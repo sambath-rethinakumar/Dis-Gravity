@@ -153,10 +153,374 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
 \r
 `+i)}function zc(t,e,i,r,n,s){if(t.listenerCount("wsClientError")){let o=new Error(n);Error.captureStackTrace(o,zc),t.emit("wsClientError",o,i,e)}else mg(i,r,n,s)}});var Ote=A((X7e,Pte)=>{"use strict";var Bo=fg();Bo.createWebSocketStream=JM();Bo.Server=zM();Bo.Receiver=zE();Bo.Sender=ZE();Bo.WebSocket=Bo;Bo.WebSocketServer=Bo.Server;Pte.exports=Bo});var iR=A((e3e,cie)=>{"use strict";var v2e=Object.create,Eg=Object.defineProperty,x2e=Object.getOwnPropertyDescriptor,S2e=Object.getOwnPropertyNames,D2e=Object.getPrototypeOf,_2e=Object.prototype.hasOwnProperty,br=(t,e)=>Eg(t,"name",{value:e,configurable:!0}),k2e=(t,e)=>{for(var i in e)Eg(t,i,{get:e[i],enumerable:!0})},jte=(t,e,i,r)=>{if(e&&typeof e=="object"||typeof e=="function")for(let n of S2e(e))!_2e.call(t,n)&&n!==i&&Eg(t,n,{get:()=>e[n],enumerable:!(r=x2e(e,n))||r.enumerable});return t},M2e=(t,e,i)=>(i=t!=null?v2e(D2e(t)):{},jte(e||!t||!t.__esModule?Eg(i,"default",{value:t,enumerable:!0}):i,t)),R2e=t=>jte(Eg({},"__esModule",{value:!0}),t),Wte={};k2e(Wte,{CloseCodes:()=>oie,CompressionMethod:()=>iie,DefaultDeviceProperty:()=>ZM,DefaultWebSocketManagerOptions:()=>rie,Encoding:()=>tie,ImportantGatewayOpcodes:()=>XM,KnownNetworkErrorCodes:()=>nie,SimpleContextFetchingStrategy:()=>Jte,SimpleIdentifyThrottler:()=>eie,SimpleShardingStrategy:()=>aie,WebSocketManager:()=>rYe,WebSocketShard:()=>tR,WebSocketShardDestroyRecovery:()=>eR,WebSocketShardEvents:()=>lC,WebSocketShardStatus:()=>sie,WorkerBootstrapper:()=>X2e,WorkerContextFetchingStrategy:()=>Kte,WorkerReceivePayloadOp:()=>zte,WorkerSendPayloadOp:()=>$te,WorkerShardingStrategy:()=>F2e,getInitialSendRateLimitState:()=>Ig,managerToFetchingStrategyOptions:()=>cC,version:()=>nYe});cie.exports=R2e(Wte);async function cC(t){let{buildIdentifyThrottler:e,buildStrategy:i,retrieveSessionInfo:r,updateSessionInfo:n,shardCount:s,shardIds:o,rest:a,...c}=t.options;return{...c,gatewayInformation:await t.fetchGatewayInformation(),shardCount:await t.getShardCount()}}br(cC,"managerToFetchingStrategyOptions");var Jte=class oC{constructor(e,i){this.manager=e,this.options=i}static{br(this,"SimpleContextFetchingStrategy")}static throttlerCache=new WeakMap;static async ensureThrottler(e){let i=oC.throttlerCache.get(e);if(i)return i;let r=await e.options.buildIdentifyThrottler(e);return oC.throttlerCache.set(e,r),r}async retrieveSessionInfo(e){return this.manager.options.retrieveSessionInfo(e)}updateSessionInfo(e,i){return this.manager.options.updateSessionInfo(e,i)}async waitForIdentify(e,i){await(await oC.ensureThrottler(this.manager)).waitForIdentify(e,i)}},fu=require("worker_threads"),Gte=xa(),T2e=require("events"),nC=require("path"),U2e=require("worker_threads"),pu=xa(),$te=(t=>(t[t.Connect=0]="Connect",t[t.Destroy=1]="Destroy",t[t.Send=2]="Send",t[t.SessionInfoResponse=3]="SessionInfoResponse",t[t.ShardIdentifyResponse=4]="ShardIdentifyResponse",t[t.FetchStatus=5]="FetchStatus",t))($te||{}),zte=(t=>(t[t.Connected=0]="Connected",t[t.Destroyed=1]="Destroyed",t[t.Event=2]="Event",t[t.RetrieveSessionInfo=3]="RetrieveSessionInfo",t[t.UpdateSessionInfo=4]="UpdateSessionInfo",t[t.WaitForIdentify=5]="WaitForIdentify",t[t.FetchStatusResponse=6]="FetchStatusResponse",t[t.WorkerReady=7]="WorkerReady",t[t.CancelIdentify=8]="CancelIdentify",t))(zte||{}),F2e=class{static{br(this,"WorkerShardingStrategy")}manager;options;#e=[];#t=new pu.Collection;connectPromises=new pu.Collection;destroyPromises=new pu.Collection;fetchStatusPromises=new pu.Collection;waitForIdentifyControllers=new pu.Collection;throttler;constructor(t,e){this.manager=t,this.options=e}async spawn(t){let e=this.options.shardsPerWorker==="all"?t.length:this.options.shardsPerWorker,i=await cC(this.manager),r=Math.ceil(t.length/e),n=[];for(let s=0;s<r;s++){let o=t.slice(s*e,(s+1)*e),a={...i,shardIds:o};n.push(this.setupWorker(a))}await Promise.all(n)}async connect(){let t=[];for(let[e,i]of this.#t.entries()){let r={op:0,shardId:e},n=new Promise(s=>this.connectPromises.set(e,s));i.postMessage(r),t.push(n)}await Promise.all(t)}async destroy(t={}){let e=[];for(let[i,r]of this.#t.entries()){let n={op:1,shardId:i,options:t};e.push(new Promise(s=>this.destroyPromises.set(i,s)).then(async()=>r.terminate())),r.postMessage(n)}this.#e=[],this.#t.clear(),await Promise.all(e)}send(t,e){let i=this.#t.get(t);if(!i)throw new Error(`No worker found for shard ${t}`);let r={op:2,shardId:t,payload:e};i.postMessage(r)}async fetchStatus(){let t=new pu.Collection;for(let[e,i]of this.#t.entries()){let r=Math.random(),n={op:5,shardId:e,nonce:r},s=new Promise(a=>this.fetchStatusPromises.set(r,a));i.postMessage(n);let o=await s;t.set(e,o)}return t}async setupWorker(t){let e=new U2e.Worker(this.resolveWorkerPath(),{workerData:t});await(0,T2e.once)(e,"online"),await this.waitForWorkerReady(e),e.on("error",i=>{throw i}).on("messageerror",i=>{throw i}).on("message",async i=>{"op"in i?await this.onMessage(e,i):await this.options.unknownPayloadHandler?.(i)}),this.#e.push(e);for(let i of t.shardIds)this.#t.set(i,e)}resolveWorkerPath(){let t=this.options.workerPath;if(!t)return(0,nC.join)(__dirname,"defaultWorker.js");if((0,nC.isAbsolute)(t))return t;if(/^\.\.?[/\\]/.test(t))return(0,nC.resolve)(t);try{return require.resolve(t)}catch{return(0,nC.resolve)(t)}}async waitForWorkerReady(t){return new Promise(e=>{let i=br(r=>{r.op===7&&(e(),t.off("message",i))},"handler");t.on("message",i)})}async onMessage(t,e){switch(e.op){case 0:{this.connectPromises.get(e.shardId)?.(),this.connectPromises.delete(e.shardId);break}case 1:{this.destroyPromises.get(e.shardId)?.(),this.destroyPromises.delete(e.shardId);break}case 2:{this.manager.emit(e.event,{...e.data,shardId:e.shardId});break}case 3:{let i=await this.manager.options.retrieveSessionInfo(e.shardId),r={op:3,nonce:e.nonce,session:i};t.postMessage(r);break}case 4:{await this.manager.options.updateSessionInfo(e.shardId,e.session);break}case 5:{let i=await this.ensureThrottler();try{let n=new AbortController;this.waitForIdentifyControllers.set(e.nonce,n),await i.waitForIdentify(e.shardId,n.signal)}catch{return}let r={op:4,nonce:e.nonce,ok:!0};t.postMessage(r);break}case 6:{this.fetchStatusPromises.get(e.nonce)?.(e.status),this.fetchStatusPromises.delete(e.nonce);break}case 7:break;case 8:{this.waitForIdentifyControllers.get(e.nonce)?.abort(),this.waitForIdentifyControllers.delete(e.nonce);let i={op:4,nonce:e.nonce,ok:!1};t.postMessage(i);break}default:{await this.options.unknownPayloadHandler?.(e);break}}}async ensureThrottler(){return this.throttler??=await this.manager.options.buildIdentifyThrottler(this.manager),this.throttler}},Kte=class{constructor(t){if(this.options=t,fu.isMainThread)throw new Error("Cannot instantiate WorkerContextFetchingStrategy on the main thread");fu.parentPort.on("message",e=>{if(e.op===3&&(this.sessionPromises.get(e.nonce)?.(e.session),this.sessionPromises.delete(e.nonce)),e.op===4){let i=this.waitForIdentifyPromises.get(e.nonce);e.ok?i?.resolve():i?.reject(i.signal.reason),this.waitForIdentifyPromises.delete(e.nonce)}})}static{br(this,"WorkerContextFetchingStrategy")}sessionPromises=new Gte.Collection;waitForIdentifyPromises=new Gte.Collection;async retrieveSessionInfo(t){let e=Math.random(),i={op:3,shardId:t,nonce:e},r=new Promise(n=>this.sessionPromises.set(e,n));return fu.parentPort.postMessage(i),r}updateSessionInfo(t,e){let i={op:4,shardId:t,session:e};fu.parentPort.postMessage(i)}async waitForIdentify(t,e){let i=Math.random(),r={op:5,nonce:i,shardId:t},n=new Promise((o,a)=>this.waitForIdentifyPromises.set(i,{signal:e,resolve:o,reject:a}));fu.parentPort.postMessage(r);let s=br(()=>{let o={op:8,nonce:i};fu.parentPort.postMessage(o)},"listener");e.addEventListener("abort",s);try{await n}finally{e.removeEventListener("abort",s)}}},L2e=xa(),N2e=require("buffer"),mu=require("events"),sC=require("timers"),KM=require("timers/promises"),q2e=require("url"),P2e=require("util"),O2e=require("zlib"),G2e=xa(),Zte=Oe(),V2e=gm(),Y2e=dm(),Bt=k(),Xte=Ote(),H2e=M2e(require("process")),j2e=xa(),W2e=Oe(),aC=k(),J2e=require("timers/promises"),$2e=xa(),z2e=gm(),eie=class{constructor(t){this.maxConcurrency=t}static{br(this,"SimpleIdentifyThrottler")}states=new $2e.Collection;async waitForIdentify(t,e){let i=t%this.maxConcurrency,r=this.states.ensure(i,()=>({queue:new z2e.AsyncQueue,resetsAt:Number.POSITIVE_INFINITY}));await r.queue.wait({signal:e});try{let n=r.resetsAt-Date.now();if(n>0&&n<=5e3){let s=n+Math.random()*1500;await(0,J2e.setTimeout)(s)}r.resetsAt=Date.now()+5e3}finally{r.queue.shift()}}},tie=(t=>(t.JSON="json",t))(tie||{}),iie=(t=>(t.ZlibStream="zlib-stream",t))(iie||{}),ZM="@discordjs/ws 1.2.3",Vte=(0,W2e.lazy)(()=>new j2e.Collection),rie={async buildIdentifyThrottler(t){let e=await t.fetchGatewayInformation();return new eie(e.session_start_limit.max_concurrency)},buildStrategy:br(t=>new aie(t),"buildStrategy"),shardCount:null,shardIds:null,largeThreshold:null,initialPresence:null,identifyProperties:{browser:ZM,device:ZM,os:H2e.default.platform},version:aC.APIVersion,encoding:"json",compression:null,retrieveSessionInfo(t){return Vte().get(t)??null},updateSessionInfo(t,e){let i=Vte();e?i.set(t,e):i.delete(t)},handshakeTimeout:3e4,helloTimeout:6e4,readyTimeout:15e3},XM=new Set([aC.GatewayOpcodes.Heartbeat,aC.GatewayOpcodes.Identify,aC.GatewayOpcodes.Resume]);function Ig(){return{sent:0,resetAt:Date.now()+6e4}}br(Ig,"getInitialSendRateLimitState");var nie=new Set(["ECONNRESET","ECONNREFUSED","ETIMEDOUT","EAI_AGAIN"]),Yte=(0,Zte.lazy)(async()=>import("zlib-sync").then(t=>t.default).catch(()=>null)),lC=(t=>(t.Closed="closed",t.Debug="debug",t.Dispatch="dispatch",t.Error="error",t.HeartbeatComplete="heartbeat",t.Hello="hello",t.Ready="ready",t.Resumed="resumed",t))(lC||{}),sie=(t=>(t[t.Idle=0]="Idle",t[t.Connecting=1]="Connecting",t[t.Resuming=2]="Resuming",t[t.Ready=3]="Ready",t))(sie||{}),eR=(t=>(t[t.Reconnect=0]="Reconnect",t[t.Resume=1]="Resume",t))(eR||{}),oie=(t=>(t[t.Normal=1e3]="Normal",t[t.Resuming=4200]="Resuming",t))(oie||{}),K2e=(0,Zte.shouldUseGlobalFetchAndWebSocket)()?globalThis.WebSocket:Xte.WebSocket,tR=class extends Y2e.AsyncEventEmitter{static{br(this,"WebSocketShard")}connection=null;useIdentifyCompress=!1;inflate=null;textDecoder=new P2e.TextDecoder;replayedEvents=0;isAck=!0;sendRateLimitState=Ig();initialHeartbeatTimeoutController=null;heartbeatInterval=null;lastHeartbeatAt=-1;initialConnectResolved=!1;failedToConnectDueToNetworkError=!1;sendQueue=new V2e.AsyncQueue;timeoutAbortControllers=new G2e.Collection;strategy;id;#e=0;get status(){return this.#e}constructor(t,e){super(),this.strategy=t,this.id=e}async connect(){let t=new AbortController,e;this.initialConnectResolved||(e=Promise.race([(0,mu.once)(this,"ready",{signal:t.signal}),(0,mu.once)(this,"resumed",{signal:t.signal})])),this.internalConnect();try{await e}catch({error:i}){throw i}finally{t.abort()}this.initialConnectResolved=!0}async internalConnect(){if(this.#e!==0)throw new Error("Tried to connect a shard that wasn't idle");let{version:t,encoding:e,compression:i}=this.strategy.options,r=new q2e.URLSearchParams({v:t,encoding:e});if(i){let c=await Yte();c?(r.append("compress",i),this.inflate=new c.Inflate({chunkSize:65535,to:"string"})):this.useIdentifyCompress||(this.useIdentifyCompress=!0,console.warn("WebSocketShard: Compression is enabled but zlib-sync is not installed, falling back to identify compress"))}let n=await this.strategy.retrieveSessionInfo(this.id),s=`${n?.resumeURL??this.strategy.options.gatewayInformation.url}?${r.toString()}`;this.debug([`Connecting to ${s}`]);let o=new K2e(s,[],{handshakeTimeout:this.strategy.options.handshakeTimeout??void 0});o.binaryType="arraybuffer",o.onmessage=c=>{this.onMessage(c.data,c.data instanceof ArrayBuffer)},o.onerror=c=>{this.onError(c.error)},o.onclose=c=>{this.onClose(c.code)},o.onopen=()=>{this.sendRateLimitState=Ig()},this.connection=o,this.#e=1;let{ok:a}=await this.waitForEvent("hello",this.strategy.options.helloTimeout);a&&(n?.shardCount===this.strategy.options.shardCount?await this.resume(n):await this.identify())}async destroy(t={}){if(this.#e===0){this.debug(["Tried to destroy a shard that was idle"]);return}t.code||(t.code=t.recover===1?4200:1e3),this.debug(["Destroying shard",`Reason: ${t.reason??"none"}`,`Code: ${t.code}`,`Recover: ${t.recover===void 0?"none":eR[t.recover]}`]),this.isAck=!0,this.heartbeatInterval&&(0,sC.clearInterval)(this.heartbeatInterval),this.initialHeartbeatTimeoutController&&(this.initialHeartbeatTimeoutController.abort(),this.initialHeartbeatTimeoutController=null),this.lastHeartbeatAt=-1;for(let e of this.timeoutAbortControllers.values())e.abort();if(this.timeoutAbortControllers.clear(),this.failedToConnectDueToNetworkError=!1,t.recover!==1&&await this.strategy.updateSessionInfo(this.id,null),this.connection){this.connection.onmessage=null,this.connection.onclose=null;let e=this.connection.readyState===Xte.WebSocket.OPEN;if(this.debug(["Connection status during destroy",`Needs closing: ${e}`,`Ready state: ${this.connection.readyState}`]),e){let i,r=new Promise(n=>{i=n});this.connection.onclose=i,this.connection.close(t.code,t.reason),await r,this.emit("closed",{code:t.code})}this.connection.onerror=null}else this.debug(["Destroying a shard that has no connection; please open an issue on GitHub"]);if(this.#e=0,t.recover!==void 0)return await(0,KM.setTimeout)(500),this.internalConnect()}async waitForEvent(t,e){this.debug([`Waiting for event ${t} ${e?`for ${e}ms`:"indefinitely"}`]);let i=new AbortController,r=e?(0,sC.setTimeout)(()=>i.abort(),e).unref():null;this.timeoutAbortControllers.set(t,i);let n=new AbortController;try{return{ok:!await Promise.race([(0,mu.once)(this,t,{signal:i.signal}).then(()=>!1),(0,mu.once)(this,"closed",{signal:n.signal}).then(()=>!0)])}}catch{return this.destroy({code:1e3,reason:"Something timed out or went wrong while waiting for an event",recover:0}),{ok:!1}}finally{r&&(0,sC.clearTimeout)(r),this.timeoutAbortControllers.delete(t),n.signal.aborted||n.abort()}}async send(t){if(!this.connection)throw new Error("WebSocketShard wasn't connected");if(XM.has(t.op)){this.connection.send(JSON.stringify(t));return}if(this.#e!==3&&!XM.has(t.op)){this.debug(["Tried to send a non-crucial payload before the shard was ready, waiting"]);try{await(0,mu.once)(this,"ready")}catch{return this.send(t)}}await this.sendQueue.wait();let e=Date.now();if(e>=this.sendRateLimitState.resetAt&&(this.sendRateLimitState=Ig()),this.sendRateLimitState.sent+1>=115){let i=this.sendRateLimitState.resetAt-e+Math.random()*1500;this.debug([`Was about to hit the send rate limit, sleeping for ${i}ms`]);let r=new AbortController;if(await Promise.race([(0,KM.setTimeout)(i).then(()=>!1),(0,mu.once)(this,"closed",{signal:r.signal}).then(()=>!0)]))return this.debug(["Connection closed while waiting for the send rate limit to reset, re-queueing payload"]),this.sendQueue.shift(),this.send(t);r.abort()}this.sendRateLimitState.sent++,this.sendQueue.shift(),this.connection.send(JSON.stringify(t))}async identify(){this.debug(["Waiting for identify throttle"]);let t=new AbortController,e=br(()=>{t.abort()},"closeHandler");this.on("closed",e);try{await this.strategy.waitForIdentify(this.id,t.signal)}catch{if(t.signal.aborted){this.debug(["Was waiting for an identify, but the shard closed in the meantime"]);return}this.debug(["IContextFetchingStrategy#waitForIdentify threw an unknown error.","If you're using a custom strategy, this is probably nothing to worry about.","If you're not, please open an issue on GitHub."]),await this.destroy({reason:"Identify throttling logic failed",recover:1})}finally{this.off("closed",e)}this.debug(["Identifying",`shard id: ${this.id.toString()}`,`shard count: ${this.strategy.options.shardCount}`,`intents: ${this.strategy.options.intents}`,`compression: ${this.inflate?"zlib-stream":this.useIdentifyCompress?"identify":"none"}`]);let i={token:this.strategy.options.token,properties:this.strategy.options.identifyProperties,intents:this.strategy.options.intents,compress:this.useIdentifyCompress,shard:[this.id,this.strategy.options.shardCount]};this.strategy.options.largeThreshold&&(i.large_threshold=this.strategy.options.largeThreshold),this.strategy.options.initialPresence&&(i.presence=this.strategy.options.initialPresence),await this.send({op:Bt.GatewayOpcodes.Identify,d:i}),await this.waitForEvent("ready",this.strategy.options.readyTimeout)}async resume(t){return this.debug(["Resuming session",`resume url: ${t.resumeURL}`,`sequence: ${t.sequence}`,`shard id: ${this.id.toString()}`]),this.#e=2,this.replayedEvents=0,this.send({op:Bt.GatewayOpcodes.Resume,d:{token:this.strategy.options.token,seq:t.sequence,session_id:t.sessionId}})}async heartbeat(t=!1){if(!this.isAck&&!t)return this.destroy({reason:"Zombie connection",recover:1});let e=await this.strategy.retrieveSessionInfo(this.id);await this.send({op:Bt.GatewayOpcodes.Heartbeat,d:e?.sequence??null}),this.lastHeartbeatAt=Date.now(),this.isAck=!1}async unpackMessage(t,e){if(!e)try{return JSON.parse(t)}catch{return null}let i=new Uint8Array(t);if(this.useIdentifyCompress)return new Promise((r,n)=>{(0,O2e.inflate)(i,{chunkSize:65535},(s,o)=>{if(s){n(s);return}r(JSON.parse(this.textDecoder.decode(o)))})});if(this.inflate){let r=i.length,n=r>=4&&i[r-4]===0&&i[r-3]===0&&i[r-2]===255&&i[r-1]===255,s=await Yte();if(this.inflate.push(N2e.Buffer.from(i),n?s.Z_SYNC_FLUSH:s.Z_NO_FLUSH),this.inflate.err&&this.emit("error",{error:new Error(`${this.inflate.err}${this.inflate.msg?`: ${this.inflate.msg}`:""}`)}),!n)return null;let{result:o}=this.inflate;return o?JSON.parse(typeof o=="string"?o:this.textDecoder.decode(o)):null}return this.debug(["Received a message we were unable to decompress",`isBinary: ${e.toString()}`,`useIdentifyCompress: ${this.useIdentifyCompress.toString()}`,`inflate: ${(!!this.inflate).toString()}`]),null}async onMessage(t,e){let i=await this.unpackMessage(t,e);if(i)switch(i.op){case Bt.GatewayOpcodes.Dispatch:{switch(this.#e===2&&this.replayedEvents++,i.t){case Bt.GatewayDispatchEvents.Ready:{this.#e=3;let n={sequence:i.s,sessionId:i.d.session_id,shardId:this.id,shardCount:this.strategy.options.shardCount,resumeURL:i.d.resume_gateway_url};await this.strategy.updateSessionInfo(this.id,n),this.emit("ready",{data:i.d});break}case Bt.GatewayDispatchEvents.Resumed:{this.#e=3,this.debug([`Resumed and replayed ${this.replayedEvents} events`]),this.emit("resumed");break}default:break}let r=await this.strategy.retrieveSessionInfo(this.id);r?i.s>r.sequence&&await this.strategy.updateSessionInfo(this.id,{...r,sequence:i.s}):this.debug([`Received a ${i.t} event but no session is available. Session information cannot be re-constructed in this state without a full reconnect`]),this.emit("dispatch",{data:i});break}case Bt.GatewayOpcodes.Heartbeat:{await this.heartbeat(!0);break}case Bt.GatewayOpcodes.Reconnect:{await this.destroy({reason:"Told to reconnect by Discord",recover:1});break}case Bt.GatewayOpcodes.InvalidSession:{this.debug([`Invalid session; will attempt to resume: ${i.d.toString()}`]);let r=await this.strategy.retrieveSessionInfo(this.id);i.d&&r?await this.resume(r):await this.destroy({reason:"Invalid session",recover:0});break}case Bt.GatewayOpcodes.Hello:{this.emit("hello");let r=Math.random(),n=Math.floor(i.d.heartbeat_interval*r);this.debug([`Preparing first heartbeat of the connection with a jitter of ${r}; waiting ${n}ms`]);try{let s=new AbortController;this.initialHeartbeatTimeoutController=s,await(0,KM.setTimeout)(n,void 0,{signal:s.signal})}catch{this.debug(["Cancelled initial heartbeat due to #destroy being called"]);return}finally{this.initialHeartbeatTimeoutController=null}await this.heartbeat(),this.debug([`First heartbeat sent, starting to beat every ${i.d.heartbeat_interval}ms`]),this.heartbeatInterval=(0,sC.setInterval)(()=>void this.heartbeat(),i.d.heartbeat_interval);break}case Bt.GatewayOpcodes.HeartbeatAck:{this.isAck=!0;let r=Date.now();this.emit("heartbeat",{ackAt:r,heartbeatAt:this.lastHeartbeatAt,latency:r-this.lastHeartbeatAt});break}}}onError(t){if("code"in t&&nie.has(t.code)){this.debug(["Failed to connect to the gateway URL specified due to a network error"]),this.failedToConnectDueToNetworkError=!0;return}this.emit("error",{error:t})}async onClose(t){switch(this.emit("closed",{code:t}),t){case 1e3:return this.destroy({code:t,reason:"Got disconnected by Discord",recover:0});case 4200:break;case Bt.GatewayCloseCodes.UnknownError:return this.debug([`An unknown error occurred: ${t}`]),this.destroy({code:t,recover:1});case Bt.GatewayCloseCodes.UnknownOpcode:return this.debug(["An invalid opcode was sent to Discord."]),this.destroy({code:t,recover:1});case Bt.GatewayCloseCodes.DecodeError:return this.debug(["An invalid payload was sent to Discord."]),this.destroy({code:t,recover:1});case Bt.GatewayCloseCodes.NotAuthenticated:return this.debug(["A request was somehow sent before the identify/resume payload."]),this.destroy({code:t,recover:0});case Bt.GatewayCloseCodes.AuthenticationFailed:return this.emit("error",{error:new Error("Authentication failed")}),this.destroy({code:t});case Bt.GatewayCloseCodes.AlreadyAuthenticated:return this.debug(["More than one auth payload was sent."]),this.destroy({code:t,recover:0});case Bt.GatewayCloseCodes.InvalidSeq:return this.debug(["An invalid sequence was sent."]),this.destroy({code:t,recover:0});case Bt.GatewayCloseCodes.RateLimited:return this.debug(["The WebSocket rate limit has been hit, this should never happen"]),this.destroy({code:t,recover:0});case Bt.GatewayCloseCodes.SessionTimedOut:return this.debug(["Session timed out."]),this.destroy({code:t,recover:1});case Bt.GatewayCloseCodes.InvalidShard:return this.emit("error",{error:new Error("Invalid shard")}),this.destroy({code:t});case Bt.GatewayCloseCodes.ShardingRequired:return this.emit("error",{error:new Error("Sharding is required")}),this.destroy({code:t});case Bt.GatewayCloseCodes.InvalidAPIVersion:return this.emit("error",{error:new Error("Used an invalid API version")}),this.destroy({code:t});case Bt.GatewayCloseCodes.InvalidIntents:return this.emit("error",{error:new Error("Used invalid intents")}),this.destroy({code:t});case Bt.GatewayCloseCodes.DisallowedIntents:return this.emit("error",{error:new Error("Used disallowed intents")}),this.destroy({code:t});default:return this.debug([`The gateway closed with an unexpected code ${t}, attempting to ${this.failedToConnectDueToNetworkError?"reconnect":"resume"}.`]),this.destroy({code:t,recover:this.failedToConnectDueToNetworkError?0:1})}}debug(t){this.emit("debug",{message:t.join(`
 	`)})}},aie=class{static{br(this,"SimpleShardingStrategy")}manager;shards=new L2e.Collection;constructor(t){this.manager=t}async spawn(t){let e=await cC(this.manager);for(let i of t){let r=new Jte(this.manager,e),n=new tR(r,i);for(let s of Object.values(lC))n.on(s,o=>this.manager.emit(s,{...o,shardId:i}));this.shards.set(i,n)}}async connect(){let t=[];for(let e of this.shards.values())t.push(e.connect());await Promise.all(t)}async destroy(t){let e=[];for(let i of this.shards.values())e.push(i.destroy(t));await Promise.all(e),this.shards.clear()}async send(t,e){let i=this.shards.get(t);if(!i)throw new RangeError(`Shard ${t} not found`);return i.send(e)}async fetchStatus(){return this.shards.mapValues(t=>t.status)}},_a=require("worker_threads"),Z2e=xa(),X2e=class{static{br(this,"WorkerBootstrapper")}data=_a.workerData;shards=new Z2e.Collection;constructor(){if(_a.isMainThread)throw new Error("Expected WorkerBootstrap to not be used within the main thread")}async connect(t){let e=this.shards.get(t);if(!e)throw new RangeError(`Shard ${t} does not exist`);await e.connect()}async destroy(t,e){let i=this.shards.get(t);if(!i)throw new RangeError(`Shard ${t} does not exist`);await i.destroy(e)}setupThreadEvents(){_a.parentPort.on("messageerror",t=>{throw t}).on("message",async t=>{switch(t.op){case 0:{await this.connect(t.shardId);let e={op:0,shardId:t.shardId};_a.parentPort.postMessage(e);break}case 1:{await this.destroy(t.shardId,t.options);let e={op:1,shardId:t.shardId};_a.parentPort.postMessage(e);break}case 2:{let e=this.shards.get(t.shardId);if(!e)throw new RangeError(`Shard ${t.shardId} does not exist`);await e.send(t.payload);break}case 3:break;case 4:break;case 5:{let e=this.shards.get(t.shardId);if(!e)throw new Error(`Shard ${t.shardId} does not exist`);let i={op:6,status:e.status,nonce:t.nonce};_a.parentPort.postMessage(i);break}}})}async bootstrap(t={}){for(let i of this.data.shardIds){let r=new tR(new Kte(this.data),i);for(let n of t.forwardEvents??Object.values(lC))r.on(n,s=>{let o={op:2,event:n,data:s,shardId:i};_a.parentPort.postMessage(o)});await t.shardCallback?.(r),this.shards.set(i,r)}this.setupThreadEvents();let e={op:7};_a.parentPort.postMessage(e)}},Hte=Oe(),eYe=Oe(),tYe=dm(),iYe=k();(0,eYe.polyfillDispose)();var rYe=class extends tYe.AsyncEventEmitter{static{br(this,"WebSocketManager")}options;gatewayInformation=null;shardIds=null;strategy;constructor(t){super(),this.options={...rie,...t},this.strategy=this.options.buildStrategy(this)}async fetchGatewayInformation(t=!1){if(this.gatewayInformation){if(this.gatewayInformation.expiresAt<=Date.now())this.gatewayInformation=null;else if(!t)return this.gatewayInformation.data}let e=await this.options.rest.get(iYe.Routes.gatewayBot());return this.gatewayInformation={data:e,expiresAt:Date.now()+(e.session_start_limit.reset_after||5e3)},this.gatewayInformation.data}async updateShardCount(t){await this.strategy.destroy({reason:"User is adjusting their shards"}),this.options.shardCount=t;let e=await this.getShardIds(!0);return await this.strategy.spawn(e),this}async getShardCount(){if(this.options.shardCount)return this.options.shardCount;let t=await this.getShardIds();return Math.max(...t)+1}async getShardIds(t=!1){if(this.shardIds&&!t)return this.shardIds;let e;if(this.options.shardIds)if(Array.isArray(this.options.shardIds))e=this.options.shardIds;else{let{start:i,end:r}=this.options.shardIds;e=[...(0,Hte.range)({start:i,end:r+1})]}else{let i=await this.fetchGatewayInformation();e=[...(0,Hte.range)(this.options.shardCount??i.shards)]}return this.shardIds=e,e}async connect(){let t=await this.getShardCount();await this.updateShardCount(t);let e=await this.getShardIds(),i=await this.fetchGatewayInformation();if(i.session_start_limit.remaining<e.length)throw new Error(`Not enough sessions remaining to spawn ${e.length} shards; only ${i.session_start_limit.remaining} remaining; resets at ${new Date(Date.now()+i.session_start_limit.reset_after).toISOString()}`);await this.strategy.connect()}destroy(t){return this.strategy.destroy(t)}send(t,e){return this.strategy.send(t,e)}fetchStatus(){return this.strategy.fetchStatus()}async[Symbol.asyncDispose](){await this.destroy()}},nYe="1.2.3"});var AC=A((c3e,lie)=>{"use strict";lie.exports={Close:"close",Destroyed:"destroyed",InvalidSession:"invalidSession",Ready:"ready",Resumed:"resumed",AllReady:"allReady"}});var nR=A((l3e,uie)=>{"use strict";var sYe=require("node:events"),oYe=require("node:process"),{setTimeout:aYe,clearTimeout:cYe}=require("node:timers"),{GatewayIntentBits:lYe}=k(),uC=ws(),hC=AC(),Aie=!1,rR=class extends sYe{constructor(e,i){super(),this.manager=e,this.id=i,this.status=uC.Idle,this.closeSequence=0,this.ping=-1,this.lastPingTimestamp=-1,Object.defineProperty(this,"expectedGuilds",{value:null,writable:!0}),Object.defineProperty(this,"readyTimeout",{value:null,writable:!0}),Object.defineProperty(this,"sessionInfo",{value:null,writable:!0})}debug(e){this.manager.debug(e,this.id)}emitClose(e={code:1011,reason:"INTERNAL_ERROR",wasClean:!1}){this.debug(["[CLOSE]",`Event Code: ${e.code}`,`Clean     : ${e.wasClean}`,`Reason    : ${e.reason??"No reason received"}`]),this.emit(hC.Close,e)}onReadyPacket(e){if(!e){this.debug([`Received broken packet: '${e}'.`]);return}this.emit(hC.Ready),this.expectedGuilds=new Set(e.guilds.map(i=>i.id)),this.status=uC.WaitingForGuilds}gotGuild(e){this.expectedGuilds.delete(e),this.checkReady()}checkReady(){if(this.readyTimeout&&(cYe(this.readyTimeout),this.readyTimeout=null),!this.expectedGuilds.size){this.debug(["Shard received all its guilds. Marking as fully ready."]),this.status=uC.Ready,this.emit(hC.AllReady);return}let e=this.manager.client.options.intents.has(lYe.Guilds),{waitGuildTimeout:i}=this.manager.client.options;this.readyTimeout=aYe(()=>{this.debug([e?`Shard did not receive any guild packets in ${i} ms.`:"Shard will not receive anymore guild packets.",`Unavailable guild count: ${this.expectedGuilds.size}`]),this.readyTimeout=null,this.status=uC.Ready,this.emit(hC.AllReady,this.expectedGuilds)},e?i:0).unref()}send(e,i=!1){i&&!Aie&&(oYe.emitWarning("Sending important payloads explicitly is deprecated. They are determined by their opcode implicitly now.","DeprecationWarning"),Aie=!0),this.manager._ws.send(this.id,e)}};uie.exports=rR});var die=A((A3e,hie)=>{"use strict";hie.exports=(t,e)=>{t.actions.ApplicationCommandPermissionsUpdate.handle(e.d)}});var fie=A((u3e,gie)=>{"use strict";gie.exports=(t,e)=>{t.actions.AutoModerationActionExecution.handle(e.d)}});var mie=A((h3e,pie)=>{"use strict";pie.exports=(t,e)=>{t.actions.AutoModerationRuleCreate.handle(e.d)}});var Eie=A((d3e,Iie)=>{"use strict";Iie.exports=(t,e)=>{t.actions.AutoModerationRuleDelete.handle(e.d)}});var Bie=A((g3e,Cie)=>{"use strict";Cie.exports=(t,e)=>{t.actions.AutoModerationRuleUpdate.handle(e.d)}});var Qie=A((f3e,yie)=>{"use strict";yie.exports=(t,e)=>{t.actions.ChannelCreate.handle(e.d)}});var bie=A((p3e,wie)=>{"use strict";wie.exports=(t,e)=>{t.actions.ChannelDelete.handle(e.d)}});var xie=A((m3e,vie)=>{"use strict";var AYe=W();vie.exports=(t,{d:e})=>{let i=t.channels.cache.get(e.channel_id),r=e.last_pin_timestamp?Date.parse(e.last_pin_timestamp):null;i&&(i.lastPinTimestamp=r,t.emit(AYe.ChannelPinsUpdate,i,r))}});var Die=A((I3e,Sie)=>{"use strict";var uYe=W();Sie.exports=(t,e)=>{let{old:i,updated:r}=t.actions.ChannelUpdate.handle(e.d);i&&r&&t.emit(uYe.ChannelUpdate,i,r)}});var kie=A((E3e,_ie)=>{"use strict";_ie.exports=(t,e)=>{t.actions.EntitlementCreate.handle(e.d)}});var Rie=A((C3e,Mie)=>{"use strict";Mie.exports=(t,e)=>{t.actions.EntitlementDelete.handle(e.d)}});var Uie=A((B3e,Tie)=>{"use strict";Tie.exports=(t,e)=>{t.actions.EntitlementUpdate.handle(e.d)}});var Lie=A((y3e,Fie)=>{"use strict";Fie.exports=(t,e)=>{t.actions.GuildAuditLogEntryCreate.handle(e.d)}});var qie=A((Q3e,Nie)=>{"use strict";Nie.exports=(t,e)=>{t.actions.GuildBanAdd.handle(e.d)}});var Oie=A((w3e,Pie)=>{"use strict";Pie.exports=(t,e)=>{t.actions.GuildBanRemove.handle(e.d)}});var Yie=A((b3e,Vie)=>{"use strict";var Gie=W(),hYe=ws();Vie.exports=(t,{d:e},i)=>{let r=t.guilds.cache.get(e.id);r?!r.available&&!e.unavailable&&(r._patch(e),t.emit(Gie.GuildAvailable,r)):(e.shardId=i.id,r=t.guilds._add(e),t.ws.status===hYe.Ready&&t.emit(Gie.GuildCreate,r))}});var jie=A((v3e,Hie)=>{"use strict";Hie.exports=(t,e)=>{t.actions.GuildDelete.handle(e.d)}});var Jie=A((x3e,Wie)=>{"use strict";Wie.exports=(t,e)=>{t.actions.GuildEmojisUpdate.handle(e.d)}});var zie=A((S3e,$ie)=>{"use strict";$ie.exports=(t,e)=>{t.actions.GuildIntegrationsUpdate.handle(e.d)}});var Zie=A((D3e,Kie)=>{"use strict";var{Collection:dYe}=re(),gYe=W();Kie.exports=(t,{d:e})=>{let i=t.guilds.cache.get(e.guild_id);if(!i)return;let r=new dYe;for(let n of e.members)r.set(n.user.id,i.members._add(n));if(e.presences)for(let n of e.presences)i.presences._add(Object.assign(n,{guild:i}));t.emit(gYe.GuildMembersChunk,r,i,{index:e.chunk_index,count:e.chunk_count,notFound:e.not_found,nonce:e.nonce})}});var ere=A((_3e,Xie)=>{"use strict";var fYe=W(),pYe=ws();Xie.exports=(t,{d:e},i)=>{let r=t.guilds.cache.get(e.guild_id);if(r){r.memberCount++;let n=r.members._add(e);i.status===pYe.Ready&&t.emit(fYe.GuildMemberAdd,n)}}});var ire=A((k3e,tre)=>{"use strict";tre.exports=(t,e,i)=>{t.actions.GuildMemberRemove.handle(e.d,i)}});var nre=A((M3e,rre)=>{"use strict";rre.exports=(t,e,i)=>{t.actions.GuildMemberUpdate.handle(e.d,i)}});var ore=A((R3e,sre)=>{"use strict";sre.exports=(t,e)=>{t.actions.GuildRoleCreate.handle(e.d)}});var cre=A((T3e,are)=>{"use strict";are.exports=(t,e)=>{t.actions.GuildRoleDelete.handle(e.d)}});var Are=A((U3e,lre)=>{"use strict";lre.exports=(t,e)=>{t.actions.GuildRoleUpdate.handle(e.d)}});var hre=A((F3e,ure)=>{"use strict";ure.exports=(t,e)=>{t.actions.GuildScheduledEventCreate.handle(e.d)}});var gre=A((L3e,dre)=>{"use strict";dre.exports=(t,e)=>{t.actions.GuildScheduledEventDelete.handle(e.d)}});var pre=A((N3e,fre)=>{"use strict";fre.exports=(t,e)=>{t.actions.GuildScheduledEventUpdate.handle(e.d)}});var Ire=A((q3e,mre)=>{"use strict";mre.exports=(t,e)=>{t.actions.GuildScheduledEventUserAdd.handle(e.d)}});var Cre=A((P3e,Ere)=>{"use strict";Ere.exports=(t,e)=>{t.actions.GuildScheduledEventUserRemove.handle(e.d)}});var yre=A((O3e,Bre)=>{"use strict";var{Collection:mYe}=re(),IYe=W();Bre.exports=(t,{d:e})=>{let i=t.guilds.cache.get(e.guild_id);if(!i)return;let r=new mYe;for(let n of e.soundboard_sounds)r.set(n.sound_id,i.soundboardSounds._add(n));t.emit(IYe.GuildSoundboardSoundsUpdate,r,i)}});var wre=A((G3e,Qre)=>{"use strict";var EYe=W();Qre.exports=(t,{d:e})=>{let i=t.guilds.cache.get(e.guild_id);if(!i)return;let r=i.soundboardSounds._add(e);t.emit(EYe.GuildSoundboardSoundCreate,r)}});var vre=A((V3e,bre)=>{"use strict";bre.exports=(t,{d:e})=>{t.actions.GuildSoundboardSoundDelete.handle(e)}});var Sre=A((Y3e,xre)=>{"use strict";var CYe=W();xre.exports=(t,{d:e})=>{let i=t.guilds.cache.get(e.guild_id);if(!i)return;let r=i.soundboardSounds.cache.get(e.sound_id)?._clone()??null,n=i.soundboardSounds._add(e);t.emit(CYe.GuildSoundboardSoundUpdate,r,n)}});var _re=A((H3e,Dre)=>{"use strict";Dre.exports=(t,e)=>{t.actions.GuildStickersUpdate.handle(e.d)}});var Mre=A((j3e,kre)=>{"use strict";kre.exports=(t,e)=>{t.actions.GuildUpdate.handle(e.d)}});var Tre=A((W3e,Rre)=>{"use strict";Rre.exports=(t,e)=>{t.actions.InteractionCreate.handle(e.d)}});var Fre=A((J3e,Ure)=>{"use strict";Ure.exports=(t,e)=>{t.actions.InviteCreate.handle(e.d)}});var Nre=A(($3e,Lre)=>{"use strict";Lre.exports=(t,e)=>{t.actions.InviteDelete.handle(e.d)}});var Pre=A((z3e,qre)=>{"use strict";qre.exports=(t,e)=>{t.actions.MessageCreate.handle(e.d)}});var Gre=A((K3e,Ore)=>{"use strict";Ore.exports=(t,e)=>{t.actions.MessageDelete.handle(e.d)}});var Yre=A((Z3e,Vre)=>{"use strict";Vre.exports=(t,e)=>{t.actions.MessageDeleteBulk.handle(e.d)}});var jre=A((X3e,Hre)=>{"use strict";Hre.exports=(t,e)=>{t.actions.MessagePollVoteAdd.handle(e.d)}});var Jre=A((eet,Wre)=>{"use strict";Wre.exports=(t,e)=>{t.actions.MessagePollVoteRemove.handle(e.d)}});var zre=A((tet,$re)=>{"use strict";$re.exports=(t,e)=>{t.actions.MessageReactionAdd.handle(e.d)}});var Zre=A((iet,Kre)=>{"use strict";Kre.exports=(t,e)=>{t.actions.MessageReactionRemove.handle(e.d)}});var ene=A((ret,Xre)=>{"use strict";Xre.exports=(t,e)=>{t.actions.MessageReactionRemoveAll.handle(e.d)}});var ine=A((net,tne)=>{"use strict";tne.exports=(t,e)=>{t.actions.MessageReactionRemoveEmoji.handle(e.d)}});var nne=A((set,rne)=>{"use strict";var BYe=W();rne.exports=(t,e)=>{let{old:i,updated:r}=t.actions.MessageUpdate.handle(e.d);i&&r&&t.emit(BYe.MessageUpdate,i,r)}});var one=A((oet,sne)=>{"use strict";sne.exports=(t,e)=>{t.actions.PresenceUpdate.handle(e.d)}});var Ane=A((aet,lne)=>{"use strict";var yYe=require("node:process"),{GatewayOpcodes:ane}=k(),cne=new Set;lne.exports=(t,{d:e})=>{switch(e.opcode){case ane.RequestGuildMembers:break;default:cne.has(e.opcode)||(yYe.emitWarning(`Hit a gateway rate limit on opcode ${e.opcode} (${ane[e.opcode]}). If the discord.js version you're using is up-to-date, please open an issue on GitHub.`),cne.add(e.opcode))}}});var oR=A((cet,hne)=>{"use strict";var{Routes:QYe}=k(),wYe=Ba(),{resolveImage:une}=Ci(),sR=class extends wYe{_patch(e){super._patch(e),"verified"in e&&(this.verified=e.verified),"mfa_enabled"in e?this.mfaEnabled=typeof e.mfa_enabled=="boolean"?e.mfa_enabled:null:this.mfaEnabled??=null,"token"in e&&(this.client.token=e.token)}get presence(){return this.client.presence}async edit({username:e,avatar:i,banner:r}){let n=await this.client.rest.patch(QYe.user(),{body:{username:e,avatar:i&&await une(i),banner:r&&await une(r)}}),{updated:s}=this.client.actions.UserUpdate.handle(n);return s??this}setUsername(e){return this.edit({username:e})}setAvatar(e){return this.edit({avatar:e})}setBanner(e){return this.edit({banner:e})}setPresence(e){return this.client.presence.set(e)}setStatus(e,i){return this.setPresence({status:e,shardId:i})}setActivity(e,i={}){if(!e)return this.setPresence({activities:[],shardId:i.shardId});let r=Object.assign({},i,typeof e=="object"?e:{name:e});return this.setPresence({activities:[r],shardId:r.shardId})}setAFK(e=!0,i){return this.setPresence({afk:e,shardId:i})}};hne.exports=sR});var fne=A((Aet,gne)=>{"use strict";var bYe=Xm(),dne;gne.exports=(t,{d:e},i)=>{t.user?t.user._patch(e.user):(dne??=oR(),t.user=new dne(t,e.user),t.users.cache.set(t.user.id,t.user));for(let r of e.guilds)r.shardId=i.id,t.guilds._add(r);t.application?t.application._patch(e.application):t.application=new bYe(t,e.application),i.checkReady()}});var mne=A((uet,pne)=>{"use strict";var vYe=W();pne.exports=(t,e,i)=>{let r=i.sessionInfo.sequence-i.closeSequence;t.emit(vYe.ShardResume,i.id,r)}});var Ene=A((het,Ine)=>{"use strict";var{Collection:xYe}=re(),SYe=W();Ine.exports=(t,{d:e})=>{let i=t.guilds.cache.get(e.guild_id);if(!i)return;let r=new xYe;for(let n of e.soundboard_sounds)r.set(n.sound_id,i.soundboardSounds._add(n));t.emit(SYe.SoundboardSounds,r,i)}});var Bne=A((det,Cne)=>{"use strict";Cne.exports=(t,e)=>{t.actions.StageInstanceCreate.handle(e.d)}});var Qne=A((get,yne)=>{"use strict";yne.exports=(t,e)=>{t.actions.StageInstanceDelete.handle(e.d)}});var bne=A((fet,wne)=>{"use strict";wne.exports=(t,e)=>{t.actions.StageInstanceUpdate.handle(e.d)}});var xne=A((pet,vne)=>{"use strict";var DYe=W();vne.exports=(t,{d:e})=>{let i=t.application.subscriptions._add(e);t.emit(DYe.SubscriptionCreate,i)}});var Dne=A((met,Sne)=>{"use strict";var _Ye=W();Sne.exports=(t,{d:e})=>{let i=t.application.subscriptions._add(e,!1);t.application.subscriptions.cache.delete(i.id),t.emit(_Ye.SubscriptionDelete,i)}});var kne=A((Iet,_ne)=>{"use strict";var kYe=W();_ne.exports=(t,{d:e})=>{let i=t.application.subscriptions.cache.get(e.id)?._clone()??null,r=t.application.subscriptions._add(e);t.emit(kYe.SubscriptionUpdate,i,r)}});var Rne=A((Eet,Mne)=>{"use strict";Mne.exports=(t,e)=>{t.actions.ThreadCreate.handle(e.d)}});var Une=A((Cet,Tne)=>{"use strict";Tne.exports=(t,e)=>{t.actions.ThreadDelete.handle(e.d)}});var Lne=A((Bet,Fne)=>{"use strict";Fne.exports=(t,e)=>{t.actions.ThreadListSync.handle(e.d)}});var qne=A((yet,Nne)=>{"use strict";Nne.exports=(t,e)=>{t.actions.ThreadMembersUpdate.handle(e.d)}});var One=A((Qet,Pne)=>{"use strict";Pne.exports=(t,e)=>{t.actions.ThreadMemberUpdate.handle(e.d)}});var Vne=A((wet,Gne)=>{"use strict";var MYe=W();Gne.exports=(t,e)=>{let{old:i,updated:r}=t.actions.ChannelUpdate.handle(e.d);i&&r&&t.emit(MYe.ThreadUpdate,i,r)}});var Hne=A((bet,Yne)=>{"use strict";Yne.exports=(t,e)=>{t.actions.TypingStart.handle(e.d)}});var Wne=A((vet,jne)=>{"use strict";jne.exports=(t,e)=>{t.actions.UserUpdate.handle(e.d)}});var cR=A((xet,Jne)=>{"use strict";var{Emoji:RYe}=Pn(),aR=class{constructor(e,i){this.guild=i,this.channelId=e.channel_id,this.userId=e.user_id,this.emoji=e.emoji?new RYe(i.client,e.emoji):null,this.animationType=e.animation_type??null,this.animationId=e.animation_id??null,this.soundId=e.sound_id??null,this.soundVolume=e.sound_volume??null}get channel(){return this.guild.channels.cache.get(this.channelId)??null}get soundboardSound(){return this.guild.soundboardSounds.cache.get(this.soundId)??null}};Jne.exports=aR});var zne=A((Det,$ne)=>{"use strict";var TYe=cR(),UYe=W();$ne.exports=(t,{d:e})=>{let i=t.guilds.cache.get(e.guild_id);i&&t.emit(UYe.VoiceChannelEffectSend,new TYe(e,i))}});var Zne=A((_et,Kne)=>{"use strict";Kne.exports=(t,e)=>{t.emit("debug",`[VOICE] received voice server: ${JSON.stringify(e)}`),t.voice.onVoiceServer(e.d)}});var ese=A((ket,Xne)=>{"use strict";Xne.exports=(t,e)=>{t.actions.VoiceStateUpdate.handle(e.d)}});var ise=A((Met,tse)=>{"use strict";tse.exports=(t,e)=>{t.actions.WebhooksUpdate.handle(e.d)}});var nse=A((Ret,rse)=>{"use strict";var FYe=Object.fromEntries([["APPLICATION_COMMAND_PERMISSIONS_UPDATE",die()],["AUTO_MODERATION_ACTION_EXECUTION",fie()],["AUTO_MODERATION_RULE_CREATE",mie()],["AUTO_MODERATION_RULE_DELETE",Eie()],["AUTO_MODERATION_RULE_UPDATE",Bie()],["CHANNEL_CREATE",Qie()],["CHANNEL_DELETE",bie()],["CHANNEL_PINS_UPDATE",xie()],["CHANNEL_UPDATE",Die()],["ENTITLEMENT_CREATE",kie()],["ENTITLEMENT_DELETE",Rie()],["ENTITLEMENT_UPDATE",Uie()],["GUILD_AUDIT_LOG_ENTRY_CREATE",Lie()],["GUILD_BAN_ADD",qie()],["GUILD_BAN_REMOVE",Oie()],["GUILD_CREATE",Yie()],["GUILD_DELETE",jie()],["GUILD_EMOJIS_UPDATE",Jie()],["GUILD_INTEGRATIONS_UPDATE",zie()],["GUILD_MEMBERS_CHUNK",Zie()],["GUILD_MEMBER_ADD",ere()],["GUILD_MEMBER_REMOVE",ire()],["GUILD_MEMBER_UPDATE",nre()],["GUILD_ROLE_CREATE",ore()],["GUILD_ROLE_DELETE",cre()],["GUILD_ROLE_UPDATE",Are()],["GUILD_SCHEDULED_EVENT_CREATE",hre()],["GUILD_SCHEDULED_EVENT_DELETE",gre()],["GUILD_SCHEDULED_EVENT_UPDATE",pre()],["GUILD_SCHEDULED_EVENT_USER_ADD",Ire()],["GUILD_SCHEDULED_EVENT_USER_REMOVE",Cre()],["GUILD_SOUNDBOARD_SOUNDS_UPDATE",yre()],["GUILD_SOUNDBOARD_SOUND_CREATE",wre()],["GUILD_SOUNDBOARD_SOUND_DELETE",vre()],["GUILD_SOUNDBOARD_SOUND_UPDATE",Sre()],["GUILD_STICKERS_UPDATE",_re()],["GUILD_UPDATE",Mre()],["INTERACTION_CREATE",Tre()],["INVITE_CREATE",Fre()],["INVITE_DELETE",Nre()],["MESSAGE_CREATE",Pre()],["MESSAGE_DELETE",Gre()],["MESSAGE_DELETE_BULK",Yre()],["MESSAGE_POLL_VOTE_ADD",jre()],["MESSAGE_POLL_VOTE_REMOVE",Jre()],["MESSAGE_REACTION_ADD",zre()],["MESSAGE_REACTION_REMOVE",Zre()],["MESSAGE_REACTION_REMOVE_ALL",ene()],["MESSAGE_REACTION_REMOVE_EMOJI",ine()],["MESSAGE_UPDATE",nne()],["PRESENCE_UPDATE",one()],["RATE_LIMITED",Ane()],["READY",fne()],["RESUMED",mne()],["SOUNDBOARD_SOUNDS",Ene()],["STAGE_INSTANCE_CREATE",Bne()],["STAGE_INSTANCE_DELETE",Qne()],["STAGE_INSTANCE_UPDATE",bne()],["SUBSCRIPTION_CREATE",xne()],["SUBSCRIPTION_DELETE",Dne()],["SUBSCRIPTION_UPDATE",kne()],["THREAD_CREATE",Rne()],["THREAD_DELETE",Une()],["THREAD_LIST_SYNC",Lne()],["THREAD_MEMBERS_UPDATE",qne()],["THREAD_MEMBER_UPDATE",One()],["THREAD_UPDATE",Vne()],["TYPING_START",Hne()],["USER_UPDATE",Wne()],["VOICE_CHANNEL_EFFECT_SEND",zne()],["VOICE_SERVER_UPDATE",Zne()],["VOICE_STATE_UPDATE",ese()],["WEBHOOKS_UPDATE",ise()]]);rse.exports=FYe});var hR=A((Tet,use)=>{"use strict";var LYe=require("node:events"),lR=require("node:process"),{setImmediate:NYe}=require("node:timers"),{Collection:qYe}=re(),{WebSocketManager:PYe,WebSocketShardEvents:ka,CompressionMethod:OYe,CloseCodes:AR}=iR(),{GatewayCloseCodes:Zc,GatewayDispatchEvents:yo}=k(),GYe=nR(),sse=nse(),{DiscordjsError:VYe,ErrorCodes:YYe}=se(),Kc=W(),yn=ws(),Cg=AC(),Ase,ose=!1;try{Ase=require("zlib-sync")}catch{}var HYe=[yo.Ready,yo.Resumed,yo.GuildCreate,yo.GuildDelete,yo.GuildMembersChunk,yo.GuildMemberAdd,yo.GuildMemberRemove],jYe=[yo.GuildCreate,yo.GuildDelete],WYe=[Zc.AuthenticationFailed,Zc.InvalidShard,Zc.ShardingRequired,Zc.InvalidAPIVersion,Zc.InvalidIntents,Zc.DisallowedIntents],ase="the reason property is deprecated, use the code property to determine the reason",cse=!1,lse=!1,uR=class extends LYe{constructor(e){super(),Object.defineProperty(this,"client",{value:e}),this.gateway=null,this.shards=new qYe,Object.defineProperty(this,"packetQueue",{value:[]}),this.status=yn.Idle,this.destroyed=!1,this._ws=null}get ping(){return this.shards.reduce((i,r)=>i+r.ping,0)/this.shards.size}debug(e,i){this.client.emit(Kc.Debug,`[WS => ${typeof i=="number"?`Shard ${i}`:"Manager"}] ${e.join(`
-	`)}`)}async connect(){let e=new VYe(YYe.TokenInvalid),{shards:i,shardCount:r,intents:n,ws:s}=this.client.options;if(this._ws&&this._ws.options.token!==this.client.token&&(await this._ws.destroy({code:AR.Normal,reason:"Login with differing token requested"}),this._ws=null),!this._ws){let h={intents:n.bitfield,rest:this.client.rest,token:this.client.token,largeThreshold:s.large_threshold,version:s.version,shardIds:i==="auto"?null:i,shardCount:i==="auto"?null:r,initialPresence:s.presence,retrieveSessionInfo:d=>this.shards.get(d).sessionInfo,updateSessionInfo:(d,p)=>{this.shards.get(d).sessionInfo=p},compression:Ase?OYe.ZlibStream:null};s.buildIdentifyThrottler&&(h.buildIdentifyThrottler=s.buildIdentifyThrottler),s.buildStrategy&&(h.buildStrategy=s.buildStrategy),this._ws=new PYe(h),this.attachEvents()}let{url:o,shards:a,session_start_limit:c}=await this._ws.fetchGatewayInformation().catch(h=>{throw h.status===401?e:h}),{total:l,remaining:u}=c;this.debug(["Fetched Gateway Information",`URL: ${o}`,`Recommended Shards: ${a}`]),this.debug(["Session Limit Information",`Total: ${l}`,`Remaining: ${u}`]),this.gateway=`${o}/`,this.client.options.shardCount=await this._ws.getShardCount(),this.client.options.shards=await this._ws.getShardIds(),this.totalShards=this.client.options.shards.length;for(let h of this.client.options.shards)if(!this.shards.has(h)){let d=new GYe(this,h);this.shards.set(h,d),d.on(Cg.AllReady,p=>{this.client.emit(Kc.ShardReady,d.id,p),this.checkShardsReady()}),d.status=yn.Connecting}await this._ws.connect(),this.shards.forEach(h=>{h.listenerCount(Cg.InvalidSession)>0&&!cse&&(lR.emitWarning("The WebSocketShard#invalidSession event is deprecated and will never emit.","DeprecationWarning"),cse=!0),h.listenerCount(Cg.Destroyed)>0&&!lse&&(lR.emitWarning("The WebSocketShard#destroyed event is deprecated and will never emit.","DeprecationWarning"),lse=!0)})}attachEvents(){this._ws.on(ka.Debug,({message:e,shardId:i})=>this.debug([e],i)),this._ws.on(ka.Dispatch,({data:e,shardId:i})=>{this.client.emit(Kc.Raw,e,i),this.emit(e.t,e.d,i);let r=this.shards.get(i);this.handlePacket(e,r),r.status===yn.WaitingForGuilds&&jYe.includes(e.t)&&r.gotGuild(e.d.id)}),this._ws.on(ka.Ready,({data:e,shardId:i})=>{this.shards.get(i).onReadyPacket(e)}),this._ws.on(ka.Closed,({code:e,shardId:i})=>{let r=this.shards.get(i);if(r.emit(Cg.Close,{code:e,reason:ase,wasClean:!0}),WYe.includes(e)){r.status=yn.Disconnected,this.client.emit(Kc.ShardDisconnect,{code:e,reason:ase,wasClean:!0},i),this.debug([`Shard not recoverable: ${e} (${Zc[e]??AR[e]})`],i);return}this.shards.get(i).status=yn.Connecting,this.client.emit(Kc.ShardReconnecting,i)}),this._ws.on(ka.Hello,({shardId:e})=>{let i=this.shards.get(e);i.sessionInfo?(i.closeSequence=i.sessionInfo.sequence,i.status=yn.Resuming):i.status=yn.Identifying}),this._ws.on(ka.Resumed,({shardId:e})=>{let i=this.shards.get(e);i.status=yn.Ready,i.emit(Cg.Resumed)}),this._ws.on(ka.HeartbeatComplete,({heartbeatAt:e,latency:i,shardId:r})=>{this.debug([`Heartbeat acknowledged, latency of ${i}ms.`],r);let n=this.shards.get(r);n.lastPingTimestamp=e,n.ping=i}),this._ws.on(ka.Error,({error:e,shardId:i})=>{this.client.emit(Kc.ShardError,e,i)})}broadcast(e){for(let i of this.shards.keys())this._ws.send(i,e)}async destroy(){this.destroyed||(this.debug([Object.assign(new Error,{name:"Manager was destroyed:"}).stack]),this.destroyed=!0,await this._ws?.destroy({code:AR.Normal,reason:"Manager was destroyed"}))}handlePacket(e,i){if(e&&this.status!==yn.Ready&&!HYe.includes(e.t))return this.packetQueue.push({packet:e,shard:i}),!1;if(this.packetQueue.length){let r=this.packetQueue.shift();NYe(()=>{this.handlePacket(r.packet,r.shard)}).unref()}return e&&sse[e.t]&&sse[e.t](this.client,e,i),!0}checkShardsReady(){this.status!==yn.Ready&&(this.shards.size!==this.totalShards||this.shards.some(e=>e.status!==yn.Ready)||this.triggerClientReady())}triggerClientReady(){this.status=yn.Ready,this.client.readyTimestamp=Date.now(),this.client.emit("ready",this.client)&&!ose&&(ose=!0,lR.emitWarning("The ready event has been renamed to clientReady to distinguish it from the gateway READY event and will only emit under that name in v15. Please use clientReady instead.","DeprecationWarning")),this.client.emit(Kc.ClientReady,this.client),this.handlePacket()}};use.exports=uR});var dC=A((Uet,hse)=>{"use strict";var JYe=at(),dR=sd(),$Ye=Hd(),gR=YI(),{parseEmoji:zYe}=Re(),fR=class extends JYe{constructor(e,i){super(e,$Ye,i)}resolve(e){return e instanceof gR?this.cache.get(e.id)??null:e instanceof dR?this.cache.get(e.id)??null:super.resolve(e)}resolveId(e){return e instanceof gR||e instanceof dR?e.id:super.resolveId(e)}resolveIdentifier(e){let i=this.resolve(e);if(i)return i.identifier;if(e instanceof gR||e instanceof dR)return e.identifier;if(typeof e=="string"){let r=zYe(e);return r?.name.length&&(e=`${r.animated?"a:":""}${r.name}${r.id?`:${r.id}`:""}`),e.includes("%")?e:encodeURIComponent(e)}return null}};hse.exports=fR});var mR=A((Fet,gse)=>{"use strict";var KYe=require("node:process"),{Routes:ZYe}=k(),XYe=at(),{BaseChannel:eHe}=ia(),{createChannel:tHe}=Zd(),{ThreadChannelTypes:iHe}=qn(),rHe=W(),dse=!1,pR=class extends XYe{constructor(e,i){super(e,eHe,i);let r=this._cache.constructor.name==="Collection"||this._cache.maxSize===void 0||this._cache.maxSize===1/0;!dse&&!r&&(dse=!0,KYe.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning"))}_add(e,i,{cache:r=!0,allowUnknownGuild:n=!1}={}){let s=this.cache.get(e.id);if(s)return r&&s._patch(e),i?.channels?._add(s),iHe.includes(s.type)&&s.parent?.threads?._add(s),s;let o=tHe(this.client,e,i,{allowUnknownGuild:n});return o?(r&&!n&&this.cache.set(o.id,o),o):(this.client.emit(rHe.Debug,`Failed to find guild, or unknown type for channel ${e.id} ${e.type}`),null)}_remove(e){let i=this.cache.get(e);i?.guild?.channels.cache.delete(e);for(let[r,n]of i?.guild?.invites.cache??[])n.channelId===e&&i.guild.invites.cache.delete(r);if(i?.parent?.threads?.cache.delete(e),this.cache.delete(e),i?.threads)for(let r of i.threads.cache.keys())this.cache.delete(r),i.guild?.channels.cache.delete(r)}async fetch(e,{allowUnknownGuild:i=!1,cache:r=!0,force:n=!1}={}){if(!n){let o=this.cache.get(e);if(o&&!o.partial)return o}let s=await this.client.rest.get(ZYe.channel(e));return this._add(s,null,{cache:r,allowUnknownGuild:i})}};gse.exports=pR});var gC=A((Let,Ise)=>{"use strict";var Ma=require("node:process"),{calculateShardId:nHe}=Oe(),{DiscordjsError:sHe,DiscordjsTypeError:oHe,ErrorCodes:fse}=se(),vs=W(),{makeError:pse,makePlainError:mse}=Re(),IR=class{constructor(e,i){switch(this.client=e,this.mode=i,this.parentPort=null,i){case"process":Ma.on("message",this._handleMessage.bind(this)),e.on(vs.ShardReady,()=>{Ma.send({_ready:!0})}),e.on(vs.ShardDisconnect,()=>{Ma.send({_disconnect:!0})}),e.on(vs.ShardReconnecting,()=>{Ma.send({_reconnecting:!0})}),e.on(vs.ShardResume,()=>{Ma.send({_resume:!0})});break;case"worker":this.parentPort=require("node:worker_threads").parentPort,this.parentPort.on("message",this._handleMessage.bind(this)),e.on(vs.ShardReady,()=>{this.parentPort.postMessage({_ready:!0})}),e.on(vs.ShardDisconnect,()=>{this.parentPort.postMessage({_disconnect:!0})}),e.on(vs.ShardReconnecting,()=>{this.parentPort.postMessage({_reconnecting:!0})}),e.on(vs.ShardResume,()=>{this.parentPort.postMessage({_resume:!0})});break}}get ids(){return this.client.options.shards}get count(){return this.client.options.shardCount}send(e){return new Promise((i,r)=>{switch(this.mode){case"process":Ma.send(e,n=>{n?r(n):i()});break;case"worker":this.parentPort.postMessage(e),i();break}})}fetchClientValues(e,i){return new Promise((r,n)=>{let s=this.parentPort??Ma,o=a=>{a?._sFetchProp!==e||a._sFetchPropShard!==i||(s.removeListener("message",o),this.decrementMaxListeners(s),a._error?n(pse(a._error)):r(a._result))};this.incrementMaxListeners(s),s.on("message",o),this.send({_sFetchProp:e,_sFetchPropShard:i}).catch(a=>{s.removeListener("message",o),this.decrementMaxListeners(s),n(a)})})}broadcastEval(e,i={}){return new Promise((r,n)=>{let s=this.parentPort??Ma;if(typeof e!="function"){n(new oHe(fse.ShardingInvalidEvalBroadcast));return}e=`(${e})(this, ${JSON.stringify(i.context)})`;let o=a=>{a?._sEval!==e||a._sEvalShard!==i.shard||(s.removeListener("message",o),this.decrementMaxListeners(s),a._error?n(pse(a._error)):r(a._result))};this.incrementMaxListeners(s),s.on("message",o),this.send({_sEval:e,_sEvalShard:i.shard}).catch(a=>{s.removeListener("message",o),this.decrementMaxListeners(s),n(a)})})}respawnAll({shardDelay:e=5e3,respawnDelay:i=500,timeout:r=3e4}={}){return this.send({_sRespawnAll:{shardDelay:e,respawnDelay:i,timeout:r}})}async _handleMessage(e){if(e){if(e._fetchProp)try{let i=e._fetchProp.split("."),r=this.client;for(let n of i)r=r[n];this._respond("fetchProp",{_fetchProp:e._fetchProp,_result:r})}catch(i){this._respond("fetchProp",{_fetchProp:e._fetchProp,_error:mse(i)})}else if(e._eval)try{this._respond("eval",{_eval:e._eval,_result:await this.client._eval(e._eval)})}catch(i){this._respond("eval",{_eval:e._eval,_error:mse(i)})}}}_respond(e,i){this.send(i).catch(r=>{let n=new Error(`Error when sending ${e} response to master process: ${r.message}`);n.stack=r.stack,this.client.emit(vs.Error,n)})}static singleton(e,i){return this._singleton?e.emit(vs.Warn,"Multiple clients created in child process/worker; only the first will handle sharding helpers."):this._singleton=new this(e,i),this._singleton}static shardIdForGuildId(e,i){let r=nHe(e,i);if(r<0)throw new sHe(fse.ShardingShardMiscalculation,r,e,i);return r}incrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i+1)}decrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i-1)}};Ise.exports=IR});var CR=A((Net,Ese)=>{"use strict";var{Collection:Iu}=re(),aHe=jm(),cHe=vE(),lHe=ig(),AHe=ys(),{flatten:uHe}=Re(),ER=class{constructor(e,i){if(i.users)for(let r of i.users)e.client.users._add(r);if(i.threads)for(let r of i.threads)e.client.channels._add(r,e);if(this.webhooks=new Iu,i.webhooks)for(let r of i.webhooks)this.webhooks.set(r.id,new AHe(e.client,r));if(this.integrations=new Iu,i.integrations)for(let r of i.integrations)this.integrations.set(r.id,new lHe(e.client,r,e));if(this.guildScheduledEvents=i.guild_scheduled_events.reduce((r,n)=>r.set(n.id,e.scheduledEvents._add(n)),new Iu),this.applicationCommands=new Iu,i.application_commands)for(let r of i.application_commands)this.applicationCommands.set(r.id,new aHe(e.client,r,e));this.autoModerationRules=i.auto_moderation_rules.reduce((r,n)=>r.set(n.id,e.autoModerationRules._add(n)),new Iu),this.entries=new Iu;for(let r of i.audit_log_entries){let n=new cHe(e,r,this);this.entries.set(n.id,n)}}toJSON(){return uHe(this)}};Ese.exports=ER});var yR=A(Bse=>{"use strict";var{Collection:Cse}=re(),hHe=_e(),{GuildOnboardingPrompt:dHe}=QE(),BR=class extends hHe{constructor(e,i){super(e),this.guildId=i.guild_id;let r=this.guild;this.prompts=i.prompts.reduce((n,s)=>n.set(s.id,new dHe(e,s,this.guildId)),new Cse),this.defaultChannels=i.default_channel_ids.reduce((n,s)=>n.set(s,r.channels.cache.get(s)),new Cse),this.enabled=i.enabled,this.mode=i.mode}get guild(){return this.client.guilds.cache.get(this.guildId)}};Bse.GuildOnboarding=BR});var wR=A((Pet,yse)=>{"use strict";var gHe=VI(),QR=class extends gHe{constructor(e,i,r){super(e,i,r),this.roles=i.roles}};yse.exports=QR});var fC=A((Oet,wse)=>{"use strict";var{Collection:Qse}=re(),{DiscordSnowflake:fHe}=At(),{Routes:pHe}=k(),mHe=_e(),IHe=wR(),{Sticker:EHe}=Ca(),bR=class extends mHe{constructor(e,i){super(e),i&&this._patch(i)}_patch(e){this.id=e.id,"name"in e&&(this.name=e.name),"icon"in e&&(this.icon=e.icon),"splash"in e&&(this.splash=e.splash),"discovery_splash"in e&&(this.discoverySplash=e.discovery_splash),"features"in e&&(this.features=e.features),"approximate_member_count"in e&&(this.approximateMemberCount=e.approximate_member_count),"approximate_presence_count"in e&&(this.approximatePresenceCount=e.approximate_presence_count),"description"in e?this.description=e.description:this.description??=null,this.emojis?this.emojis.clear():this.emojis=new Qse;for(let i of e.emojis)this.emojis.set(i.id,new IHe(this.client,i,this));this.stickers=e.stickers.reduce((i,r)=>i.set(r.id,new EHe(this.client,r)),new Qse)}get createdTimestamp(){return fHe.timestampFrom(this.id)}get createdAt(){return new Date(this.createdTimestamp)}splashURL(e={}){return this.splash&&this.client.rest.cdn.splash(this.id,this.splash,e)}discoverySplashURL(e={}){return this.discoverySplash&&this.client.rest.cdn.discoverySplash(this.id,this.discoverySplash,e)}iconURL(e={}){return this.icon&&this.client.rest.cdn.icon(this.id,this.icon,e)}async fetch(){let e=await this.client.rest.get(pHe.guildPreview(this.id));return this._patch(e),this}toString(){return this.name}toJSON(){let e=super.toJSON();return e.iconURL=this.iconURL(),e.splashURL=this.splashURL(),e}};wse.exports=bR});var xR=A((Get,bse)=>{"use strict";var{Collection:CHe}=re(),{Routes:Bg}=k(),BHe=at(),yHe=yE(),vR=class extends BHe{constructor(e,i){super(e.client,yHe,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async create({name:e,eventType:i,triggerType:r,triggerMetadata:n,actions:s,enabled:o,exemptRoles:a,exemptChannels:c,reason:l}){let u=await this.client.rest.post(Bg.guildAutoModerationRules(this.guild.id),{body:{name:e,event_type:i,trigger_type:r,trigger_metadata:n&&{keyword_filter:n.keywordFilter,regex_patterns:n.regexPatterns,presets:n.presets,allow_list:n.allowList,mention_total_limit:n.mentionTotalLimit,mention_raid_protection_enabled:n.mentionRaidProtectionEnabled},actions:s.map(h=>({type:h.type,metadata:{duration_seconds:h.metadata?.durationSeconds,channel_id:h.metadata?.channel&&this.guild.channels.resolveId(h.metadata.channel),custom_message:h.metadata?.customMessage}})),enabled:o,exempt_roles:a?.map(h=>this.guild.roles.resolveId(h)),exempt_channels:c?.map(h=>this.guild.channels.resolveId(h))},reason:l});return this._add(u)}async edit(e,{name:i,eventType:r,triggerMetadata:n,actions:s,enabled:o,exemptRoles:a,exemptChannels:c,reason:l}){let u=this.resolveId(e),h=await this.client.rest.patch(Bg.guildAutoModerationRule(this.guild.id,u),{body:{name:i,event_type:r,trigger_metadata:n&&{keyword_filter:n.keywordFilter,regex_patterns:n.regexPatterns,presets:n.presets,allow_list:n.allowList,mention_total_limit:n.mentionTotalLimit,mention_raid_protection_enabled:n.mentionRaidProtectionEnabled},actions:s?.map(d=>({type:d.type,metadata:{duration_seconds:d.metadata?.durationSeconds,channel_id:d.metadata?.channel&&this.guild.channels.resolveId(d.metadata.channel),custom_message:d.metadata?.customMessage}})),enabled:o,exempt_roles:a?.map(d=>this.guild.roles.resolveId(d)),exempt_channels:c?.map(d=>this.guild.channels.resolveId(d))},reason:l});return this._add(h)}fetch(e){if(!e)return this._fetchMany();let{autoModerationRule:i,cache:r,force:n}=e,s=this.resolveId(i??e);return s?this._fetchSingle({autoModerationRule:s,cache:r,force:n}):this._fetchMany(e)}async _fetchSingle({autoModerationRule:e,cache:i,force:r=!1}){if(!r){let s=this.cache.get(e);if(s)return s}let n=await this.client.rest.get(Bg.guildAutoModerationRule(this.guild.id,e));return this._add(n,i)}async _fetchMany(e={}){return(await this.client.rest.get(Bg.guildAutoModerationRules(this.guild.id))).reduce((r,n)=>r.set(n.id,this._add(n,e.cache)),new CHe)}async delete(e,i){let r=this.resolveId(e);await this.client.rest.delete(Bg.guildAutoModerationRule(this.guild.id,r),{reason:i})}};bse.exports=vR});var DR=A((Vet,vse)=>{"use strict";var QHe=Jm(),wHe=rd(),SR=class extends QHe{constructor(e,i){super(e.client,i),this.guild=e,this.permissions=new wHe(this)}};vse.exports=SR});var MR=A((Yet,Dse)=>{"use strict";var bHe=require("node:process"),{Collection:xse}=re(),{makeURLSearchParams:vHe}=bt(),{Routes:yg}=k(),xHe=at(),{DiscordjsTypeError:_R,DiscordjsError:pC,ErrorCodes:Xc}=se(),SHe=xE(),{GuildMember:DHe}=Qa(),Sse=!1,kR=class extends xHe{constructor(e,i){super(e.client,SHe,i),this.guild=e}_add(e,i){return super._add(e,i,{id:e.user.id,extras:[this.guild]})}resolve(e){return super.resolve(e)??super.resolve(this.client.users.resolveId(e))}async fetch(e){if(!e)return this._fetchMany();let{user:i,cache:r,force:n,limit:s,before:o,after:a}=e,c=this.client.users.resolveId(i??e);if(c)return this._fetchSingle({user:c,cache:r,force:n});if(!o&&!a&&!s&&r===void 0)throw new pC(Xc.FetchBanResolveId);return this._fetchMany(e)}async _fetchSingle({user:e,cache:i,force:r=!1}){if(!r){let s=this.cache.get(e);if(s&&!s.partial)return s}let n=await this.client.rest.get(yg.guildBan(this.guild.id,e));return this._add(n,i)}async _fetchMany({cache:e,...i}={}){return(await this.client.rest.get(yg.guildBans(this.guild.id),{query:vHe(i)})).reduce((n,s)=>n.set(s.user.id,this._add(s,e)),new xse)}async create(e,i={}){if(typeof i!="object")throw new _R(Xc.InvalidType,"options","object",!0);let r=this.client.users.resolveId(e);if(!r)throw new pC(Xc.BanResolveId,!0);if(i.deleteMessageDays!==void 0&&!Sse&&(bHe.emitWarning("The deleteMessageDays option for GuildBanManager#create() is deprecated. Use the deleteMessageSeconds option instead.","DeprecationWarning"),Sse=!0),await this.client.rest.put(yg.guildBan(this.guild.id,r),{body:{delete_message_seconds:i.deleteMessageSeconds??(i.deleteMessageDays?i.deleteMessageDays*24*60*60:void 0)},reason:i.reason}),e instanceof DHe)return e;let n=this.client.users.cache.get(r);return n?this.guild.members.resolve(n)??n:r}async remove(e,i){let r=this.client.users.resolveId(e);if(!r)throw new pC(Xc.BanResolveId);return await this.client.rest.delete(yg.guildBan(this.guild.id,r),{reason:i}),this.client.users.resolve(e)}async bulkCreate(e,i={}){if(!e||!(Array.isArray(e)||e instanceof xse))throw new _R(Xc.InvalidType,"users","Array or Collection of UserResolvable",!0);if(typeof i!="object")throw new _R(Xc.InvalidType,"options","object",!0);let r=e.map(s=>this.client.users.resolveId(s));if(r.length===0)throw new pC(Xc.BulkBanUsersOptionEmpty);let n=await this.client.rest.post(yg.guildBulkBan(this.guild.id),{body:{delete_message_seconds:i.deleteMessageSeconds,user_ids:r},reason:i.reason});return{bannedUsers:n.banned_users,failedUsers:n.failed_users}}};Dse.exports=kR});var TR=A((Het,Fse)=>{"use strict";var _He=require("node:process"),{Collection:_se}=re(),{ChannelType:kHe,Routes:Wn}=k(),MHe=at(),RHe=mE(),{DiscordjsError:THe,DiscordjsTypeError:el,ErrorCodes:Ra}=se(),UHe=gs(),mC=Mm(),kse=Xd(),Mse=ys(),FHe=Wh(),{transformGuildForumTag:Rse,transformGuildDefaultReaction:Tse}=Zd(),{ThreadChannelTypes:LHe}=qn(),{resolveImage:NHe}=Ci(),{setPosition:qHe}=Re(),Use=!1,RR=class extends MHe{constructor(e,i){super(e.client,UHe,i);let r=this._cache.constructor.name==="Collection"||this._cache.maxSize===void 0||this._cache.maxSize===1/0;!Use&&!r&&(Use=!0,_He.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning")),this.guild=e}get channelCountWithoutThreads(){return this.cache.reduce((e,i)=>LHe.includes(i.type)?e:++e,0)}_add(e){let i=this.cache.get(e.id);return i||(this.cache.set(e.id,e),e)}resolve(e){return e instanceof kse?this.cache.get(e.id)??null:super.resolve(e)}resolveId(e){return e instanceof kse?super.resolveId(e.id):super.resolveId(e)}async addFollower(e,i,r){let n=this.resolveId(e);if(!n)throw new el(Ra.InvalidType,"channel","NewsChannelResolvable");let s=this.resolveId(i);if(!s)throw new el(Ra.InvalidType,"targetChannel","TextChannelResolvable");let{webhook_id:o}=await this.client.rest.post(Wn.channelFollowers(n),{body:{webhook_channel_id:s},reason:r});return o}async create({name:e,type:i,topic:r,nsfw:n,bitrate:s,userLimit:o,parent:a,permissionOverwrites:c,position:l,rateLimitPerUser:u,rtcRegion:h,videoQualityMode:d,defaultThreadRateLimitPerUser:p,availableTags:m,defaultReactionEmoji:B,defaultAutoArchiveDuration:f,defaultSortOrder:E,defaultForumLayout:D,reason:R}){a&&=this.client.channels.resolveId(a),c&&=c.map(V=>mC.resolve(V,this.guild));let G=await this.client.rest.post(Wn.guildChannels(this.guild.id),{body:{name:e,topic:r,type:i,nsfw:n,bitrate:s,user_limit:o,parent_id:a,position:l,permission_overwrites:c,rate_limit_per_user:u,rtc_region:h,video_quality_mode:d,default_thread_rate_limit_per_user:p,available_tags:m?.map(V=>Rse(V)),default_reaction_emoji:B&&Tse(B),default_auto_archive_duration:f,default_sort_order:E,default_forum_layout:D},reason:R});return this.client.actions.ChannelCreate.handle(G).channel}async createWebhook({channel:e,name:i,avatar:r,reason:n}){let s=this.resolveId(e);if(!s)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");let o=await NHe(r),a=await this.client.rest.post(Wn.channelWebhooks(s),{body:{name:i,avatar:o},reason:n});return new Mse(this.client,a)}async edit(e,i){let r=this.resolve(e);if(!r)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");let n=i.parent&&this.client.channels.resolveId(i.parent);i.position!==void 0&&await this.setPosition(r,i.position,{position:i.position,reason:i.reason});let s=i.permissionOverwrites?.map(a=>mC.resolve(a,this.guild));if(i.lockPermissions)if(n){let a=this.cache.get(n);a?.type===kHe.GuildCategory&&(s=a.permissionOverwrites.cache.map(c=>mC.resolve(c,this.guild)))}else r.parent&&(s=r.parent.permissionOverwrites.cache.map(a=>mC.resolve(a,this.guild)));let o=await this.client.rest.patch(Wn.channel(r.id),{body:{name:i.name,type:i.type,topic:i.topic,nsfw:i.nsfw,bitrate:i.bitrate,user_limit:i.userLimit,rtc_region:i.rtcRegion,video_quality_mode:i.videoQualityMode,parent_id:n,lock_permissions:i.lockPermissions,rate_limit_per_user:i.rateLimitPerUser,default_auto_archive_duration:i.defaultAutoArchiveDuration,permission_overwrites:s,available_tags:i.availableTags?.map(a=>Rse(a)),default_reaction_emoji:i.defaultReactionEmoji&&Tse(i.defaultReactionEmoji),default_thread_rate_limit_per_user:i.defaultThreadRateLimitPerUser,flags:"flags"in i?FHe.resolve(i.flags):void 0,default_sort_order:i.defaultSortOrder,default_forum_layout:i.defaultForumLayout},reason:i.reason});return this.client.actions.ChannelUpdate.handle(o).updated}async setPosition(e,i,{relative:r,reason:n}={}){if(e=this.resolve(e),!e)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");let s=await qHe(e,i,r,this.guild._sortedChannels(e),this.client,Wn.guildChannels(this.guild.id),n);return this.client.actions.GuildChannelsPositionUpdate.handle({guild_id:this.guild.id,channels:s}),e}async fetch(e,{cache:i=!0,force:r=!1}={}){if(e&&!r){let o=this.cache.get(e);if(o)return o}if(e){let o=await this.client.rest.get(Wn.channel(e));if(this.guild.id!==o.guild_id)throw new THe(Ra.GuildChannelUnowned);return this.client.channels._add(o,this.guild,{cache:i})}let n=await this.client.rest.get(Wn.guildChannels(this.guild.id)),s=new _se;for(let o of n)s.set(o.id,this.client.channels._add(o,this.guild,{cache:i}));return s}async fetchWebhooks(e){let i=this.resolveId(e);if(!i)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");return(await this.client.rest.get(Wn.channelWebhooks(i))).reduce((n,s)=>n.set(s.id,new Mse(this.client,s)),new _se)}async setPositions(e){return e=e.map(i=>({id:this.client.channels.resolveId(i.channel),position:i.position,lock_permissions:i.lockPermissions,parent_id:i.parent!==void 0?this.resolveId(i.parent):void 0})),await this.client.rest.patch(Wn.guildChannels(this.guild.id),{body:e}),this.client.actions.GuildChannelsPositionUpdate.handle({guild_id:this.guild.id,channels:e}).guild}async fetchActiveThreads(e=!0){let i=await this.rawFetchGuildActiveThreads();return RHe._mapThreads(i,this.client,{guild:this.guild,cache:e})}rawFetchGuildActiveThreads(){return this.client.rest.get(Wn.guildActiveThreads(this.guild.id))}async delete(e,i){let r=this.resolveId(e);if(!r)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");await this.client.rest.delete(Wn.channel(r),{reason:i}),this.client.actions.ChannelDelete.handle({id:r})}};Fse.exports=RR});var LR=A((jet,qse)=>{"use strict";var{Collection:Lse}=re(),{Routes:Eu,PermissionFlagsBits:Nse}=k(),PHe=dC(),{DiscordjsError:UR,DiscordjsTypeError:Cu,ErrorCodes:Qo}=se(),{resolveImage:OHe}=Ci(),FR=class extends PHe{constructor(e,i){super(e.client,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async create({attachment:e,name:i,roles:r,reason:n}){if(e=await OHe(e),!e)throw new Cu(Qo.ReqResourceType);let s={image:e,name:i};if(r){if(!Array.isArray(r)&&!(r instanceof Lse))throw new Cu(Qo.InvalidType,"options.roles","Array or Collection of Roles or Snowflakes",!0);s.roles=[];for(let a of r.values()){let c=this.guild.roles.resolveId(a);if(!c)throw new Cu(Qo.InvalidElement,"Array or Collection","options.roles",a);s.roles.push(c)}}let o=await this.client.rest.post(Eu.guildEmojis(this.guild.id),{body:s,reason:n});return this.client.actions.GuildEmojiCreate.handle(this.guild,o).emoji}async fetch(e,{cache:i=!0,force:r=!1}={}){if(e){if(!r){let a=this.cache.get(e);if(a)return a}let o=await this.client.rest.get(Eu.guildEmoji(this.guild.id,e));return this._add(o,i)}let n=await this.client.rest.get(Eu.guildEmojis(this.guild.id)),s=new Lse;for(let o of n)s.set(o.id,this._add(o,i));return s}async delete(e,i){let r=this.resolveId(e);if(!r)throw new Cu(Qo.InvalidType,"emoji","EmojiResolvable",!0);await this.client.rest.delete(Eu.guildEmoji(this.guild.id,r),{reason:i})}async edit(e,i){let r=this.resolveId(e);if(!r)throw new Cu(Qo.InvalidType,"emoji","EmojiResolvable",!0);let n=i.roles?.map(a=>this.guild.roles.resolveId(a)),s=await this.client.rest.patch(Eu.guildEmoji(this.guild.id,r),{body:{name:i.name,roles:n},reason:i.reason}),o=this.cache.get(r);if(o){let a=o._clone();return a._patch(s),a}return this._add(s)}async fetchAuthor(e){if(e=this.resolve(e),!e)throw new Cu(Qo.InvalidType,"emoji","EmojiResolvable",!0);if(e.managed)throw new UR(Qo.EmojiManaged);let{me:i}=this.guild.members;if(!i)throw new UR(Qo.GuildUncachedMe);if(!i.permissions.any(Nse.CreateGuildExpressions|Nse.ManageGuildExpressions))throw new UR(Qo.MissingManageGuildExpressionsPermission,this.guild);let r=await this.client.rest.get(Eu.guildEmoji(this.guild.id,e.id));return e._patch(r),e.author}};qse.exports=FR});var PR=A((Wet,Gse)=>{"use strict";var{Collection:Pse}=re(),{Routes:IC}=k(),GHe=at(),{DiscordjsError:Qg,ErrorCodes:wg}=se(),Ose=sa(),{resolveInviteCode:NR}=Ci(),qR=class extends GHe{constructor(e,i){super(e.client,Ose,i),this.guild=e}_add(e,i){return super._add(e,i,{id:e.code,extras:[this.guild]})}async fetch(e){if(!e)return this._fetchMany();if(typeof e=="string"){let i=NR(e);if(!i)throw new Qg(wg.InviteResolveCode);return this._fetchSingle({code:i,cache:!0})}if(!e.code){if(e.channelId){let i=this.guild.channels.resolveId(e.channelId);if(!i)throw new Qg(wg.GuildChannelResolve);return this._fetchChannelMany(i,e.cache)}if("cache"in e)return this._fetchMany(e.cache);throw new Qg(wg.InviteResolveCode)}return this._fetchSingle({...e,code:NR(e.code)})}async _fetchSingle({code:e,cache:i,force:r=!1}){if(!r){let o=this.cache.get(e);if(o)return o}let s=(await this._fetchMany(i)).get(e);if(!s)throw new Qg(wg.InviteNotFound);return s}async _fetchMany(e){return(await this.client.rest.get(IC.guildInvites(this.guild.id))).reduce((r,n)=>r.set(n.code,this._add(n,e)),new Pse)}async _fetchChannelMany(e,i){return(await this.client.rest.get(IC.channelInvites(e))).reduce((n,s)=>n.set(s.code,this._add(s,i)),new Pse)}async create(e,{temporary:i,maxAge:r,maxUses:n,unique:s,targetUser:o,targetApplication:a,targetType:c,reason:l}={}){let u=this.guild.channels.resolveId(e);if(!u)throw new Qg(wg.GuildChannelResolve);let h=await this.client.rest.post(IC.channelInvites(u),{body:{temporary:i,max_age:r,max_uses:n,unique:s,target_user_id:this.client.users.resolveId(o),target_application_id:a?.id??a?.applicationId??a,target_type:c},reason:l});return new Ose(this.client,h)}async delete(e,i){let r=NR(e);await this.client.rest.delete(IC.invite(r),{reason:i})}};Gse.exports=qR});var VR=A((Jet,jse)=>{"use strict";var{process:VHe}=require("node:process"),{setTimeout:YHe,clearTimeout:HHe}=require("node:timers"),{Collection:EC}=re(),{makeURLSearchParams:OR}=bt(),{GatewayRateLimitError:jHe}=Oe(),{DiscordSnowflake:WHe}=At(),{Routes:Jn,GatewayOpcodes:JHe,GatewayDispatchEvents:$He}=k(),zHe=at(),{DiscordjsError:Vse,DiscordjsTypeError:tl,DiscordjsRangeError:KHe,ErrorCodes:xs}=se(),ZHe=tg(),{GuildMember:XHe}=Qa(),{Role:eje}=no(),{resolveImage:Yse}=Ci(),CC=W(),{GuildMemberFlagsBitField:tje}=tE(),ije=wa(),Hse=!1,GR=class extends zHe{constructor(e,i){super(e.client,XHe,i),this.guild=e}_add(e,i=!0){return super._add(e,i,{id:e.user.id,extras:[this.guild]})}resolve(e){let i=super.resolve(e);if(i)return i;let r=this.client.users.resolveId(e);return r?this.cache.get(r)??null:null}resolveId(e){let i=super.resolveId(e);if(i)return i;let r=this.client.users.resolveId(e);return this.cache.has(r)?r:null}async add(e,i){let r=this.client.users.resolveId(e);if(!r)throw new tl(xs.InvalidType,"user","UserResolvable");if(!i.force){let o=this.cache.get(r);if(o)return o}let n={access_token:i.accessToken,nick:i.nick,mute:i.mute,deaf:i.deaf};if(i.roles){if(!Array.isArray(i.roles)&&!(i.roles instanceof EC))throw new tl(xs.InvalidType,"options.roles","Array or Collection of Roles or Snowflakes",!0);let o=[];for(let a of i.roles.values()){let c=this.guild.roles.resolveId(a);if(!c)throw new tl(xs.InvalidElement,"Array or Collection","options.roles",a);o.push(c)}n.roles=o}let s=await this.client.rest.put(Jn.guildMember(this.guild.id,r),{body:n});return s instanceof ArrayBuffer?i.fetchWhenExisting===!1?null:this.fetch(r):this._add(s)}get me(){return this.cache.get(this.client.user.id)??(this.client.options.partials.includes(ije.GuildMember)?this._add({user:{id:this.client.user.id}},!0):null)}fetch(e){if(!e)return this._fetchMany();let{user:i,limit:r,withPresences:n,cache:s,force:o}=e,a=this.client.users.resolveId(i??e);if(a&&!r&&!n)return this._fetchSingle({user:a,cache:s,force:o});let c=i?.map?.(l=>this.client.users.resolveId(l))??a??void 0;return this._fetchMany({...e,users:c})}async _fetchSingle({user:e,cache:i,force:r=!1}){if(!r){let s=this.cache.get(e);if(s&&!s.partial)return s}let n=await this.client.rest.get(Jn.guildMember(this.guild.id,e));return this._add(n,i)}async _fetchMany({limit:e=0,withPresences:i,users:r,query:n,time:s=12e4,nonce:o=WHe.generate().toString()}={}){if(o.length>32)throw new KHe(xs.MemberFetchNonceLength);return new Promise((a,c)=>{!n&&!r&&(n="");let l=new EC,u=0,h=()=>{HHe(d),this.client.removeListener(CC.Raw,B),this.client.decrementMaxListeners(),this.client.removeListener(CC.GuildMembersChunk,p),this.client.decrementMaxListeners()},d=YHe(()=>{h(),c(new Vse(xs.GuildMembersTimeout))},s).unref(),p=(f,E,D)=>{if(D.nonce===o){d.refresh(),u++;for(let R of f.values())l.set(R.id,R);(f.size<1e3||e&&l.size>=e||u===D.count)&&(h(),a(r&&!Array.isArray(r)&&l.size?l.first():l))}},m={guild_id:this.guild.id,presences:i,user_ids:r,query:n,nonce:o,limit:e},B=f=>{f.t===$He.RateLimited&&f.d.meta.nonce===o&&(h(),c(new jHe(f.d,m)))};this.client.incrementMaxListeners(),this.client.on(CC.Raw,B),this.client.incrementMaxListeners(),this.client.on(CC.GuildMembersChunk,p),this.guild.shard.send({op:JHe.RequestGuildMembers,d:m})})}fetchMe(e){return this.fetch({...e,user:this.client.user.id})}async search({query:e,limit:i,cache:r=!0}={}){return(await this.client.rest.get(Jn.guildMembersSearch(this.guild.id),{query:OR({query:e,limit:i})})).reduce((s,o)=>s.set(o.user.id,this._add(o,r)),new EC)}async list({after:e,limit:i,cache:r=!0}={}){let n=OR({limit:i,after:e});return(await this.client.rest.get(Jn.guildMembers(this.guild.id),{query:n})).reduce((o,a)=>o.set(a.user.id,this._add(a,r)),new EC)}async edit(e,{reason:i,...r}){let n=this.client.users.resolveId(e);if(!n)throw new tl(xs.InvalidType,"user","UserResolvable");if(r.channel){if(r.channel=this.guild.channels.resolve(r.channel),!(r.channel instanceof ZHe))throw new Vse(xs.GuildVoiceChannelResolve);r.channel_id=r.channel.id,r.channel=void 0}else r.channel===null&&(r.channel_id=null,r.channel=void 0);r.roles&&=r.roles.map(c=>c instanceof eje?c.id:c),r.communicationDisabledUntil!==void 0&&(r.communication_disabled_until=r.communicationDisabledUntil!=null?new Date(r.communicationDisabledUntil).toISOString():r.communicationDisabledUntil),r.flags!==void 0&&(r.flags=tje.resolve(r.flags));let s;if(n===this.client.user.id){let c=Object.keys(r);c.length===1&&c[0]==="nick"&&(s=Jn.guildMember(this.guild.id,"@me"),Hse||(VHe.emitWarning("You should use GuildMemberManager#editMe() when changing your nickname. Due to Discord's API changes, GuildMemberManager#edit() will end up requiring MANAGE_NICKNAMES in v15.","DeprecationWarning"),Hse=!0))}s??=Jn.guildMember(this.guild.id,n);let o=await this.client.rest.patch(s,{body:r,reason:i}),a=this.cache.get(n)?._clone();return a?._patch(o),a??this._add(o,!1)}async editMe({reason:e,...i}){let r=await this.client.rest.patch(Jn.guildMember(this.guild.id,"@me"),{body:{...i,banner:i.banner&&await Yse(i.banner),avatar:i.avatar&&await Yse(i.avatar)},reason:e}),n=this.me?._clone();return n?._patch(r),n??this._add(r,!1)}async prune({days:e,dry:i=!1,count:r,roles:n=[],reason:s}={}){if(typeof e!="number")throw new tl(xs.PruneDaysType);let o={days:e},a=[];for(let u of n){let h=this.guild.roles.resolveId(u);if(!h)throw new tl(xs.InvalidElement,"Array","options.roles",u);a.push(h)}a.length&&(o.include_roles=i?a.join(","):a);let c=Jn.guildPrune(this.guild.id),{pruned:l}=await(i?this.client.rest.get(c,{query:OR(o),reason:s}):this.client.rest.post(c,{body:{...o,compute_prune_count:r},reason:s}));return l}async kick(e,i){let r=this.client.users.resolveId(e);if(!r)throw new tl(xs.InvalidType,"user","UserResolvable");return await this.client.rest.delete(Jn.guildMember(this.guild.id,r),{reason:i}),this.resolve(e)??this.client.users.resolve(e)??r}ban(e,i){return this.guild.bans.create(e,i)}unban(e,i){return this.guild.bans.remove(e,i)}bulkBan(e,i={}){return this.guild.bans.bulkCreate(e,i)}async addRole(e){let{user:i,role:r,reason:n}=e,s=this.resolveId(i),o=this.guild.roles.resolveId(r);return await this.client.rest.put(Jn.guildMemberRole(this.guild.id,s,o),{reason:n}),this.resolve(i)??this.client.users.resolve(i)??s}async removeRole(e){let{user:i,role:r,reason:n}=e,s=this.resolveId(i),o=this.guild.roles.resolveId(r);return await this.client.rest.delete(Jn.guildMemberRole(this.guild.id,s,o),{reason:n}),this.resolve(i)??this.client.users.resolve(i)??s}};jse.exports=GR});var jR=A(($et,Kse)=>{"use strict";var{Collection:Wse}=re(),{makeURLSearchParams:YR}=bt(),{GuildScheduledEventEntityType:rje,Routes:Bu}=k(),nje=at(),{DiscordjsTypeError:Jse,DiscordjsError:BC,ErrorCodes:yu}=se(),{GuildScheduledEvent:sje}=Zh(),{resolveImage:$se}=Ci(),{_transformGuildScheduledEventRecurrenceRule:zse}=Kt(),HR=class extends nje{constructor(e,i){super(e.client,sje,i),this.guild=e}async create(e){if(typeof e!="object")throw new Jse(yu.InvalidType,"options","object",!0);let{privacyLevel:i,entityType:r,channel:n,name:s,scheduledStartTime:o,description:a,scheduledEndTime:c,entityMetadata:l,reason:u,image:h,recurrenceRule:d}=e,p,m;if(r===rje.External)m=n===void 0?n:null,p={location:l?.location};else{if(m=this.guild.channels.resolveId(n),!m)throw new BC(yu.GuildVoiceChannelResolve);p=l===void 0?l:null}let B=await this.client.rest.post(Bu.guildScheduledEvents(this.guild.id),{body:{channel_id:m,name:s,privacy_level:i,scheduled_start_time:new Date(o).toISOString(),scheduled_end_time:c&&new Date(c).toISOString(),description:a,entity_type:r,entity_metadata:p,image:h&&await $se(h),recurrence_rule:d&&zse(d)},reason:u});return this._add(B)}async fetch(e={}){let i=this.resolveId(e.guildScheduledEvent??e);if(i){if(!e.force){let s=this.cache.get(i);if(s)return s}let n=await this.client.rest.get(Bu.guildScheduledEvent(this.guild.id,i),{query:YR({with_user_count:e.withUserCount??!0})});return this._add(n,e.cache)}return(await this.client.rest.get(Bu.guildScheduledEvents(this.guild.id),{query:YR({with_user_count:e.withUserCount??!0})})).reduce((n,s)=>n.set(s.id,this._add(s,e.cache)),new Wse)}async edit(e,i){let r=this.resolveId(e);if(!r)throw new BC(yu.GuildScheduledEventResolve);if(typeof i!="object")throw new Jse(yu.InvalidType,"options","object",!0);let{privacyLevel:n,entityType:s,channel:o,status:a,name:c,scheduledStartTime:l,description:u,scheduledEndTime:h,entityMetadata:d,reason:p,image:m,recurrenceRule:B}=i,f;d&&(f={location:d.location});let E=await this.client.rest.patch(Bu.guildScheduledEvent(this.guild.id,r),{body:{channel_id:o===void 0?o:this.guild.channels.resolveId(o),name:c,privacy_level:n,scheduled_start_time:l?new Date(l).toISOString():void 0,scheduled_end_time:h&&new Date(h).toISOString(),description:u,entity_type:s,status:a,image:m&&await $se(m),entity_metadata:f,recurrence_rule:B&&zse(B)},reason:p});return this._add(E)}async delete(e){let i=this.resolveId(e);if(!i)throw new BC(yu.GuildScheduledEventResolve);await this.client.rest.delete(Bu.guildScheduledEvent(this.guild.id,i))}async fetchSubscribers(e,i={}){let r=this.resolveId(e);if(!r)throw new BC(yu.GuildScheduledEventResolve);let n=YR({limit:i.limit,with_member:i.withMember,before:i.before,after:i.after});return(await this.client.rest.get(Bu.guildScheduledEventUsers(this.guild.id,r),{query:n})).reduce((o,a)=>o.set(a.user.id,{guildScheduledEventId:a.guild_scheduled_event_id,user:this.client.users._add(a.user),member:a.member?this.guild.members._add({...a.member,user:a.user}):null}),new Wse)}};Kse.exports=HR});var yC=A(eoe=>{"use strict";var{DiscordSnowflake:oje}=At(),aje=_e(),{Emoji:cje}=Pn(),{DiscordjsError:Zse,ErrorCodes:Xse}=se(),WR=class t extends aje{constructor(e,i){super(e),this.soundId=i.sound_id,this._patch(i)}_patch(e){"available"in e?this.available=e.available:this.available??=null,"name"in e?this.name=e.name:this.name??=null,"volume"in e?this.volume=e.volume:this.volume??=null,"emoji_id"in e?this._emoji={id:e.emoji_id,name:e.emoji_name}:this._emoji??=null,"guild_id"in e?this.guildId=e.guild_id:this.guildId??=null,"user"in e?this.user=this.client.users._add(e.user):this.user??=null}get createdTimestamp(){return oje.timestampFrom(this.soundId)}get createdAt(){return new Date(this.createdTimestamp)}get emoji(){return this._emoji?this.guild?.emojis.cache.get(this._emoji.id)??new cje(this.client,this._emoji):null}get guild(){return this.client.guilds.resolve(this.guildId)}get url(){return this.client.rest.cdn.soundboardSound(this.soundId)}async edit(e){if(!this.guildId)throw new Zse(Xse.NotGuildSoundboardSound,"edited");return this.guild.soundboardSounds.edit(this,e)}async delete(e){if(!this.guildId)throw new Zse(Xse.NotGuildSoundboardSound,"deleted");return await this.guild.soundboardSounds.delete(this,e),this}equals(e){return e instanceof t?this.soundId===e.soundId&&this.available===e.available&&this.name===e.name&&this.volume===e.volume&&this._emoji?.id===e._emoji?.id&&this._emoji?.name===e._emoji?.name&&this.guildId===e.guildId&&this.user?.id===e.user?.id:this.soundId===e.sound_id&&this.available===e.available&&this.name===e.name&&this.volume===e.volume&&(this._emoji?.id??null)===e.emoji_id&&(this._emoji?.name??null)===e.emoji_name&&this.guildId===e.guild_id&&this.user?.id===e.user?.id}};eoe.SoundboardSound=WR});var $R=A(roe=>{"use strict";var{Collection:lje}=re(),{lazy:Aje}=Oe(),{Routes:bg}=k(),uje=at(),{DiscordjsTypeError:toe,ErrorCodes:ioe}=se(),{SoundboardSound:hje}=yC(),{resolveBase64:dje,resolveFile:gje}=Ci(),fje=Aje(()=>i0().filetypemime),JR=class extends uje{constructor(e,i){super(e.client,hje,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild],id:e.sound_id})}resolveId(e){return e instanceof this.holds?e.soundId:typeof e=="string"?e:null}async create({contentType:e,emojiId:i,emojiName:r,file:n,name:s,reason:o,volume:a}){let c=await gje(n),l=e??c.contentType??fje()(c.data)[0],u=dje(c.data,l),h={emoji_id:i,emoji_name:r,name:s,sound:u,volume:a},d=await this.client.rest.post(bg.guildSoundboardSounds(this.guild.id),{body:h,reason:o});return this._add(d)}async edit(e,i={}){let r=this.resolveId(e);if(!r)throw new toe(ioe.InvalidType,"soundboardSound","SoundboardSoundResolvable");let{emojiId:n,emojiName:s,name:o,reason:a,volume:c}=i,l={emoji_id:n,emoji_name:s,name:o,volume:c},u=await this.client.rest.patch(bg.guildSoundboardSound(this.guild.id,r),{body:l,reason:a}),h=this.cache.get(r);if(h){let d=h._clone();return d._patch(u),d}return this._add(u)}async delete(e,i){let r=this.resolveId(e);if(!r)throw new toe(ioe.InvalidType,"soundboardSound","SoundboardSoundResolvable");await this.client.rest.delete(bg.guildSoundboardSound(this.guild.id,r),{reason:i})}async fetch(e){if(!e)return this._fetchMany();let{cache:i,force:r,soundboardSound:n}=e,s=this.resolveId(n??e);return s?this._fetchSingle({cache:i,force:r,soundboardSound:s}):this._fetchMany({cache:i})}async _fetchSingle({cache:e,force:i,soundboardSound:r}={}){if(!i){let s=this.cache.get(r);if(s)return s}let n=await this.client.rest.get(bg.guildSoundboardSound(this.guild.id,r));return this._add(n,e)}async _fetchMany({cache:e}={}){return(await this.client.rest.get(bg.guildSoundboardSounds(this.guild.id))).items.reduce((r,n)=>r.set(n.sound_id,this._add(n,e)),new lje)}};roe.GuildSoundboardSoundManager=JR});var KR=A((Zet,noe)=>{"use strict";var{Collection:pje}=re(),{Routes:Qu}=k(),mje=at(),{DiscordjsTypeError:QC,ErrorCodes:wC}=se(),Ije=fo(),{Sticker:Eje}=Ca(),zR=class extends mje{constructor(e,i){super(e.client,Eje,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async create({file:e,name:i,tags:r,description:n,reason:s}={}){let o=await Ije.resolveFile(e);if(!o)throw new QC(wC.ReqResourceType);e={...o,key:"file"};let a={name:i,tags:r,description:n??""},c=await this.client.rest.post(Qu.guildStickers(this.guild.id),{appendToFormData:!0,body:a,files:[e],reason:s});return this.client.actions.GuildStickerCreate.handle(this.guild,c).sticker}async edit(e,i={}){let r=this.resolveId(e);if(!r)throw new QC(wC.InvalidType,"sticker","StickerResolvable");let n=await this.client.rest.patch(Qu.guildSticker(this.guild.id,r),{body:i,reason:i.reason}),s=this.cache.get(r);if(s){let o=s._clone();return o._patch(n),o}return this._add(n)}async delete(e,i){if(e=this.resolveId(e),!e)throw new QC(wC.InvalidType,"sticker","StickerResolvable");await this.client.rest.delete(Qu.guildSticker(this.guild.id,e),{reason:i})}async fetch(e,{cache:i=!0,force:r=!1}={}){if(e){if(!r){let o=this.cache.get(e);if(o)return o}let s=await this.client.rest.get(Qu.guildSticker(this.guild.id,e));return this._add(s,i)}let n=await this.client.rest.get(Qu.guildStickers(this.guild.id));return new pje(n.map(s=>[s.id,this._add(s,i)]))}async fetchUser(e){if(e=this.resolve(e),!e)throw new QC(wC.InvalidType,"sticker","StickerResolvable");let i=await this.client.rest.get(Qu.guildSticker(this.guild.id,e.id));return e._patch(i),e.user}};noe.exports=zR});var XR=A((Xet,soe)=>{"use strict";var{ActivityFlags:Cje}=k(),Bje=Ni(),ZR=class extends Bje{static Flags=Cje};soe.exports=ZR});var wu=A(xC=>{"use strict";var yje=_e(),{Emoji:Qje}=Pn(),wje=XR(),{flatten:bje}=Re(),eT=class extends yje{constructor(e,i={}){super(e),this.userId=i.user.id,this.guild=i.guild??null,this._patch(i)}get user(){return this.client.users.resolve(this.userId)}get member(){return this.guild.members.resolve(this.userId)}_patch(e){return"status"in e?this.status=e.status:this.status??="offline","activities"in e?this.activities=e.activities.map(i=>new bC(this,i)):this.activities??=[],"client_status"in e?this.clientStatus=e.client_status:this.clientStatus??=null,this}_clone(){let e=Object.assign(Object.create(this),this);return e.activities=this.activities.map(i=>i._clone()),e}equals(e){return this===e||e&&this.status===e.status&&this.clientStatus?.web===e.clientStatus?.web&&this.clientStatus?.mobile===e.clientStatus?.mobile&&this.clientStatus?.desktop===e.clientStatus?.desktop&&this.activities.length===e.activities.length&&this.activities.every((i,r)=>i.equals(e.activities[r]))}toJSON(){return bje(this)}},bC=class{constructor(e,i){Object.defineProperty(this,"presence",{value:e}),this.name=i.name,this.type=i.type,this.url=i.url??null,this.details=i.details??null,this.state=i.state??null,this.applicationId=i.application_id??null,this.timestamps=i.timestamps?{start:i.timestamps.start?new Date(Number(i.timestamps.start)):null,end:i.timestamps.end?new Date(Number(i.timestamps.end)):null}:null,this.party=i.party??null,this.syncId=i.sync_id??null,this.assets=i.assets?new vC(this,i.assets):null,this.flags=new wje(i.flags).freeze(),this.emoji=i.emoji?new Qje(e.client,i.emoji):null,this.buttons=i.buttons??[],this.createdTimestamp=i.created_at}equals(e){return this===e||e&&this.name===e.name&&this.type===e.type&&this.url===e.url&&this.state===e.state&&this.details===e.details&&this.emoji?.id===e.emoji?.id&&this.emoji?.name===e.emoji?.name}get createdAt(){return new Date(this.createdTimestamp)}toString(){return this.name}_clone(){return Object.assign(Object.create(this),this)}},vC=class{constructor(e,i){Object.defineProperty(this,"activity",{value:e}),this.largeText=i.large_text??null,this.smallText=i.small_text??null,this.largeImage=i.large_image??null,this.smallImage=i.small_image??null}smallImageURL(e={}){if(!this.smallImage)return null;if(this.smallImage.includes(":")){let[i,r]=this.smallImage.split(":");switch(i){case"mp":return`https://media.discordapp.net/${r}`;default:return null}}return this.activity.presence.client.rest.cdn.appAsset(this.activity.applicationId,this.smallImage,e)}largeImageURL(e={}){if(!this.largeImage)return null;if(this.largeImage.includes(":")){let[i,r]=this.largeImage.split(":");switch(i){case"mp":return`https://media.discordapp.net/${r}`;case"spotify":return`https://i.scdn.co/image/${r}`;case"youtube":return`https://i.ytimg.com/vi/${r}/hqdefault_live.jpg`;case"twitch":return`https://static-cdn.jtvnw.net/previews-ttv/live_user_${r}.png`;default:return null}}return this.activity.presence.client.rest.cdn.appAsset(this.activity.applicationId,this.largeImage,e)}};xC.Presence=eT;xC.Activity=bC;xC.RichPresenceAssets=vC});var iT=A((ttt,ooe)=>{"use strict";var vje=at(),{Presence:xje}=wu(),tT=class extends vje{constructor(e,i){super(e,xje,i)}_add(e,i){return super._add(e,i,{id:e.user.id})}resolve(e){let i=super.resolve(e);if(i)return i;let r=this.client.users.resolveId(e);return super.cache.get(r)??null}resolveId(e){let i=super.resolveId(e);if(i)return i;let r=this.client.users.resolveId(e);return this.cache.has(r)?r:null}};ooe.exports=tT});var aT=A((itt,uoe)=>{"use strict";var rT=require("node:process"),{Collection:Sje}=re(),{DiscordAPIError:Dje}=bt(),{RESTJSONErrorCodes:_je,Routes:il}=k(),kje=at(),{DiscordjsTypeError:nT,ErrorCodes:sT}=se(),{Role:Mje}=no(),{resolveImage:SC}=Ci(),aoe=$i(),{setPosition:Rje,resolveColor:Ta}=Re(),coe=!1,loe=!1,Aoe=!1,oT=class extends kje{constructor(e,i){super(e.client,Mje,i),!coe&&this._cache.constructor.name!=="Collection"&&(coe=!0,rT.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning")),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async fetch(e,{cache:i=!0,force:r=!1}={}){if(!e){let n=await this.client.rest.get(il.guildRoles(this.guild.id)),s=new Sje;for(let o of n)s.set(o.id,this._add(o,i));return s}if(!r){let n=this.cache.get(e);if(n)return n}try{let n=await this.client.rest.get(il.guildRole(this.guild.id,e));return this._add(n,i)}catch(n){if(n instanceof Dje&&n.code===_je.UnknownRole)return null;throw n}}async create(e={}){let{permissions:i,icon:r}=e,{name:n,color:s,hoist:o,position:a,mentionable:c,reason:l,unicodeEmoji:u}=e;if(i!==void 0&&(i=new aoe(i)),r){let m=this.guild.emojis.resolve(r)?.imageURL();r=m?await SC(m):await SC(r),typeof r!="string"&&(r=void 0)}let h=e.colors&&{primary_color:Ta(e.colors.primaryColor),secondary_color:e.colors.secondaryColor&&Ta(e.colors.secondaryColor),tertiary_color:e.colors.tertiaryColor&&Ta(e.colors.tertiaryColor)};s!==void 0&&(loe||rT.emitWarning('Passing "color" to RoleManager#create() is deprecated. Use "colors" instead.'),loe=!0,h={primary_color:Ta(s),secondary_color:null,tertiary_color:null});let d=await this.client.rest.post(il.guildRoles(this.guild.id),{body:{name:n,colors:h,hoist:o,permissions:i,mentionable:c,icon:r,unicode_emoji:u},reason:l}),{role:p}=this.client.actions.GuildRoleCreate.handle({guild_id:this.guild.id,role:d});return a?this.setPosition(p,a,{reason:l}):p}async edit(e,i){if(e=this.resolve(e),!e)throw new nT(sT.InvalidType,"role","RoleResolvable");typeof i.position=="number"&&await this.setPosition(e,i.position,{reason:i.reason});let r=i.icon;if(r){let c=this.guild.emojis.resolve(r)?.imageURL();r=c?await SC(c):await SC(r),typeof r!="string"&&(r=void 0)}let n=i.colors&&{primary_color:Ta(i.colors.primaryColor),secondary_color:i.colors.secondaryColor&&Ta(i.colors.secondaryColor),tertiary_color:i.colors.tertiaryColor&&Ta(i.colors.tertiaryColor)};i.color!==void 0&&(Aoe||rT.emitWarning('Passing "color" to RoleManager#edit() is deprecated. Use "colors" instead.'),Aoe=!0,n={primary_color:Ta(i.color),secondary_color:null,tertiary_color:null});let s={name:i.name,colors:n,hoist:i.hoist,permissions:i.permissions===void 0?void 0:new aoe(i.permissions),mentionable:i.mentionable,icon:r,unicode_emoji:i.unicodeEmoji},o=await this.client.rest.patch(il.guildRole(this.guild.id,e.id),{body:s,reason:i.reason}),a=e._clone();return a._patch(o),a}async delete(e,i){let r=this.resolveId(e);await this.client.rest.delete(il.guildRole(this.guild.id,r),{reason:i}),this.client.actions.GuildRoleDelete.handle({guild_id:this.guild.id,role_id:r})}async setPosition(e,i,{relative:r,reason:n}={}){if(e=this.resolve(e),!e)throw new nT(sT.InvalidType,"role","RoleResolvable");let s=await Rje(e,i,r,this.guild._sortedRoles(),this.client,il.guildRoles(this.guild.id),n);return this.client.actions.GuildRolesPositionUpdate.handle({guild_id:this.guild.id,roles:s}),e}async setPositions(e){return e=e.map(i=>({id:this.resolveId(i.role),position:i.position})),await this.client.rest.patch(il.guildRoles(this.guild.id),{body:e}),this.client.actions.GuildRolesPositionUpdate.handle({guild_id:this.guild.id,roles:e}).guild}comparePositions(e,i){let r=this.resolve(e),n=this.resolve(i);if(!r||!n)throw new nT(sT.InvalidType,"role","Role nor a Snowflake");let s=r.position,o=n.position;return s===o?Number(BigInt(n.id)-BigInt(r.id)):s-o}botRoleFor(e){let i=this.client.users.resolveId(e);return i?this.cache.find(r=>r.tags?.botId===i)??null:null}get everyone(){return this.cache.get(this.guild.id)}get premiumSubscriberRole(){return this.cache.find(e=>e.tags?.premiumSubscriberRole)??null}get highest(){return this.cache.reduce((e,i)=>i.comparePositionTo(e)>0?i:e,this.cache.first())}};uoe.exports=oT});var lT=A((rtt,doe)=>{"use strict";var{Routes:DC}=k(),Tje=at(),{DiscordjsTypeError:hoe,DiscordjsError:_C,ErrorCodes:bu}=se(),{StageInstance:Uje}=wE(),cT=class extends Tje{constructor(e,i){super(e.client,Uje,i),this.guild=e}async create(e,i){let r=this.guild.channels.resolveId(e);if(!r)throw new _C(bu.StageChannelResolve);if(typeof i!="object")throw new hoe(bu.InvalidType,"options","object",!0);let{guildScheduledEvent:n,topic:s,privacyLevel:o,sendStartNotification:a}=i,c=n&&this.resolveId(n),l=await this.client.rest.post(DC.stageInstances(),{body:{channel_id:r,topic:s,privacy_level:o,send_start_notification:a,guild_scheduled_event_id:c}});return this._add(l)}async fetch(e,{cache:i=!0,force:r=!1}={}){let n=this.guild.channels.resolveId(e);if(!n)throw new _C(bu.StageChannelResolve);if(!r){let o=this.cache.find(a=>a.channelId===n);if(o)return o}let s=await this.client.rest.get(DC.stageInstance(n));return this._add(s,i)}async edit(e,i){if(typeof i!="object")throw new hoe(bu.InvalidType,"options","object",!0);let r=this.guild.channels.resolveId(e);if(!r)throw new _C(bu.StageChannelResolve);let{topic:n,privacyLevel:s}=i,o=await this.client.rest.patch(DC.stageInstance(r),{body:{topic:n,privacy_level:s}});if(this.cache.has(o.id)){let a=this.cache.get(o.id)._clone();return a._patch(o),a}return this._add(o)}async delete(e){let i=this.guild.channels.resolveId(e);if(!i)throw new _C(bu.StageChannelResolve);await this.client.rest.delete(DC.stageInstance(i))}};doe.exports=cT});var uT=A((ntt,goe)=>{"use strict";var{Routes:Fje}=k(),Lje=at(),Nje=zd(),AT=class extends Lje{constructor(e,i){super(e.client,Nje,i),this.guild=e}_add(e,i=!0){let r=this.cache.get(e.user_id);if(r)return r._patch(e);let n=new this.holds(this.guild,e);return i&&this.cache.set(e.user_id,n),n}async fetch(e,{cache:i=!0,force:r=!1}={}){let n=e==="@me"?e:this.guild.members.resolveId(e);if(!r){let o=this.cache.get(n==="@me"?this.client.user.id:n);if(o)return o}let s=await this.client.rest.get(Fje.guildVoiceState(this.guild.id,n));return this._add(s,i)}};goe.exports=AT});var kC=A((stt,foe)=>{"use strict";var{GuildSystemChannelFlags:qje}=k(),Pje=Ni(),hT=class extends Pje{static Flags=qje};foe.exports=hT});var IT=A(yoe=>{"use strict";var{Collection:dT}=re(),{makeURLSearchParams:Oje}=bt(),{DiscordSnowflake:Gje}=At(),{ChannelType:Vje,GuildPremiumTier:gT,Routes:xi,GuildFeature:fT}=k(),Yje=Gm(),Hje=CR(),{GuildOnboarding:poe}=yR(),jje=fC(),moe=Xh(),Wje=ig(),Jje=ys(),Ioe=Vm(),{DiscordjsError:Eoe,DiscordjsTypeError:$je,ErrorCodes:pT}=se(),zje=xR(),Kje=DR(),Zje=MR(),Xje=TR(),eWe=LR(),tWe=PR(),iWe=VR(),rWe=jR(),{GuildSoundboardSoundManager:nWe}=$R(),sWe=KR(),oWe=iT(),aWe=aT(),cWe=lT(),lWe=uT(),{resolveImage:MC}=Ci(),AWe=ws(),Coe=kC(),{_transformAPIIncidentsData:uWe}=Kt(),{discordSort:Boe,getSortableGroupTypes:hWe,resolvePartialEmoji:dWe}=Re(),mT=class extends Yje{constructor(e,i){super(e,i,!1),this.commands=new Kje(this),this.members=new iWe(this),this.channels=new Xje(this),this.bans=new Zje(this),this.roles=new aWe(this),this.presences=new oWe(this.client),this.voiceStates=new lWe(this),this.stageInstances=new cWe(this),this.invites=new tWe(this),this.scheduledEvents=new rWe(this),this.autoModerationRules=new zje(this),this.soundboardSounds=new nWe(this),i&&(i.unavailable?this.available=!1:(this._patch(i),i.channels||(this.available=!1)),this.shardId=i.shardId)}get shard(){return this.client.ws.shards.get(this.shardId)}_patch(e){if(super._patch(e),this.id=e.id,"name"in e&&(this.name=e.name),"icon"in e&&(this.icon=e.icon),"unavailable"in e?this.available=!e.unavailable:this.available??=!0,"discovery_splash"in e&&(this.discoverySplash=e.discovery_splash),"member_count"in e&&(this.memberCount=e.member_count),"large"in e&&(this.large=!!e.large),"premium_progress_bar_enabled"in e&&(this.premiumProgressBarEnabled=e.premium_progress_bar_enabled),"application_id"in e&&(this.applicationId=e.application_id),"afk_timeout"in e&&(this.afkTimeout=e.afk_timeout),"afk_channel_id"in e&&(this.afkChannelId=e.afk_channel_id),"system_channel_id"in e&&(this.systemChannelId=e.system_channel_id),"premium_tier"in e&&(this.premiumTier=e.premium_tier),"widget_enabled"in e?this.widgetEnabled=e.widget_enabled:this.widgetEnabled??=null,"widget_channel_id"in e?this.widgetChannelId=e.widget_channel_id:this.widgetChannelId??=null,"explicit_content_filter"in e&&(this.explicitContentFilter=e.explicit_content_filter),"mfa_level"in e&&(this.mfaLevel=e.mfa_level),"joined_at"in e&&(this.joinedTimestamp=Date.parse(e.joined_at)),"default_message_notifications"in e&&(this.defaultMessageNotifications=e.default_message_notifications),"system_channel_flags"in e&&(this.systemChannelFlags=new Coe(e.system_channel_flags).freeze()),"max_members"in e?this.maximumMembers=e.max_members:this.maximumMembers??=null,"max_presences"in e?this.maximumPresences=e.max_presences:this.maximumPresences??=null,"max_video_channel_users"in e?this.maxVideoChannelUsers=e.max_video_channel_users:this.maxVideoChannelUsers??=null,"max_stage_video_channel_users"in e?this.maxStageVideoChannelUsers=e.max_stage_video_channel_users:this.maxStageVideoChannelUsers??=null,"approximate_member_count"in e?this.approximateMemberCount=e.approximate_member_count:this.approximateMemberCount??=null,"approximate_presence_count"in e?this.approximatePresenceCount=e.approximate_presence_count:this.approximatePresenceCount??=null,this.vanityURLUses??=null,"rules_channel_id"in e&&(this.rulesChannelId=e.rules_channel_id),"public_updates_channel_id"in e&&(this.publicUpdatesChannelId=e.public_updates_channel_id),"preferred_locale"in e&&(this.preferredLocale=e.preferred_locale),"safety_alerts_channel_id"in e?this.safetyAlertsChannelId=e.safety_alerts_channel_id:this.safetyAlertsChannelId??=null,e.channels){this.channels.cache.clear();for(let i of e.channels)this.client.channels._add(i,this)}if(e.threads)for(let i of e.threads)this.client.channels._add(i,this);if(e.roles){this.roles.cache.clear();for(let i of e.roles)this.roles._add(i)}if(e.members){this.members.cache.clear();for(let i of e.members)this.members._add(i)}if("owner_id"in e&&(this.ownerId=e.owner_id),e.presences)for(let i of e.presences)this.presences._add(Object.assign(i,{guild:this}));if(e.stage_instances){this.stageInstances.cache.clear();for(let i of e.stage_instances)this.stageInstances._add(i)}if(e.guild_scheduled_events){this.scheduledEvents.cache.clear();for(let i of e.guild_scheduled_events)this.scheduledEvents._add(i)}if(e.voice_states){this.voiceStates.cache.clear();for(let i of e.voice_states)this.voiceStates._add(i)}if(this.emojis)e.emojis&&this.client.actions.GuildEmojisUpdate.handle({guild_id:this.id,emojis:e.emojis});else if(this.emojis=new eWe(this),e.emojis)for(let i of e.emojis)this.emojis._add(i);if(this.stickers)e.stickers&&this.client.actions.GuildStickersUpdate.handle({guild_id:this.id,stickers:e.stickers});else if(this.stickers=new sWe(this),e.stickers)for(let i of e.stickers)this.stickers._add(i);if("incidents_data"in e?this.incidentsData=e.incidents_data&&uWe(e.incidents_data):this.incidentsData??=null,e.soundboard_sounds){this.soundboardSounds.cache.clear();for(let i of e.soundboard_sounds)this.soundboardSounds._add(i)}}get joinedAt(){return new Date(this.joinedTimestamp)}discoverySplashURL(e={}){return this.discoverySplash&&this.client.rest.cdn.discoverySplash(this.id,this.discoverySplash,e)}async fetchOwner(e){if(!this.ownerId)throw new Eoe(pT.FetchOwnerId,"guild");return await this.members.fetch({...e,user:this.ownerId})}get afkChannel(){return this.client.channels.resolve(this.afkChannelId)}get systemChannel(){return this.client.channels.resolve(this.systemChannelId)}get widgetChannel(){return this.client.channels.resolve(this.widgetChannelId)}get rulesChannel(){return this.client.channels.resolve(this.rulesChannelId)}get publicUpdatesChannel(){return this.client.channels.resolve(this.publicUpdatesChannelId)}get safetyAlertsChannel(){return this.client.channels.resolve(this.safetyAlertsChannelId)}get maximumBitrate(){if(this.features.includes(fT.VIPRegions))return 384e3;switch(this.premiumTier){case gT.Tier1:return 128e3;case gT.Tier2:return 256e3;case gT.Tier3:return 384e3;default:return 96e3}}async fetchIntegrations(){return(await this.client.rest.get(xi.guildIntegrations(this.id))).reduce((i,r)=>i.set(r.id,new Wje(this.client,r,this)),new dT)}async fetchTemplates(){return(await this.client.rest.get(xi.guildTemplates(this.id))).reduce((i,r)=>i.set(r.code,new moe(this.client,r)),new dT)}async fetchWelcomeScreen(){let e=await this.client.rest.get(xi.guildWelcomeScreen(this.id));return new Ioe(this,e)}async createTemplate(e,i){let r=await this.client.rest.post(xi.guildTemplates(this.id),{body:{name:e,description:i}});return new moe(this.client,r)}async fetchPreview(){let e=await this.client.rest.get(xi.guildPreview(this.id));return new jje(this.client,e)}async fetchVanityData(){let e=await this.client.rest.get(xi.guildVanityUrl(this.id));return this.vanityURLCode=e.code,this.vanityURLUses=e.uses,e}async fetchWebhooks(){let e=await this.client.rest.get(xi.guildWebhooks(this.id)),i=new dT;for(let r of e)i.set(r.id,new Jje(this.client,r));return i}fetchWidget(){return this.client.fetchGuildWidget(this.id)}async fetchWidgetSettings(){let e=await this.client.rest.get(xi.guildWidgetSettings(this.id));return this.widgetEnabled=e.enabled,this.widgetChannelId=e.channel_id,{enabled:e.enabled,channel:e.channel_id?this.channels.cache.get(e.channel_id):null}}widgetImageURL(e){return this.client.guilds.widgetImageURL(this.id,e)}async fetchAuditLogs({before:e,after:i,limit:r,user:n,type:s}={}){let o=Oje({before:e?.id??e,after:i?.id??i,limit:r,action_type:s});if(n){let c=this.client.users.resolveId(n);if(!c)throw new $je(pT.InvalidType,"user","UserResolvable");o.set("user_id",c)}let a=await this.client.rest.get(xi.guildAuditLog(this.id),{query:o});return new Hje(this,a)}async fetchOnboarding(){let e=await this.client.rest.get(xi.guildOnboarding(this.id));return new poe(this.client,e)}async edit({verificationLevel:e,defaultMessageNotifications:i,explicitContentFilter:r,afkChannel:n,afkTimeout:s,icon:o,owner:a,splash:c,discoverySplash:l,banner:u,systemChannel:h,systemChannelFlags:d,rulesChannel:p,publicUpdatesChannel:m,preferredLocale:B,premiumProgressBarEnabled:f,safetyAlertsChannel:E,...D}){let R=await this.client.rest.patch(xi.guild(this.id),{body:{...D,verification_level:e,default_message_notifications:i,explicit_content_filter:r,afk_channel_id:n&&this.client.channels.resolveId(n),afk_timeout:s,icon:o&&await MC(o),owner_id:a&&this.client.users.resolveId(a),splash:c&&await MC(c),discovery_splash:l&&await MC(l),banner:u&&await MC(u),system_channel_id:h&&this.client.channels.resolveId(h),system_channel_flags:d===void 0?void 0:Coe.resolve(d),rules_channel_id:p&&this.client.channels.resolveId(p),public_updates_channel_id:m&&this.client.channels.resolveId(m),preferred_locale:B,premium_progress_bar_enabled:f,safety_alerts_channel_id:E&&this.client.channels.resolveId(E)},reason:D.reason});return this.client.actions.GuildUpdate.handle(R).updated}async editOnboarding(e){let i=await this.client.rest.put(xi.guildOnboarding(this.id),{body:{prompts:e.prompts?.map(r=>({id:r.id??Gje.generate().toString(),title:r.title,single_select:r.singleSelect,required:r.required,in_onboarding:r.inOnboarding,type:r.type,options:r.options.map(n=>{let s=dWe(n.emoji);return{id:n.id,channel_ids:n.channels?.map(o=>this.channels.resolveId(o)),role_ids:n.roles?.map(o=>this.roles.resolveId(o)),title:n.title,description:n.description,emoji_animated:s?.animated,emoji_id:s?.id,emoji_name:s?.name}})})),default_channel_ids:e.defaultChannels?.map(r=>this.channels.resolveId(r)),enabled:e.enabled,mode:e.mode},reason:e.reason});return new poe(this.client,i)}async editWelcomeScreen(e){let{enabled:i,description:r,welcomeChannels:n}=e,s=n?.map(a=>{let c=this.emojis.resolve(a.emoji);return{emoji_id:c?.id,emoji_name:c?.name??a.emoji,channel_id:this.channels.resolveId(a.channel),description:a.description}}),o=await this.client.rest.patch(xi.guildWelcomeScreen(this.id),{body:{welcome_channels:s,description:r,enabled:i}});return new Ioe(this,o)}setExplicitContentFilter(e,i){return this.edit({explicitContentFilter:e,reason:i})}setDefaultMessageNotifications(e,i){return this.edit({defaultMessageNotifications:e,reason:i})}setSystemChannelFlags(e,i){return this.edit({systemChannelFlags:e,reason:i})}setName(e,i){return this.edit({name:e,reason:i})}setVerificationLevel(e,i){return this.edit({verificationLevel:e,reason:i})}setAFKChannel(e,i){return this.edit({afkChannel:e,reason:i})}setSystemChannel(e,i){return this.edit({systemChannel:e,reason:i})}setAFKTimeout(e,i){return this.edit({afkTimeout:e,reason:i})}setIcon(e,i){return this.edit({icon:e,reason:i})}setOwner(e,i){return this.edit({owner:e,reason:i})}setSplash(e,i){return this.edit({splash:e,reason:i})}setDiscoverySplash(e,i){return this.edit({discoverySplash:e,reason:i})}setBanner(e,i){return this.edit({banner:e,reason:i})}setRulesChannel(e,i){return this.edit({rulesChannel:e,reason:i})}setPublicUpdatesChannel(e,i){return this.edit({publicUpdatesChannel:e,reason:i})}setPreferredLocale(e,i){return this.edit({preferredLocale:e,reason:i})}setPremiumProgressBarEnabled(e=!0,i){return this.edit({premiumProgressBarEnabled:e,reason:i})}setSafetyAlertsChannel(e,i){return this.edit({safetyAlertsChannel:e,reason:i})}async setWidgetSettings(e,i){return await this.client.rest.patch(xi.guildWidgetSettings(this.id),{body:{enabled:e.enabled,channel_id:this.channels.resolveId(e.channel)},reason:i}),this}async setMFALevel(e,i){return await this.client.rest.post(xi.guildMFA(this.id),{body:{level:e},reason:i}),this}async leave(){if(this.ownerId===this.client.user.id)throw new Eoe(pT.GuildOwned);return await this.client.rest.delete(xi.userGuild(this.id)),this}async delete(){return await this.client.rest.delete(xi.guild(this.id)),this}async disableInvites(e=!0){let i=this.features.filter(r=>r!==fT.InvitesDisabled);return e&&i.push(fT.InvitesDisabled),this.edit({features:i})}async setIncidentActions(e){return this.client.guilds.setIncidentActions(this.id,e)}equals(e){return e&&e instanceof this.constructor&&this.id===e.id&&this.available===e.available&&this.splash===e.splash&&this.discoverySplash===e.discoverySplash&&this.name===e.name&&this.memberCount===e.memberCount&&this.large===e.large&&this.icon===e.icon&&this.ownerId===e.ownerId&&this.verificationLevel===e.verificationLevel&&(this.features===e.features||this.features.length===e.features.length&&this.features.every((i,r)=>i===e.features[r]))}toJSON(){let e=super.toJSON({available:!1,createdTimestamp:!0,nameAcronym:!0,presences:!1,voiceStates:!1});return e.iconURL=this.iconURL(),e.splashURL=this.splashURL(),e.discoverySplashURL=this.discoverySplashURL(),e.bannerURL=this.bannerURL(),e}get voiceAdapterCreator(){return e=>(this.client.voice.adapters.set(this.id,e),{sendPayload:i=>this.shard.status!==AWe.Ready?!1:(this.shard.send(i),!0),destroy:()=>{this.client.voice.adapters.delete(this.id)}})}_sortedRoles(){return Boe(this.roles.cache)}_sortedChannels(e){let i=e.type===Vje.GuildCategory,r=hWe(e.type);return Boe(this.channels.cache.filter(({parentId:n,type:s})=>r.includes(s)&&(i||n===e.parentId)))}};yoe.Guild=mT});var CT=A((att,Qoe)=>{"use strict";var gWe=Om(),fWe=$i(),ET=class extends gWe{constructor(e,i){super(e,i),this.owner=i.owner,this.permissions=new fWe(BigInt(i.permissions)).freeze()}};Qoe.exports=ET});var wT=A((ctt,Toe)=>{"use strict";var pWe=require("node:process"),{setTimeout:woe,clearTimeout:boe}=require("node:timers"),{Collection:voe}=re(),{makeURLSearchParams:BT}=bt(),{GatewayOpcodes:mWe,Routes:vg,RouteBases:IWe}=k(),EWe=at(),{ErrorCodes:CWe,DiscordjsError:BWe}=se(),xoe=gC(),{Guild:yWe}=IT(),Soe=gs(),Doe=Hd(),{GuildMember:_oe}=Qa(),koe=sa(),QWe=CT(),{Role:Moe}=no(),{resolveImage:wWe}=Ci(),xg=W(),yT=$i(),bWe=kC(),{_transformAPIIncidentsData:vWe}=Kt(),{resolveColor:xWe}=Re(),Roe=!1,QT=class extends EWe{constructor(e,i){super(e,yWe,i),!Roe&&this._cache.constructor.name!=="Collection"&&(Roe=!0,pWe.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning"))}resolve(e){return e instanceof Soe||e instanceof _oe||e instanceof Doe||e instanceof Moe||e instanceof koe&&e.guild?super.resolve(e.guild):super.resolve(e)}resolveId(e){return e instanceof Soe||e instanceof _oe||e instanceof Doe||e instanceof Moe||e instanceof koe&&e.guild?super.resolveId(e.guild.id):super.resolveId(e)}async create({name:e,icon:i=null,verificationLevel:r,defaultMessageNotifications:n,explicitContentFilter:s,roles:o=[],channels:a=[],afkChannelId:c,afkTimeout:l,systemChannelId:u,systemChannelFlags:h}){let d=await this.client.rest.post(vg.guilds(),{body:{name:e,icon:i&&await wWe(i),verification_level:r,default_message_notifications:n,explicit_content_filter:s,roles:o.map(({color:p,permissions:m,...B})=>({...B,color:p&&xWe(p),permissions:m===void 0?void 0:yT.resolve(m).toString()})),channels:a.map(({parentId:p,userLimit:m,rtcRegion:B,videoQualityMode:f,permissionOverwrites:E,rateLimitPerUser:D,...R})=>({...R,parent_id:p,user_limit:m,rtc_region:B,video_quality_mode:f,permission_overwrites:E?.map(({allow:G,deny:V,...ee})=>({...ee,allow:G===void 0?void 0:yT.resolve(G).toString(),deny:V===void 0?void 0:yT.resolve(V).toString()})),rate_limit_per_user:D})),afk_channel_id:c,afk_timeout:l,system_channel_id:u,system_channel_flags:h===void 0?void 0:bWe.resolve(h)}});return this.client.guilds.cache.get(d.id)??new Promise(p=>{let m=f=>{f.id===d.id&&(boe(B),this.client.decrementMaxListeners(),p(f))};this.client.incrementMaxListeners(),this.client.once(xg.GuildCreate,m);let B=woe(()=>{this.client.removeListener(xg.GuildCreate,m),this.client.decrementMaxListeners(),p(this.client.guilds._add(d))},1e4).unref()})}async fetch(e={}){let i=this.resolveId(e)??this.resolveId(e.guild);if(i){if(!e.force){let s=this.cache.get(i);if(s)return s}let n=await this.client.rest.get(vg.guild(i),{query:BT({with_counts:e.withCounts??!0})});return n.shardId=xoe.shardIdForGuildId(i,this.client.options.shardCount),this._add(n,e.cache)}return(await this.client.rest.get(vg.userGuilds(),{query:BT(e)})).reduce((n,s)=>n.set(s.id,new QWe(this.client,s)),new voe)}async fetchSoundboardSounds({guildIds:e,time:i=1e4}){let r=this.client.options.shardCount,n=new Map;for(let s of e){let o=xoe.shardIdForGuildId(s,r),a=n.get(o);a?a.push(s):n.set(o,[s])}for(let[s,o]of n)this.client.ws.shards.get(s).send({op:mWe.RequestSoundboardSounds,d:{guild_ids:o}});return new Promise((s,o)=>{let a=new Set(e),c=new voe,l=(h,d)=>{u.refresh(),a.has(d.id)&&(c.set(d.id,h),a.delete(d.id),a.size===0&&(boe(u),this.client.removeListener(xg.SoundboardSounds,l),this.client.decrementMaxListeners(),s(c)))},u=woe(()=>{this.client.removeListener(xg.SoundboardSounds,l),this.client.decrementMaxListeners(),o(new BWe(CWe.GuildSoundboardSoundsTimeout))},i).unref();this.client.incrementMaxListeners(),this.client.on(xg.SoundboardSounds,l)})}async setIncidentActions(e,{invitesDisabledUntil:i,dmsDisabledUntil:r}){let n=this.resolveId(e),s=await this.client.rest.put(vg.guildIncidentActions(n),{body:{invites_disabled_until:i&&new Date(i).toISOString(),dms_disabled_until:r&&new Date(r).toISOString()}}),o=vWe(s),a=this.resolve(e);return a&&(a.incidentsData=o),o}widgetImageURL(e,i){let r=String(BT({style:i}));return`${IWe.api}${vg.guildWidgetImage(this.resolveId(e))}${r?`?${r}`:""}`}};Toe.exports=QT});var xT=A((ltt,Noe)=>{"use strict";var{ChannelType:SWe,Routes:bT}=k(),DWe=at(),{DiscordjsError:_We,ErrorCodes:kWe}=se(),{GuildMember:Uoe}=Qa(),{Message:Foe}=Bs(),Loe=gE(),MWe=Ba(),{emitDeprecationWarningForUserFetchFlags:RWe}=Re(),vT=class extends DWe{constructor(e,i){super(e,MWe,i)}dmChannel(e){return this.client.channels.cache.find(i=>i.type===SWe.DM&&i.recipientId===e)??null}async createDM(e,{cache:i=!0,force:r=!1}={}){let n=this.resolveId(e);if(!r){let o=this.dmChannel(n);if(o&&!o.partial)return o}let s=await this.client.rest.post(bT.userChannels(),{body:{recipient_id:n}});return this.client.channels._add(s,null,{cache:i})}async deleteDM(e){let i=this.resolveId(e),r=this.dmChannel(i);if(!r)throw new _We(kWe.UserNoDMChannel);return await this.client.rest.delete(bT.channel(r.id)),this.client.channels._remove(r.id),r}async fetch(e,{cache:i=!0,force:r=!1}={}){let n=this.resolveId(e);if(!r){let o=this.cache.get(n);if(o&&!o.partial)return o}let s=await this.client.rest.get(bT.user(n));return this._add(s,i)}async fetchFlags(e,i){return RWe(this.constructor.name),(await this.fetch(e,i)).flags}async send(e,i){return(await this.createDM(e)).send(i)}resolve(e){return e instanceof Uoe||e instanceof Loe?e.user:e instanceof Foe?e.author:super.resolve(e)}resolveId(e){return e instanceof Loe?e.id:e instanceof Uoe?e.user.id:e instanceof Foe?e.author.id:super.resolveId(e)}};Noe.exports=vT});var _T=A((Att,Poe)=>{"use strict";var{GatewayOpcodes:ST,ActivityType:qoe}=k(),{Presence:TWe}=wu(),{DiscordjsTypeError:UWe,ErrorCodes:FWe}=se(),DT=class extends TWe{constructor(e,i={}){super(e,Object.assign(i,{status:i.status??"online",user:{id:null}}))}set(e){let i=this._parse(e);if(this._patch(i),e.shardId===void 0)this.client.ws.broadcast({op:ST.PresenceUpdate,d:i});else if(Array.isArray(e.shardId))for(let r of e.shardId)this.client.ws.shards.get(r).send({op:ST.PresenceUpdate,d:i});else this.client.ws.shards.get(e.shardId).send({op:ST.PresenceUpdate,d:i});return this}_parse({status:e,since:i,afk:r,activities:n}){let s={activities:[],afk:typeof r=="boolean"?r:!1,since:typeof i=="number"&&!Number.isNaN(i)?i:null,status:e??this.status};if(n?.length)for(let[o,a]of n.entries()){if(typeof a.name!="string")throw new UWe(FWe.InvalidType,`activities[${o}].name`,"string");a.type??=qoe.Playing,a.type===qoe.Custom&&!a.state&&(a.state=a.name,a.name="Custom Status"),s.activities.push({type:a.type,name:a.name,state:a.state,url:a.url})}else!n&&(e||r||i)&&this.activities.length&&s.activities.push(...this.activities.map(o=>({name:o.name,state:o.state??void 0,type:o.type,url:o.url??void 0})));return s}};Poe.exports=DT});var MT=A((utt,Ooe)=>{"use strict";var{Collection:LWe}=re(),{DiscordSnowflake:NWe}=At(),qWe=_e(),{Sticker:PWe}=Ca(),kT=class extends qWe{constructor(e,i){super(e),this.id=i.id,this.stickers=new LWe(i.stickers.map(r=>[r.id,new PWe(e,r)])),this.name=i.name,this.skuId=i.sku_id,this.coverStickerId=i.cover_sticker_id??null,this.description=i.description,this.bannerId=i.banner_asset_id??null}get createdTimestamp(){return NWe.timestampFrom(this.id)}get createdAt(){return new Date(this.createdTimestamp)}get coverSticker(){return this.coverStickerId&&this.stickers.get(this.coverStickerId)}bannerURL(e={}){return this.bannerId&&this.client.rest.cdn.stickerPackBanner(this.bannerId,e)}};Ooe.exports=kT});var TT=A((htt,Goe)=>{"use strict";var{flatten:OWe}=Re(),RT=class{constructor(e){this.id=e.id,this.name=e.name,this.deprecated=e.deprecated,this.optimal=e.optimal,this.custom=e.custom}toJSON(){return OWe(this)}};Goe.exports=RT});var FT=A((dtt,Voe)=>{"use strict";var GWe=_e(),UT=class extends GWe{constructor(e,i){super(e),this.id=i.id,this.username=i.username,this.discriminator=i.discriminator,this.avatar=i.avatar,this.status=i.status,this.deaf=i.deaf??null,this.mute=i.mute??null,this.selfDeaf=i.self_deaf??null,this.selfMute=i.self_mute??null,this.suppress=i.suppress??null,this.channelId=i.channel_id??null,this.avatarURL=i.avatar_url,this.activity=i.activity??null}};Voe.exports=UT});var NT=A((gtt,Hoe)=>{"use strict";var{Collection:Yoe}=re(),{Routes:VWe}=k(),YWe=_e(),HWe=FT(),LT=class extends YWe{constructor(e,i){super(e),this._patch(i)}_patch(e){this.id=e.id,"name"in e&&(this.name=e.name),"instant_invite"in e&&(this.instantInvite=e.instant_invite),this.channels=new Yoe;for(let i of e.channels)this.channels.set(i.id,i);this.members=new Yoe;for(let i of e.members)this.members.set(i.id,new HWe(this.client,i));"presence_count"in e&&(this.presenceCount=e.presence_count)}async fetch(){let e=await this.client.rest.get(VWe.guildWidgetJSON(this.id));return this._patch(e),this}imageURL(e){return this.client.guilds.widgetImageURL(this.id,e)}};Hoe.exports=LT});var PT=A((ftt,joe)=>{"use strict";var{GatewayIntentBits:jWe}=k(),WWe=Ni(),qT=class extends WWe{static Flags=jWe};joe.exports=qT});var VT=A((ptt,Joe)=>{"use strict";var{setInterval:JWe,clearInterval:$We}=require("node:timers"),{ThreadChannelTypes:Woe,SweeperKeys:OT}=qn(),Ua=W(),{DiscordjsTypeError:tr,ErrorCodes:ir}=se(),GT=class{constructor(e,i){Object.defineProperty(this,"client",{value:e}),this.options=i,this.intervals=Object.fromEntries(OT.map(r=>[r,null]));for(let r of OT){if(!(r in i))continue;this._validateProperties(r);let n={...this.options[r]};if(!("filter"in n))switch(r){case"invites":n.filter=this.constructor.expiredInviteSweepFilter(n.lifetime);break;case"messages":n.filter=this.constructor.outdatedMessageSweepFilter(n.lifetime);break;case"threads":n.filter=this.constructor.archivedThreadSweepFilter(n.lifetime)}this._initInterval(r,`sweep${r[0].toUpperCase()}${r.slice(1)}`,n)}}sweepApplicationCommands(e){let{guilds:i,items:r}=this._sweepGuildDirectProp("commands",e,{emit:!1}),n=this.client.application?.commands.cache.sweep(e)??0;return this.client.emit(Ua.CacheSweep,`Swept ${n} global application commands and ${r} guild commands in ${i} guilds.`),r+n}sweepAutoModerationRules(e){return this._sweepGuildDirectProp("autoModerationRules",e).items}sweepBans(e){return this._sweepGuildDirectProp("bans",e).items}sweepEmojis(e){return this._sweepGuildDirectProp("emojis",e).items}sweepEntitlements(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=this.client.application.entitlements.cache.sweep(e);return this.client.emit(Ua.CacheSweep,`Swept ${i} entitlements.`),i}sweepInvites(e){return this._sweepGuildDirectProp("invites",e).items}sweepGuildMembers(e){return this._sweepGuildDirectProp("members",e,{outputName:"guild members"}).items}sweepMessages(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0,r=0;for(let n of this.client.channels.cache.values())n.isTextBased()&&(i++,r+=n.messages.cache.sweep(e));return this.client.emit(Ua.CacheSweep,`Swept ${r} messages in ${i} text-based channels.`),r}sweepPresences(e){return this._sweepGuildDirectProp("presences",e).items}sweepReactions(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0,r=0,n=0;for(let s of this.client.channels.cache.values())if(s.isTextBased()){i++;for(let o of s.messages.cache.values())r++,n+=o.reactions.cache.sweep(e)}return this.client.emit(Ua.CacheSweep,`Swept ${n} reactions on ${r} messages in ${i} text-based channels.`),n}sweepStageInstances(e){return this._sweepGuildDirectProp("stageInstances",e,{outputName:"stage instances"}).items}sweepStickers(e){return this._sweepGuildDirectProp("stickers",e).items}sweepThreadMembers(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0,r=0;for(let n of this.client.channels.cache.values())Woe.includes(n.type)&&(i++,r+=n.members.cache.sweep(e));return this.client.emit(Ua.CacheSweep,`Swept ${r} thread members in ${i} threads.`),r}sweepThreads(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0;for(let[r,n]of this.client.channels.cache.entries())Woe.includes(n.type)&&e(n,r,this.client.channels.cache)&&(i++,this.client.channels._remove(r));return this.client.emit(Ua.CacheSweep,`Swept ${i} threads.`),i}sweepUsers(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=this.client.users.cache.sweep(e);return this.client.emit(Ua.CacheSweep,`Swept ${i} users.`),i}sweepVoiceStates(e){return this._sweepGuildDirectProp("voiceStates",e,{outputName:"voice states"}).items}destroy(){for(let e of OT)this.intervals[e]&&$We(this.intervals[e])}static filterByLifetime({lifetime:e=14400,getComparisonTimestamp:i=n=>n?.createdTimestamp,excludeFromSweep:r=()=>!1}={}){if(typeof e!="number")throw new tr(ir.InvalidType,"lifetime","number");if(typeof i!="function")throw new tr(ir.InvalidType,"getComparisonTimestamp","function");if(typeof r!="function")throw new tr(ir.InvalidType,"excludeFromSweep","function");return()=>{if(e<=0)return null;let n=e*1e3,s=Date.now();return(o,a,c)=>{if(r(o,a,c))return!1;let l=i(o,a,c);return!l||typeof l!="number"?!1:s-l>n}}}static archivedThreadSweepFilter(e=14400){return this.filterByLifetime({lifetime:e,getComparisonTimestamp:i=>i.archiveTimestamp,excludeFromSweep:i=>!i.archived})}static expiredInviteSweepFilter(e=14400){return this.filterByLifetime({lifetime:e,getComparisonTimestamp:i=>i.expiresTimestamp})}static outdatedMessageSweepFilter(e=3600){return this.filterByLifetime({lifetime:e,getComparisonTimestamp:i=>i.editedTimestamp??i.createdTimestamp})}_sweepGuildDirectProp(e,i,{emit:r=!0,outputName:n}={}){if(typeof i!="function")throw new tr(ir.InvalidType,"filter","function");let s=0,o=0;for(let a of this.client.guilds.cache.values()){if(!a.available)continue;let{cache:c}=a[e];s++,o+=c.sweep(i)}return r&&this.client.emit(Ua.CacheSweep,`Swept ${o} ${n??e} in ${s} guilds.`),{guilds:s,items:o}}_validateProperties(e){let i=this.options[e];if(typeof i!="object")throw new tr(ir.InvalidType,`sweepers.${e}`,"object",!0);if(typeof i.interval!="number")throw new tr(ir.InvalidType,`sweepers.${e}.interval`,"number");if(["invites","messages","threads"].includes(e)&&!("filter"in i)){if(typeof i.lifetime!="number")throw new tr(ir.InvalidType,`sweepers.${e}.lifetime`,"number");return}if(typeof i.filter!="function")throw new tr(ir.InvalidType,`sweepers.${e}.filter`,"function")}_initInterval(e,i,r){r.interval<=0||r.interval===1/0||(this.intervals[e]=JWe(()=>{let n=r.filter();if(n!==null){if(typeof n!="function")throw new tr(ir.SweepFilterReturn);this[i](n)}},r.interval*1e3).unref())}};Joe.exports=GT});var $oe=A((exports,module)=>{"use strict";var process=require("node:process"),{Collection}=re(),{makeURLSearchParams}=bt(),{OAuth2Scopes,Routes}=k(),BaseClient=Lm(),ActionsManager=Tee(),ClientVoiceManager=DM(),WebSocketManager=hR(),{DiscordjsError,DiscordjsTypeError,DiscordjsRangeError,ErrorCodes}=se(),BaseGuildEmojiManager=dC(),ChannelManager=mR(),GuildManager=wT(),UserManager=xT(),ShardClientUtil=gC(),ClientPresence=_T(),GuildPreview=fC(),GuildTemplate=Xh(),Invite=sa(),{SoundboardSound}=yC(),{Sticker}=Ca(),StickerPack=MT(),VoiceRegion=TT(),Webhook=ys(),Widget=NT(),{resolveInviteCode,resolveGuildTemplateCode}=Ci(),Events=W(),IntentsBitField=PT(),Options=Fm(),PermissionsBitField=$i(),Status=ws(),Sweepers=VT(),deprecationEmittedForPremiumStickerPacks=!1,Client=class extends BaseClient{constructor(t){super(t);let e=require("node:worker_threads").workerData??process.env,i=Options.createDefault();this.options.shards===i.shards&&"SHARDS"in e&&(this.options.shards=JSON.parse(e.SHARDS)),this.options.shardCount===i.shardCount&&("SHARD_COUNT"in e?this.options.shardCount=Number(e.SHARD_COUNT):Array.isArray(this.options.shards)&&(this.options.shardCount=this.options.shards.length));let r=typeof this.options.shards;r==="undefined"&&typeof this.options.shardCount=="number"&&(this.options.shards=Array.from({length:this.options.shardCount},(n,s)=>s)),r==="number"&&(this.options.shards=[this.options.shards]),Array.isArray(this.options.shards)&&(this.options.shards=[...new Set(this.options.shards.filter(n=>!isNaN(n)&&n>=0&&n<1/0&&n===(n|0)))]),this._validateOptions(),this.ws=new WebSocketManager(this),this.actions=new ActionsManager(this),this.voice=new ClientVoiceManager(this),this.shard=process.env.SHARDING_MANAGER?ShardClientUtil.singleton(this,process.env.SHARDING_MANAGER_MODE):null,this.users=new UserManager(this),this.guilds=new GuildManager(this),this.channels=new ChannelManager(this),this.sweepers=new Sweepers(this,this.options.sweepers),this.presence=new ClientPresence(this,this.options.presence),Object.defineProperty(this,"token",{writable:!0}),!this.token&&"DISCORD_TOKEN"in process.env?this.token=process.env.DISCORD_TOKEN:this.token=null,this.user=null,this.application=null,this.readyTimestamp=null}get emojis(){let t=new BaseGuildEmojiManager(this);for(let e of this.guilds.cache.values())if(e.available)for(let i of e.emojis.cache.values())t.cache.set(i.id,i);return t}get readyAt(){return this.readyTimestamp&&new Date(this.readyTimestamp)}get uptime(){return this.readyTimestamp&&Date.now()-this.readyTimestamp}async login(t=this.token){if(!t||typeof t!="string")throw new DiscordjsError(ErrorCodes.TokenInvalid);this.token=t=t.replace(/^(Bot|Bearer)\s*/i,""),this.rest.setToken(t),this.emit(Events.Debug,`Provided token: ${this._censoredToken}`),this.options.presence&&(this.options.ws.presence=this.presence._parse(this.options.presence)),this.emit(Events.Debug,"Preparing to connect to the gateway...");try{return await this.ws.connect(),this.token}catch(e){throw await this.destroy(),e}}isReady(){return!this.ws.destroyed&&this.ws.status===Status.Ready}async destroy(){super.destroy(),this.sweepers.destroy(),await this.ws.destroy(),this.token=null,this.rest.setToken(null)}async fetchInvite(t,e){let i=resolveInviteCode(t),r=makeURLSearchParams({with_counts:!0,guild_scheduled_event_id:e?.guildScheduledEventId}),n=await this.rest.get(Routes.invite(i),{query:r});return new Invite(this,n)}async fetchGuildTemplate(t){let e=resolveGuildTemplateCode(t),i=await this.rest.get(Routes.template(e));return new GuildTemplate(this,i)}async fetchWebhook(t,e){let i=await this.rest.get(Routes.webhook(t,e),{auth:e===void 0});return new Webhook(this,{token:e,...i})}async fetchVoiceRegions(){let t=await this.rest.get(Routes.voiceRegions()),e=new Collection;for(let i of t)e.set(i.id,new VoiceRegion(i));return e}async fetchSticker(t){let e=await this.rest.get(Routes.sticker(t));return new Sticker(this,e)}async fetchStickerPacks({packId:t}={}){if(t){let i=await this.rest.get(Routes.stickerPack(t));return new StickerPack(this,i)}let e=await this.rest.get(Routes.stickerPacks());return new Collection(e.sticker_packs.map(i=>[i.id,new StickerPack(this,i)]))}fetchPremiumStickerPacks(){return deprecationEmittedForPremiumStickerPacks||(process.emitWarning("The Client#fetchPremiumStickerPacks() method is deprecated. Use Client#fetchStickerPacks() instead.","DeprecationWarning"),deprecationEmittedForPremiumStickerPacks=!0),this.fetchStickerPacks()}async fetchDefaultSoundboardSounds(){let t=await this.rest.get(Routes.soundboardDefaultSounds());return new Collection(t.map(e=>[e.sound_id,new SoundboardSound(this,e)]))}async fetchGuildPreview(t){let e=this.guilds.resolveId(t);if(!e)throw new DiscordjsTypeError(ErrorCodes.InvalidType,"guild","GuildResolvable");let i=await this.rest.get(Routes.guildPreview(e));return new GuildPreview(this,i)}async fetchGuildWidget(t){let e=this.guilds.resolveId(t);if(!e)throw new DiscordjsTypeError(ErrorCodes.InvalidType,"guild","GuildResolvable");let i=await this.rest.get(Routes.guildWidgetJSON(e));return new Widget(this,i)}generateInvite(t={}){if(typeof t!="object")throw new DiscordjsTypeError(ErrorCodes.InvalidType,"options","object",!0);if(!this.application)throw new DiscordjsError(ErrorCodes.ClientNotReady,"generate an invite link");let{scopes:e}=t;if(e===void 0)throw new DiscordjsTypeError(ErrorCodes.InvalidMissingScopes);if(!Array.isArray(e))throw new DiscordjsTypeError(ErrorCodes.InvalidType,"scopes","Array of Invite Scopes",!0);if(!e.some(s=>[OAuth2Scopes.Bot,OAuth2Scopes.ApplicationsCommands].includes(s)))throw new DiscordjsTypeError(ErrorCodes.InvalidMissingScopes);if(!e.includes(OAuth2Scopes.Bot)&&t.permissions)throw new DiscordjsTypeError(ErrorCodes.InvalidScopesWithPermissions);let i=Object.values(OAuth2Scopes),r=e.find(s=>!i.includes(s));if(r)throw new DiscordjsTypeError(ErrorCodes.InvalidElement,"Array","scopes",r);let n=makeURLSearchParams({client_id:this.application.id,scope:e.join(" "),disable_guild_select:t.disableGuildSelect});if(t.permissions){let s=PermissionsBitField.resolve(t.permissions);s&&n.set("permissions",s.toString())}if(t.guild){let s=this.guilds.resolveId(t.guild);if(!s)throw new DiscordjsTypeError(ErrorCodes.InvalidType,"options.guild","GuildResolvable");n.set("guild_id",s)}return`${this.options.rest.api}${Routes.oauth2Authorization()}?${n}`}toJSON(){return super.toJSON({actions:!1,presence:!1})}get _censoredToken(){return this.token?this.token.split(".").map((t,e)=>e>1?t.replace(/./g,"*"):t).join("."):null}_eval(script){return eval(script)}_validateOptions(t=this.options){if(t.intents===void 0)throw new DiscordjsTypeError(ErrorCodes.ClientMissingIntents);if(t.intents=new IntentsBitField(t.intents).freeze(),typeof t.shardCount!="number"||isNaN(t.shardCount)||t.shardCount<1)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"shardCount","a number greater than or equal to 1");if(t.shards&&!(t.shards==="auto"||Array.isArray(t.shards)))throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"shards","'auto', a number or array of numbers");if(t.shards&&!t.shards.length)throw new DiscordjsRangeError(ErrorCodes.ClientInvalidProvidedShards);if(typeof t.makeCache!="function")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"makeCache","a function");if(typeof t.sweepers!="object"||t.sweepers===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"sweepers","an object");if(!Array.isArray(t.partials))throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"partials","an Array");if(typeof t.waitGuildTimeout!="number"||isNaN(t.waitGuildTimeout))throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"waitGuildTimeout","a number");if(typeof t.failIfNotExists!="boolean")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"failIfNotExists","a boolean");if(typeof t.enforceNonce!="boolean")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"enforceNonce","a boolean");if(typeof t.allowedMentions!="object"&&t.allowedMentions!==void 0||t.allowedMentions===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"allowedMentions","an object");if(typeof t.presence!="object"||t.presence===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"presence","an object");if(typeof t.ws!="object"||t.ws===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"ws","an object");if(typeof t.rest!="object"||t.rest===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"rest","an object");if(typeof t.jsonTransformer!="function")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"jsonTransformer","a function")}};module.exports=Client});var YT=A((mtt,zoe)=>{"use strict";zoe.exports={Death:"death",Disconnect:"disconnect",Error:"error",Message:"message",Ready:"ready",Reconnecting:"reconnecting",Resume:"resume",Spawn:"spawn"}});var jT=A((Itt,iae)=>{"use strict";var zWe=require("node:events"),Koe=require("node:path"),KWe=require("node:process"),{setTimeout:ZWe,clearTimeout:XWe}=require("node:timers"),{setTimeout:eJe}=require("node:timers/promises"),{SHARE_ENV:tJe}=require("node:worker_threads"),{DiscordjsError:rl,ErrorCodes:nl}=se(),Fa=YT(),{makeError:Zoe,makePlainError:Xoe}=Re(),eae=null,tae=null,HT=class extends zWe{constructor(e,i){switch(super(),e.mode){case"process":eae=require("node:child_process");break;case"worker":tae=require("node:worker_threads").Worker;break}this.manager=e,this.id=i,this.silent=e.silent,this.args=e.shardArgs??[],this.execArgv=e.execArgv,this.env=Object.assign({},KWe.env,{SHARDING_MANAGER:!0,SHARDS:this.id,SHARD_COUNT:this.manager.totalShards,DISCORD_TOKEN:this.manager.token}),this.ready=!1,this.process=null,this.worker=null,this._evals=new Map,this._fetches=new Map,this._exitListener=null}async spawn(e=3e4){if(this.process)throw new rl(nl.ShardingProcessExists,this.id);if(this.worker)throw new rl(nl.ShardingWorkerExists,this.id);switch(this._exitListener=this._handleExit.bind(this,void 0,e),this.manager.mode){case"process":this.process=eae.fork(Koe.resolve(this.manager.file),this.args,{env:this.env,execArgv:this.execArgv,silent:this.silent}).on("message",this._handleMessage.bind(this)).on("exit",this._exitListener);break;case"worker":this.worker=new tae(Koe.resolve(this.manager.file),{workerData:this.env,env:tJe,execArgv:this.execArgv,argv:this.args}).on("message",this._handleMessage.bind(this)).on("exit",this._exitListener);break}this._evals.clear(),this._fetches.clear();let i=this.process??this.worker;return this.emit(Fa.Spawn,i),e===-1||e===1/0?i:new Promise((r,n)=>{let s=()=>{XWe(u),this.off("ready",o),this.off("disconnect",a),this.off("death",c)},o=()=>{s(),r(i)},a=()=>{s(),n(new rl(nl.ShardingReadyDisconnected,this.id))},c=()=>{s(),n(new rl(nl.ShardingReadyDied,this.id))},u=ZWe(()=>{s(),n(new rl(nl.ShardingReadyTimeout,this.id))},e);this.once("ready",o),this.once("disconnect",a),this.once("death",c)})}kill(){this.process?(this.process.removeListener("exit",this._exitListener),this.process.kill()):(this.worker.removeListener("exit",this._exitListener),this.worker.terminate()),this._handleExit(!1)}async respawn({delay:e=500,timeout:i=3e4}={}){return this.kill(),e>0&&await eJe(e),this.spawn(i)}send(e){return new Promise((i,r)=>{this.process?this.process.send(e,n=>{n?r(n):i(this)}):(this.worker.postMessage(e),i(this))})}async fetchClientValue(e){if(!this.process&&!this.worker)throw new rl(nl.ShardingNoChildExists,this.id);if(this._fetches.has(e))return this._fetches.get(e);let i=new Promise((r,n)=>{let s=this.process??this.worker,o=a=>{a?._fetchProp===e&&(s.removeListener("message",o),this.decrementMaxListeners(s),this._fetches.delete(e),a._error?n(Zoe(a._error)):r(a._result))};this.incrementMaxListeners(s),s.on("message",o),this.send({_fetchProp:e}).catch(a=>{s.removeListener("message",o),this.decrementMaxListeners(s),this._fetches.delete(e),n(a)})});return this._fetches.set(e,i),i}async eval(e,i){let r=typeof e=="function"?`(${e})(this, ${JSON.stringify(i)})`:e;if(!this.process&&!this.worker)throw new rl(nl.ShardingNoChildExists,this.id);if(this._evals.has(r))return this._evals.get(r);let n=new Promise((s,o)=>{let a=this.process??this.worker,c=l=>{l?._eval===r&&(a.removeListener("message",c),this.decrementMaxListeners(a),this._evals.delete(r),l._error?o(Zoe(l._error)):s(l._result))};this.incrementMaxListeners(a),a.on("message",c),this.send({_eval:r}).catch(l=>{a.removeListener("message",c),this.decrementMaxListeners(a),this._evals.delete(r),o(l)})});return this._evals.set(r,n),n}_handleMessage(e){if(e){if(e._ready){this.ready=!0,this.emit(Fa.Ready);return}if(e._disconnect){this.ready=!1,this.emit(Fa.Disconnect);return}if(e._reconnecting){this.ready=!1,this.emit(Fa.Reconnecting);return}if(e._resume){this.ready=!0,this.emit(Fa.Resume);return}if(e._sFetchProp){let i={_sFetchProp:e._sFetchProp,_sFetchPropShard:e._sFetchPropShard};this.manager.fetchClientValues(e._sFetchProp,e._sFetchPropShard).then(r=>this.send({...i,_result:r}),r=>this.send({...i,_error:Xoe(r)}));return}if(e._sEval){let i={_sEval:e._sEval,_sEvalShard:e._sEvalShard};this.manager._performOnShards("eval",[e._sEval],e._sEvalShard).then(r=>this.send({...i,_result:r}),r=>this.send({...i,_error:Xoe(r)}));return}if(e._sRespawnAll){let{shardDelay:i,respawnDelay:r,timeout:n}=e._sRespawnAll;this.manager.respawnAll({shardDelay:i,respawnDelay:r,timeout:n}).catch(()=>{});return}}this.emit(Fa.Message,e)}_handleExit(e=this.manager.respawn,i){this.emit(Fa.Death,this.process??this.worker),this.ready=!1,this.process=null,this.worker=null,this._evals.clear(),this._fetches.clear(),e&&this.spawn(i).catch(r=>this.emit(Fa.Error,r))}incrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i+1)}decrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i-1)}};iae.exports=HT});var oae=A((Ett,sae)=>{"use strict";var iJe=require("node:events"),rJe=require("node:fs"),rae=require("node:path"),Sg=require("node:process"),{setTimeout:nae}=require("node:timers/promises"),{Collection:nJe}=re(),sJe=jT(),{DiscordjsError:vu,DiscordjsTypeError:xu,DiscordjsRangeError:Su,ErrorCodes:gi}=se(),{fetchRecommendedShardCount:oJe}=Re(),WT=class extends iJe{constructor(e,i){super();let r={totalShards:"auto",mode:"process",respawn:!0,silent:!1,shardArgs:[],execArgv:[],token:Sg.env.DISCORD_TOKEN,...i};if(this.file=e,!e)throw new vu(gi.ClientInvalidOption,"File","specified.");if(rae.isAbsolute(e)||(this.file=rae.resolve(Sg.cwd(),e)),!rJe.statSync(this.file).isFile())throw new vu(gi.ClientInvalidOption,"File","a file");if(this.shardList=r.shardList??"auto",this.shardList!=="auto"){if(!Array.isArray(this.shardList))throw new xu(gi.ClientInvalidOption,"shardList","an array.");if(this.shardList=[...new Set(this.shardList)],this.shardList.length<1)throw new Su(gi.ClientInvalidOption,"shardList","at least 1 id.");if(this.shardList.some(s=>typeof s!="number"||isNaN(s)||!Number.isInteger(s)||s<0))throw new xu(gi.ClientInvalidOption,"shardList","an array of positive integers.")}if(this.totalShards=r.totalShards||"auto",this.totalShards!=="auto"){if(typeof this.totalShards!="number"||isNaN(this.totalShards))throw new xu(gi.ClientInvalidOption,"Amount of shards","a number.");if(this.totalShards<1)throw new Su(gi.ClientInvalidOption,"Amount of shards","at least 1.");if(!Number.isInteger(this.totalShards))throw new Su(gi.ClientInvalidOption,"Amount of shards","an integer.")}if(this.mode=r.mode,this.mode!=="process"&&this.mode!=="worker")throw new Su(gi.ClientInvalidOption,"Sharding mode",'"process" or "worker"');this.respawn=r.respawn,this.silent=r.silent,this.shardArgs=r.shardArgs,this.execArgv=r.execArgv,this.token=r.token?.replace(/^Bot\s*/i,"")??null,this.shards=new nJe,Sg.env.SHARDING_MANAGER=!0,Sg.env.SHARDING_MANAGER_MODE=this.mode,Sg.env.DISCORD_TOKEN=this.token}createShard(e=this.shards.size){let i=new sJe(this,e);return this.shards.set(e,i),this.emit("shardCreate",i),i}async spawn({amount:e=this.totalShards,delay:i=5500,timeout:r=3e4}={}){if(e==="auto")e=await oJe(this.token);else{if(typeof e!="number"||isNaN(e))throw new xu(gi.ClientInvalidOption,"Amount of shards","a number.");if(e<1)throw new Su(gi.ClientInvalidOption,"Amount of shards","at least 1.");if(!Number.isInteger(e))throw new xu(gi.ClientInvalidOption,"Amount of shards","an integer.")}if(this.shards.size>=e)throw new vu(gi.ShardingAlreadySpawned,this.shards.size);if((this.shardList==="auto"||this.totalShards==="auto"||this.totalShards!==e)&&(this.shardList=[...Array(e).keys()]),(this.totalShards==="auto"||this.totalShards!==e)&&(this.totalShards=e),this.shardList.some(n=>n>=e))throw new Su(gi.ClientInvalidOption,"Amount of shards","bigger than the highest shardId in the shardList option.");for(let n of this.shardList){let s=[],o=this.createShard(n);s.push(o.spawn(r)),i>0&&this.shards.size!==this.shardList.length&&s.push(nae(i)),await Promise.all(s)}return this.shards}broadcast(e){let i=[];for(let r of this.shards.values())i.push(r.send(e));return Promise.all(i)}async broadcastEval(e,i={}){if(typeof e!="function")throw new xu(gi.ShardingInvalidEvalBroadcast);return this._performOnShards("eval",[`(${e})(this, ${JSON.stringify(i.context)})`],i.shard)}fetchClientValues(e,i){return this._performOnShards("fetchClientValue",[e],i)}async _performOnShards(e,i,r){if(this.shards.size===0)throw new vu(gi.ShardingNoShards);if(typeof r=="number"){if(this.shards.has(r))return this.shards.get(r)[e](...i);throw new vu(gi.ShardingShardNotFound,r)}if(this.shards.size!==this.shardList.length)throw new vu(gi.ShardingInProcess);let n=[];for(let s of this.shards.values())n.push(s[e](...i));return Promise.all(n)}async respawnAll({shardDelay:e=5e3,respawnDelay:i=500,timeout:r=3e4}={}){let n=0;for(let s of this.shards.values()){let o=[s.respawn({delay:i,timeout:r})];++n<this.shards.size&&e>0&&o.push(nae(e)),await Promise.all(o)}return this.shards}};sae.exports=WT});var cae=A((Ctt,aae)=>{"use strict";var{deprecate:Gi}=require("node:util"),{blockQuote:aJe,bold:cJe,channelMention:lJe,codeBlock:AJe,formatEmoji:uJe,hideLinkEmbed:hJe,hyperlink:dJe,inlineCode:gJe,italic:fJe,quote:pJe,roleMention:mJe,spoiler:IJe,strikethrough:EJe,time:CJe,TimestampStyles:BJe,underscore:yJe,userMention:QJe}=ds(),JT=class extends null{static blockQuote=Gi(aJe,"Formatters.blockQuote() is deprecated. Import this method directly from discord.js instead.");static bold=Gi(cJe,"Formatters.bold() is deprecated. Import this method directly from discord.js instead.");static channelMention=Gi(lJe,"Formatters.channelMention() is deprecated. Import this method directly from discord.js instead.");static codeBlock=Gi(AJe,"Formatters.codeBlock() is deprecated. Import this method directly from discord.js instead.");static formatEmoji=Gi(uJe,"Formatters.formatEmoji() is deprecated. Import this method directly from discord.js instead.");static hideLinkEmbed=Gi(hJe,"Formatters.hideLinkEmbed() is deprecated. Import this method directly from discord.js instead.");static hyperlink=Gi(dJe,"Formatters.hyperlink() is deprecated. Import this method directly from discord.js instead.");static inlineCode=Gi(gJe,"Formatters.inlineCode() is deprecated. Import this method directly from discord.js instead.");static italic=Gi(fJe,"Formatters.italic() is deprecated. Import this method directly from discord.js instead.");static quote=Gi(pJe,"Formatters.quote() is deprecated. Import this method directly from discord.js instead.");static roleMention=Gi(mJe,"Formatters.roleMention() is deprecated. Import this method directly from discord.js instead.");static spoiler=Gi(IJe,"Formatters.spoiler() is deprecated. Import this method directly from discord.js instead.");static strikethrough=Gi(EJe,"Formatters.strikethrough() is deprecated. Import this method directly from discord.js instead.");static time=Gi(CJe,"Formatters.time() is deprecated. Import this method directly from discord.js instead.");static TimestampStyles=BJe;static underscore=Gi(yJe,"Formatters.underscore() is deprecated. Import this method directly from discord.js instead.");static userMention=Gi(QJe,"Formatters.userMention() is deprecated. Import this method directly from discord.js instead.")};aae.exports=JT});var Aae=A((Btt,lae)=>{"use strict";var{EmbedBuilder:wJe,embedLength:bJe}=Ki(),{isJSONEncodable:vJe}=Oe(),{toSnakeCase:xJe}=Kt(),{resolveColor:SJe}=Re(),$T=class extends wJe{constructor(e){super(xJe(e))}setColor(e){return super.setColor(e&&SJe(e))}static from(e){return new this(vJe(e)?e.toJSON():e)}get length(){return bJe(this.data)}};lae.exports=$T});var hae=A((ytt,uae)=>{"use strict";var{basename:DJe,flatten:_Je}=Re(),zT=class t{constructor(e,i={}){this.attachment=e,this.name=i.name,this.description=i.description}setDescription(e){return this.description=e,this}setFile(e){return this.attachment=e,this}setName(e){return this.name=e,this}setSpoiler(e=!0){if(e===this.spoiler)return this;if(!e){for(;this.spoiler;)this.name=this.name.slice(8);return this}return this.name=`SPOILER_${this.name}`,this}get spoiler(){return DJe(this.name).startsWith("SPOILER_")}toJSON(){return _Je(this)}static from(e){return new t(e.attachment,{name:e.name,description:e.description})}};uae.exports=zT});var fae=A((Qtt,gae)=>{"use strict";var{ModalBuilder:kJe,ComponentBuilder:MJe}=Ki(),{isJSONEncodable:RJe}=Oe(),{toSnakeCase:dae}=Kt(),KT=class extends kJe{constructor({components:e,...i}={}){super({...dae(i),components:e?.map(r=>r instanceof MJe?r:dae(r))})}static from(e){return new this(RJe(e)?e.toJSON():e)}};gae.exports=KT});var Iae=A((wtt,mae)=>{"use strict";var TJe=require("node:process"),UJe=HI(),pae=!1,ZT=class extends UJe{constructor(...e){super(...e),pae||(TJe.emitWarning("The SelectMenuBuilder class is deprecated. Use StringSelectMenuBuilder instead.","DeprecationWarning"),pae=!0)}};mae.exports=ZT});var Bae=A((btt,Cae)=>{"use strict";var FJe=require("node:process"),LJe=jI(),Eae=!1,XT=class extends LJe{constructor(...e){super(...e),Eae||(FJe.emitWarning("The SelectMenuComponent class is deprecated. Use StringSelectMenuComponent instead.","DeprecationWarning"),Eae=!0)}};Cae.exports=XT});var wae=A((vtt,Qae)=>{"use strict";var NJe=require("node:process"),qJe=NE(),yae=!1,eU=class extends qJe{constructor(...e){super(...e),yae||(NJe.emitWarning("The SelectMenuInteraction class is deprecated. Use StringSelectMenuInteraction instead.","DeprecationWarning"),yae=!0)}};Qae.exports=eU});var iU=A((xtt,vae)=>{"use strict";var{SelectMenuOptionBuilder:PJe}=Ki(),{isJSONEncodable:OJe}=Oe(),{toSnakeCase:GJe}=Kt(),{resolvePartialEmoji:bae}=Re(),tU=class extends PJe{constructor({emoji:e,...i}={}){super(GJe({...i,emoji:e&&typeof e=="string"?bae(e):e}))}setEmoji(e){return typeof e=="string"?super.setEmoji(bae(e)):super.setEmoji(e)}static from(e){return new this(OJe(e)?e.toJSON():e)}};vae.exports=tU});var Dae=A((Stt,Sae)=>{"use strict";var VJe=require("node:process"),YJe=iU(),xae=!1,rU=class extends YJe{constructor(...e){super(...e),xae||(VJe.emitWarning("The SelectMenuOptionBuilder class is deprecated. Use StringSelectMenuOptionBuilder instead.","DeprecationWarning"),xae=!0)}};Sae.exports=rU});var _ae=A(y=>{"use strict";var{polyfillDispose:HJe}=Oe(),{__exportStar:sl}=(qF(),XU(NF));HJe();y.BaseClient=Lm();y.Client=$oe();y.Shard=jT();y.ShardClientUtil=gC();y.ShardingManager=oae();y.WebhookClient=yD();y.DiscordjsError=SA().DiscordjsError;y.DiscordjsTypeError=SA().DiscordjsTypeError;y.DiscordjsRangeError=SA().DiscordjsRangeError;y.DiscordjsErrorCodes=jh();y.ActivityFlagsBitField=XR();y.ApplicationFlagsBitField=ev();y.AttachmentFlagsBitField=m0();y.BaseManager=_m();y.BitField=Ni();y.ChannelFlagsBitField=Wh();y.Collection=re().Collection;y.Constants=qn();y.Colors=g0();y.Events=W();y.Formatters=cae();y.GuildMemberFlagsBitField=tE().GuildMemberFlagsBitField;y.IntentsBitField=PT();y.InviteFlagsBitField=Ib().InviteFlagsBitField;y.LimitedCollection=rb();y.MessageFlagsBitField=td();y.Options=Fm();y.Partials=wa();y.PermissionsBitField=$i();y.RoleFlagsBitField=P0();y.ShardEvents=YT();y.SKUFlagsBitField=z0().SKUFlagsBitField;y.Status=ws();y.SnowflakeUtil=At().DiscordSnowflake;y.Sweepers=VT();y.SystemChannelFlagsBitField=kC();y.ThreadMemberFlagsBitField=a_();y.UserFlagsBitField=FD();sl(Re(),y);y.WebSocketShardEvents=AC();y.version=X0().version;y.ApplicationCommandManager=Jm();y.ApplicationEmojiManager=Yb();y.ApplicationCommandPermissionsManager=rd();y.AutoModerationRuleManager=xR();y.BaseGuildEmojiManager=dC();y.CachedManager=at();y.ChannelManager=mR();y.ClientVoiceManager=DM();y.DataManager=kA();y.DMMessageManager=i_();y.EntitlementManager=Jb().EntitlementManager;y.GuildApplicationCommandManager=DR();y.GuildBanManager=MR();y.GuildChannelManager=TR();y.GuildEmojiManager=LR();y.GuildEmojiRoleManager=AS();y.GuildForumThreadManager=s_();y.GuildInviteManager=PR();y.GuildManager=wT();y.GuildMemberManager=VR();y.GuildMemberRoleManager=vD();y.GuildMessageManager=iu();y.GuildScheduledEventManager=jR();y.GuildSoundboardSoundManager=$R().GuildSoundboardSoundManager;y.GuildStickerManager=KR();y.GuildTextThreadManager=mE();y.MessageManager=eu();y.PermissionOverwriteManager=W0();y.PollAnswerVoterManager=ND().PollAnswerVoterManager;y.PresenceManager=iT();y.ReactionManager=ES();y.ReactionUserManager=fS();y.RoleManager=aT();y.StageInstanceManager=lT();y.SubscriptionManager=Zb().SubscriptionManager;y.ThreadManager=hE();y.ThreadMemberManager=A_();y.UserManager=xT();y.VoiceStateManager=uT();y.WebSocketManager=hR();y.WebSocketShard=nR();y.ActionRow=yS();y.ActionRowBuilder=wS();y.Activity=wu().Activity;y.AnonymousGuild=Gm();y.Application=qm();y.ApplicationCommand=jm();y.ApplicationEmoji=sd();y.ApplicationRoleConnectionMetadata=kb().ApplicationRoleConnectionMetadata;y.AutocompleteInteraction=Ek();y.AutoModerationActionExecution=HD();y.AutoModerationRule=yE();y.Base=_e();y.BaseGuild=Om();y.BaseGuildEmoji=VI();y.BaseGuildTextChannel=EE();y.BaseGuildVoiceChannel=tg();y.ButtonBuilder=vS();y.ButtonComponent=SS();y.ButtonInteraction=_k();y.CategoryChannel=e_();y.BaseChannel=ia().BaseChannel;y.ChatInputCommandInteraction=Tk();y.ClientApplication=Xm();y.ClientPresence=_T();y.ClientUser=oR();y.CommandInteraction=sg();y.Collector=Kh();y.CommandInteractionOptionResolver=rg();y.Component=Xi();y.ContainerComponent=US();y.ContextMenuCommandInteraction=UE();y.DirectoryChannel=Q_();y.DMChannel=r_();y.Embed=eS();y.EmbedBuilder=Aae();y.Emoji=Pn().Emoji;y.Entitlement=jb().Entitlement;y.FileComponent=NS();y.ForumChannel=D_();y.Guild=IT().Guild;y.GuildAuditLogs=CR();y.GuildAuditLogsEntry=vE();y.GuildBan=xE();y.GuildChannel=gs();y.GuildEmoji=Hd();y.GuildMember=Qa().GuildMember;y.GuildOnboarding=yR().GuildOnboarding;y.GuildOnboardingPrompt=QE().GuildOnboardingPrompt;y.GuildOnboardingPromptOption=N_().GuildOnboardingPromptOption;y.GuildPreview=fC();y.GuildPreviewEmoji=wR();y.GuildScheduledEvent=Zh().GuildScheduledEvent;y.GuildTemplate=Xh();y.Integration=ig();y.IntegrationApplication=Pm();y.InteractionCallback=Bk();y.InteractionCallbackResource=Qk();y.InteractionCallbackResponse=bk();y.BaseInteraction=pc();y.InteractionCollector=MA();y.InteractionResponse=xk();y.InteractionWebhook=tu();y.Invite=sa();y.InviteStageInstance=pb();y.InviteGuild=bb();y.LabelComponent=PS();y.Message=Bs().Message;y.Attachment=_A();y.AttachmentBuilder=hae();y.ModalBuilder=fae();y.MediaChannel=k_();y.MediaGalleryComponent=YS();y.MediaGalleryItem=GS();y.MessageCollector=ub();y.MessageComponentInteraction=va();y.MessageContextMenuCommandInteraction=qk();y.MessageMentions=rS();y.MessagePayload=fo();y.MessageReaction=mS();y.ModalSubmitInteraction=Gk();y.ModalSubmitFields=Ok();y.NewsChannel=g_();y.OAuth2Guild=CT();y.PartialGroupDMChannel=x_();y.PermissionOverwrites=Mm();y.Poll=JI().Poll;y.PollAnswer=AE().PollAnswer;y.PrimaryEntryPointCommandInteraction=Yk();y.Presence=wu().Presence;y.ReactionCollector=sS();y.ReactionEmoji=YI();y.RichPresenceAssets=wu().RichPresenceAssets;y.Role=no().Role;y.SectionComponent=eD();y.SelectMenuBuilder=Iae();y.ChannelSelectMenuBuilder=_S();y.MentionableSelectMenuBuilder=jS();y.RoleSelectMenuBuilder=zS();y.StringSelectMenuBuilder=HI();y.UserSelectMenuBuilder=gD();y.BaseSelectMenuComponent=Fc();y.SelectMenuComponent=Bae();y.ChannelSelectMenuComponent=RS();y.MentionableSelectMenuComponent=JS();y.RoleSelectMenuComponent=ZS();y.StringSelectMenuComponent=jI();y.UserSelectMenuComponent=pD();y.SelectMenuInteraction=wae();y.ChannelSelectMenuInteraction=Mk();y.MentionableSelectMenuInteraction=TE();y.MentionableSelectMenuInteraction=TE();y.RoleSelectMenuInteraction=jk();y.StringSelectMenuInteraction=NE();y.UserSelectMenuInteraction=Kk();y.SelectMenuOptionBuilder=Dae();y.SeparatorComponent=iD();y.SKU=Rm().SKU;y.SoundboardSound=yC().SoundboardSound;y.StringSelectMenuOptionBuilder=iU();y.StageChannel=p_();y.StageInstance=wE().StageInstance;y.Subscription=zb().Subscription;y.Sticker=Ca().Sticker;y.StickerPack=MT();y.Team=Ub();y.TeamMember=Rb();y.TextChannel=I_();y.TextDisplayComponent=oD();y.TextInputBuilder=cD();y.TextInputComponent=AD();y.ThreadChannel=Xd();y.ThreadMember=gE();y.ThreadOnlyChannel=Kd();y.ThumbnailComponent=hD();y.Typing=yM();y.UnfurledMediaItem=jd();y.User=Ba();y.UserContextMenuCommandInteraction=$k();y.VoiceChannelEffect=cR();y.VoiceChannel=B_();y.VoiceRegion=TT();y.VoiceState=zd();y.Webhook=ys();y.Widget=NT();y.WidgetMember=FT();y.WelcomeChannel=yb();y.WelcomeScreen=Vm();sl(k(),y);sl(Ki(),y);sl(ds(),y);sl(bt(),y);sl(Oe(),y);sl(iR(),y)});var s$e={};KU(s$e,{activate:()=>r$e,deactivate:()=>n$e});module.exports=XU(s$e);var vr=Xn(require("vscode"));var ri=Xn(_ae());function RC(t){return!!(/^\[CDP\]/.test(t)||/^\[Stream\]/.test(t)||/^\[Discord\]/.test(t)||/^\[Extension\]/.test(t)||/^"(classes|parentTag|parentAriaLabel|tag|role|lexical|textLen|visible|parentId|parentClass|grandparentId|hasSvg|ariaLabel|disabled)"\s*:/.test(t)||/^Ctrl\+I|^Ctrl\+L/.test(t)||/^Pre-snapshot:|^Post-snapshot:|^Diff result:/.test(t)||/^Agent is processing|^Agent finished|^Agent never became/.test(t)||/^Message injected|^Focused agent panel/.test(t)||/^DOM discovery/.test(t)||/^Found chat editor|^Still waiting for agent/.test(t)||/^"svgs"\s*:\s*\[/.test(t)||/^\{$|^\}$|^\]$|^\[$/.test(t)||/^Thought for/.test(t)||/^Thinking\.{0,3}$/.test(t)||/^✅\s*Elaborazione completata/.test(t)||/^Elaborazione completata/.test(t)||/^Simple request/i.test(t)||/no task needed/i.test(t)||/^⋯ Expand \d+ more lines?$/.test(t)||t==="Always run"||t==="Planning"||t==="Review Changes"||t==="Review"||t==="Cancel"||t==="Submit"||t==="Reject"||t==="Accept"||/^\[AutoAccept\]/.test(t)||/^\[CDP\]\s*\[AutoAccept\]/.test(t)||/^\["/.test(t)&&/"?\]$/.test(t)||/^\d+ more lines","/.test(t)||/^"\u22ef Expand \d+/.test(t)||/","/.test(t)&&(/"Always run"/.test(t)||/"Review Changes"/.test(t)||/"Planning"/.test(t))||/^"Thought for/.test(t)||/^for \d+s"/.test(t)||/^"",""/.test(t))}function nU(t){return!!(/Press desired key combination/i.test(t)||/Configuring MCP/i.test(t)||/MCP \(Model Context Protocol\)/i.test(t)||/mcpServers/i.test(t)||/@modelcontextprotocol/i.test(t)||/GITHUB_PERSONAL_ACCESS_TOKEN/i.test(t)||/An MCP server implements/i.test(t))}function jJe(t,e){let i=t.lastIndexOf(`
+	`)}`)}async connect(){let e=new VYe(YYe.TokenInvalid),{shards:i,shardCount:r,intents:n,ws:s}=this.client.options;if(this._ws&&this._ws.options.token!==this.client.token&&(await this._ws.destroy({code:AR.Normal,reason:"Login with differing token requested"}),this._ws=null),!this._ws){let h={intents:n.bitfield,rest:this.client.rest,token:this.client.token,largeThreshold:s.large_threshold,version:s.version,shardIds:i==="auto"?null:i,shardCount:i==="auto"?null:r,initialPresence:s.presence,retrieveSessionInfo:d=>this.shards.get(d).sessionInfo,updateSessionInfo:(d,p)=>{this.shards.get(d).sessionInfo=p},compression:Ase?OYe.ZlibStream:null};s.buildIdentifyThrottler&&(h.buildIdentifyThrottler=s.buildIdentifyThrottler),s.buildStrategy&&(h.buildStrategy=s.buildStrategy),this._ws=new PYe(h),this.attachEvents()}let{url:o,shards:a,session_start_limit:c}=await this._ws.fetchGatewayInformation().catch(h=>{throw h.status===401?e:h}),{total:l,remaining:u}=c;this.debug(["Fetched Gateway Information",`URL: ${o}`,`Recommended Shards: ${a}`]),this.debug(["Session Limit Information",`Total: ${l}`,`Remaining: ${u}`]),this.gateway=`${o}/`,this.client.options.shardCount=await this._ws.getShardCount(),this.client.options.shards=await this._ws.getShardIds(),this.totalShards=this.client.options.shards.length;for(let h of this.client.options.shards)if(!this.shards.has(h)){let d=new GYe(this,h);this.shards.set(h,d),d.on(Cg.AllReady,p=>{this.client.emit(Kc.ShardReady,d.id,p),this.checkShardsReady()}),d.status=yn.Connecting}await this._ws.connect(),this.shards.forEach(h=>{h.listenerCount(Cg.InvalidSession)>0&&!cse&&(lR.emitWarning("The WebSocketShard#invalidSession event is deprecated and will never emit.","DeprecationWarning"),cse=!0),h.listenerCount(Cg.Destroyed)>0&&!lse&&(lR.emitWarning("The WebSocketShard#destroyed event is deprecated and will never emit.","DeprecationWarning"),lse=!0)})}attachEvents(){this._ws.on(ka.Debug,({message:e,shardId:i})=>this.debug([e],i)),this._ws.on(ka.Dispatch,({data:e,shardId:i})=>{this.client.emit(Kc.Raw,e,i),this.emit(e.t,e.d,i);let r=this.shards.get(i);this.handlePacket(e,r),r.status===yn.WaitingForGuilds&&jYe.includes(e.t)&&r.gotGuild(e.d.id)}),this._ws.on(ka.Ready,({data:e,shardId:i})=>{this.shards.get(i).onReadyPacket(e)}),this._ws.on(ka.Closed,({code:e,shardId:i})=>{let r=this.shards.get(i);if(r.emit(Cg.Close,{code:e,reason:ase,wasClean:!0}),WYe.includes(e)){r.status=yn.Disconnected,this.client.emit(Kc.ShardDisconnect,{code:e,reason:ase,wasClean:!0},i),this.debug([`Shard not recoverable: ${e} (${Zc[e]??AR[e]})`],i);return}this.shards.get(i).status=yn.Connecting,this.client.emit(Kc.ShardReconnecting,i)}),this._ws.on(ka.Hello,({shardId:e})=>{let i=this.shards.get(e);i.sessionInfo?(i.closeSequence=i.sessionInfo.sequence,i.status=yn.Resuming):i.status=yn.Identifying}),this._ws.on(ka.Resumed,({shardId:e})=>{let i=this.shards.get(e);i.status=yn.Ready,i.emit(Cg.Resumed)}),this._ws.on(ka.HeartbeatComplete,({heartbeatAt:e,latency:i,shardId:r})=>{this.debug([`Heartbeat acknowledged, latency of ${i}ms.`],r);let n=this.shards.get(r);n.lastPingTimestamp=e,n.ping=i}),this._ws.on(ka.Error,({error:e,shardId:i})=>{this.client.emit(Kc.ShardError,e,i)})}broadcast(e){for(let i of this.shards.keys())this._ws.send(i,e)}async destroy(){this.destroyed||(this.debug([Object.assign(new Error,{name:"Manager was destroyed:"}).stack]),this.destroyed=!0,await this._ws?.destroy({code:AR.Normal,reason:"Manager was destroyed"}))}handlePacket(e,i){if(e&&this.status!==yn.Ready&&!HYe.includes(e.t))return this.packetQueue.push({packet:e,shard:i}),!1;if(this.packetQueue.length){let r=this.packetQueue.shift();NYe(()=>{this.handlePacket(r.packet,r.shard)}).unref()}return e&&sse[e.t]&&sse[e.t](this.client,e,i),!0}checkShardsReady(){this.status!==yn.Ready&&(this.shards.size!==this.totalShards||this.shards.some(e=>e.status!==yn.Ready)||this.triggerClientReady())}triggerClientReady(){this.status=yn.Ready,this.client.readyTimestamp=Date.now(),this.client.emit("ready",this.client)&&!ose&&(ose=!0,lR.emitWarning("The ready event has been renamed to clientReady to distinguish it from the gateway READY event and will only emit under that name in v15. Please use clientReady instead.","DeprecationWarning")),this.client.emit(Kc.ClientReady,this.client),this.handlePacket()}};use.exports=uR});var dC=A((Uet,hse)=>{"use strict";var JYe=at(),dR=sd(),$Ye=Hd(),gR=YI(),{parseEmoji:zYe}=Re(),fR=class extends JYe{constructor(e,i){super(e,$Ye,i)}resolve(e){return e instanceof gR?this.cache.get(e.id)??null:e instanceof dR?this.cache.get(e.id)??null:super.resolve(e)}resolveId(e){return e instanceof gR||e instanceof dR?e.id:super.resolveId(e)}resolveIdentifier(e){let i=this.resolve(e);if(i)return i.identifier;if(e instanceof gR||e instanceof dR)return e.identifier;if(typeof e=="string"){let r=zYe(e);return r?.name.length&&(e=`${r.animated?"a:":""}${r.name}${r.id?`:${r.id}`:""}`),e.includes("%")?e:encodeURIComponent(e)}return null}};hse.exports=fR});var mR=A((Fet,gse)=>{"use strict";var KYe=require("node:process"),{Routes:ZYe}=k(),XYe=at(),{BaseChannel:eHe}=ia(),{createChannel:tHe}=Zd(),{ThreadChannelTypes:iHe}=qn(),rHe=W(),dse=!1,pR=class extends XYe{constructor(e,i){super(e,eHe,i);let r=this._cache.constructor.name==="Collection"||this._cache.maxSize===void 0||this._cache.maxSize===1/0;!dse&&!r&&(dse=!0,KYe.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning"))}_add(e,i,{cache:r=!0,allowUnknownGuild:n=!1}={}){let s=this.cache.get(e.id);if(s)return r&&s._patch(e),i?.channels?._add(s),iHe.includes(s.type)&&s.parent?.threads?._add(s),s;let o=tHe(this.client,e,i,{allowUnknownGuild:n});return o?(r&&!n&&this.cache.set(o.id,o),o):(this.client.emit(rHe.Debug,`Failed to find guild, or unknown type for channel ${e.id} ${e.type}`),null)}_remove(e){let i=this.cache.get(e);i?.guild?.channels.cache.delete(e);for(let[r,n]of i?.guild?.invites.cache??[])n.channelId===e&&i.guild.invites.cache.delete(r);if(i?.parent?.threads?.cache.delete(e),this.cache.delete(e),i?.threads)for(let r of i.threads.cache.keys())this.cache.delete(r),i.guild?.channels.cache.delete(r)}async fetch(e,{allowUnknownGuild:i=!1,cache:r=!0,force:n=!1}={}){if(!n){let o=this.cache.get(e);if(o&&!o.partial)return o}let s=await this.client.rest.get(ZYe.channel(e));return this._add(s,null,{cache:r,allowUnknownGuild:i})}};gse.exports=pR});var gC=A((Let,Ise)=>{"use strict";var Ma=require("node:process"),{calculateShardId:nHe}=Oe(),{DiscordjsError:sHe,DiscordjsTypeError:oHe,ErrorCodes:fse}=se(),vs=W(),{makeError:pse,makePlainError:mse}=Re(),IR=class{constructor(e,i){switch(this.client=e,this.mode=i,this.parentPort=null,i){case"process":Ma.on("message",this._handleMessage.bind(this)),e.on(vs.ShardReady,()=>{Ma.send({_ready:!0})}),e.on(vs.ShardDisconnect,()=>{Ma.send({_disconnect:!0})}),e.on(vs.ShardReconnecting,()=>{Ma.send({_reconnecting:!0})}),e.on(vs.ShardResume,()=>{Ma.send({_resume:!0})});break;case"worker":this.parentPort=require("node:worker_threads").parentPort,this.parentPort.on("message",this._handleMessage.bind(this)),e.on(vs.ShardReady,()=>{this.parentPort.postMessage({_ready:!0})}),e.on(vs.ShardDisconnect,()=>{this.parentPort.postMessage({_disconnect:!0})}),e.on(vs.ShardReconnecting,()=>{this.parentPort.postMessage({_reconnecting:!0})}),e.on(vs.ShardResume,()=>{this.parentPort.postMessage({_resume:!0})});break}}get ids(){return this.client.options.shards}get count(){return this.client.options.shardCount}send(e){return new Promise((i,r)=>{switch(this.mode){case"process":Ma.send(e,n=>{n?r(n):i()});break;case"worker":this.parentPort.postMessage(e),i();break}})}fetchClientValues(e,i){return new Promise((r,n)=>{let s=this.parentPort??Ma,o=a=>{a?._sFetchProp!==e||a._sFetchPropShard!==i||(s.removeListener("message",o),this.decrementMaxListeners(s),a._error?n(pse(a._error)):r(a._result))};this.incrementMaxListeners(s),s.on("message",o),this.send({_sFetchProp:e,_sFetchPropShard:i}).catch(a=>{s.removeListener("message",o),this.decrementMaxListeners(s),n(a)})})}broadcastEval(e,i={}){return new Promise((r,n)=>{let s=this.parentPort??Ma;if(typeof e!="function"){n(new oHe(fse.ShardingInvalidEvalBroadcast));return}e=`(${e})(this, ${JSON.stringify(i.context)})`;let o=a=>{a?._sEval!==e||a._sEvalShard!==i.shard||(s.removeListener("message",o),this.decrementMaxListeners(s),a._error?n(pse(a._error)):r(a._result))};this.incrementMaxListeners(s),s.on("message",o),this.send({_sEval:e,_sEvalShard:i.shard}).catch(a=>{s.removeListener("message",o),this.decrementMaxListeners(s),n(a)})})}respawnAll({shardDelay:e=5e3,respawnDelay:i=500,timeout:r=3e4}={}){return this.send({_sRespawnAll:{shardDelay:e,respawnDelay:i,timeout:r}})}async _handleMessage(e){if(e){if(e._fetchProp)try{let i=e._fetchProp.split("."),r=this.client;for(let n of i)r=r[n];this._respond("fetchProp",{_fetchProp:e._fetchProp,_result:r})}catch(i){this._respond("fetchProp",{_fetchProp:e._fetchProp,_error:mse(i)})}else if(e._eval)try{this._respond("eval",{_eval:e._eval,_result:await this.client._eval(e._eval)})}catch(i){this._respond("eval",{_eval:e._eval,_error:mse(i)})}}}_respond(e,i){this.send(i).catch(r=>{let n=new Error(`Error when sending ${e} response to master process: ${r.message}`);n.stack=r.stack,this.client.emit(vs.Error,n)})}static singleton(e,i){return this._singleton?e.emit(vs.Warn,"Multiple clients created in child process/worker; only the first will handle sharding helpers."):this._singleton=new this(e,i),this._singleton}static shardIdForGuildId(e,i){let r=nHe(e,i);if(r<0)throw new sHe(fse.ShardingShardMiscalculation,r,e,i);return r}incrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i+1)}decrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i-1)}};Ise.exports=IR});var CR=A((Net,Ese)=>{"use strict";var{Collection:Iu}=re(),aHe=jm(),cHe=vE(),lHe=ig(),AHe=ys(),{flatten:uHe}=Re(),ER=class{constructor(e,i){if(i.users)for(let r of i.users)e.client.users._add(r);if(i.threads)for(let r of i.threads)e.client.channels._add(r,e);if(this.webhooks=new Iu,i.webhooks)for(let r of i.webhooks)this.webhooks.set(r.id,new AHe(e.client,r));if(this.integrations=new Iu,i.integrations)for(let r of i.integrations)this.integrations.set(r.id,new lHe(e.client,r,e));if(this.guildScheduledEvents=i.guild_scheduled_events.reduce((r,n)=>r.set(n.id,e.scheduledEvents._add(n)),new Iu),this.applicationCommands=new Iu,i.application_commands)for(let r of i.application_commands)this.applicationCommands.set(r.id,new aHe(e.client,r,e));this.autoModerationRules=i.auto_moderation_rules.reduce((r,n)=>r.set(n.id,e.autoModerationRules._add(n)),new Iu),this.entries=new Iu;for(let r of i.audit_log_entries){let n=new cHe(e,r,this);this.entries.set(n.id,n)}}toJSON(){return uHe(this)}};Ese.exports=ER});var yR=A(Bse=>{"use strict";var{Collection:Cse}=re(),hHe=_e(),{GuildOnboardingPrompt:dHe}=QE(),BR=class extends hHe{constructor(e,i){super(e),this.guildId=i.guild_id;let r=this.guild;this.prompts=i.prompts.reduce((n,s)=>n.set(s.id,new dHe(e,s,this.guildId)),new Cse),this.defaultChannels=i.default_channel_ids.reduce((n,s)=>n.set(s,r.channels.cache.get(s)),new Cse),this.enabled=i.enabled,this.mode=i.mode}get guild(){return this.client.guilds.cache.get(this.guildId)}};Bse.GuildOnboarding=BR});var wR=A((Pet,yse)=>{"use strict";var gHe=VI(),QR=class extends gHe{constructor(e,i,r){super(e,i,r),this.roles=i.roles}};yse.exports=QR});var fC=A((Oet,wse)=>{"use strict";var{Collection:Qse}=re(),{DiscordSnowflake:fHe}=At(),{Routes:pHe}=k(),mHe=_e(),IHe=wR(),{Sticker:EHe}=Ca(),bR=class extends mHe{constructor(e,i){super(e),i&&this._patch(i)}_patch(e){this.id=e.id,"name"in e&&(this.name=e.name),"icon"in e&&(this.icon=e.icon),"splash"in e&&(this.splash=e.splash),"discovery_splash"in e&&(this.discoverySplash=e.discovery_splash),"features"in e&&(this.features=e.features),"approximate_member_count"in e&&(this.approximateMemberCount=e.approximate_member_count),"approximate_presence_count"in e&&(this.approximatePresenceCount=e.approximate_presence_count),"description"in e?this.description=e.description:this.description??=null,this.emojis?this.emojis.clear():this.emojis=new Qse;for(let i of e.emojis)this.emojis.set(i.id,new IHe(this.client,i,this));this.stickers=e.stickers.reduce((i,r)=>i.set(r.id,new EHe(this.client,r)),new Qse)}get createdTimestamp(){return fHe.timestampFrom(this.id)}get createdAt(){return new Date(this.createdTimestamp)}splashURL(e={}){return this.splash&&this.client.rest.cdn.splash(this.id,this.splash,e)}discoverySplashURL(e={}){return this.discoverySplash&&this.client.rest.cdn.discoverySplash(this.id,this.discoverySplash,e)}iconURL(e={}){return this.icon&&this.client.rest.cdn.icon(this.id,this.icon,e)}async fetch(){let e=await this.client.rest.get(pHe.guildPreview(this.id));return this._patch(e),this}toString(){return this.name}toJSON(){let e=super.toJSON();return e.iconURL=this.iconURL(),e.splashURL=this.splashURL(),e}};wse.exports=bR});var xR=A((Get,bse)=>{"use strict";var{Collection:CHe}=re(),{Routes:Bg}=k(),BHe=at(),yHe=yE(),vR=class extends BHe{constructor(e,i){super(e.client,yHe,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async create({name:e,eventType:i,triggerType:r,triggerMetadata:n,actions:s,enabled:o,exemptRoles:a,exemptChannels:c,reason:l}){let u=await this.client.rest.post(Bg.guildAutoModerationRules(this.guild.id),{body:{name:e,event_type:i,trigger_type:r,trigger_metadata:n&&{keyword_filter:n.keywordFilter,regex_patterns:n.regexPatterns,presets:n.presets,allow_list:n.allowList,mention_total_limit:n.mentionTotalLimit,mention_raid_protection_enabled:n.mentionRaidProtectionEnabled},actions:s.map(h=>({type:h.type,metadata:{duration_seconds:h.metadata?.durationSeconds,channel_id:h.metadata?.channel&&this.guild.channels.resolveId(h.metadata.channel),custom_message:h.metadata?.customMessage}})),enabled:o,exempt_roles:a?.map(h=>this.guild.roles.resolveId(h)),exempt_channels:c?.map(h=>this.guild.channels.resolveId(h))},reason:l});return this._add(u)}async edit(e,{name:i,eventType:r,triggerMetadata:n,actions:s,enabled:o,exemptRoles:a,exemptChannels:c,reason:l}){let u=this.resolveId(e),h=await this.client.rest.patch(Bg.guildAutoModerationRule(this.guild.id,u),{body:{name:i,event_type:r,trigger_metadata:n&&{keyword_filter:n.keywordFilter,regex_patterns:n.regexPatterns,presets:n.presets,allow_list:n.allowList,mention_total_limit:n.mentionTotalLimit,mention_raid_protection_enabled:n.mentionRaidProtectionEnabled},actions:s?.map(d=>({type:d.type,metadata:{duration_seconds:d.metadata?.durationSeconds,channel_id:d.metadata?.channel&&this.guild.channels.resolveId(d.metadata.channel),custom_message:d.metadata?.customMessage}})),enabled:o,exempt_roles:a?.map(d=>this.guild.roles.resolveId(d)),exempt_channels:c?.map(d=>this.guild.channels.resolveId(d))},reason:l});return this._add(h)}fetch(e){if(!e)return this._fetchMany();let{autoModerationRule:i,cache:r,force:n}=e,s=this.resolveId(i??e);return s?this._fetchSingle({autoModerationRule:s,cache:r,force:n}):this._fetchMany(e)}async _fetchSingle({autoModerationRule:e,cache:i,force:r=!1}){if(!r){let s=this.cache.get(e);if(s)return s}let n=await this.client.rest.get(Bg.guildAutoModerationRule(this.guild.id,e));return this._add(n,i)}async _fetchMany(e={}){return(await this.client.rest.get(Bg.guildAutoModerationRules(this.guild.id))).reduce((r,n)=>r.set(n.id,this._add(n,e.cache)),new CHe)}async delete(e,i){let r=this.resolveId(e);await this.client.rest.delete(Bg.guildAutoModerationRule(this.guild.id,r),{reason:i})}};bse.exports=vR});var DR=A((Vet,vse)=>{"use strict";var QHe=Jm(),wHe=rd(),SR=class extends QHe{constructor(e,i){super(e.client,i),this.guild=e,this.permissions=new wHe(this)}};vse.exports=SR});var MR=A((Yet,Dse)=>{"use strict";var bHe=require("node:process"),{Collection:xse}=re(),{makeURLSearchParams:vHe}=bt(),{Routes:yg}=k(),xHe=at(),{DiscordjsTypeError:_R,DiscordjsError:pC,ErrorCodes:Xc}=se(),SHe=xE(),{GuildMember:DHe}=Qa(),Sse=!1,kR=class extends xHe{constructor(e,i){super(e.client,SHe,i),this.guild=e}_add(e,i){return super._add(e,i,{id:e.user.id,extras:[this.guild]})}resolve(e){return super.resolve(e)??super.resolve(this.client.users.resolveId(e))}async fetch(e){if(!e)return this._fetchMany();let{user:i,cache:r,force:n,limit:s,before:o,after:a}=e,c=this.client.users.resolveId(i??e);if(c)return this._fetchSingle({user:c,cache:r,force:n});if(!o&&!a&&!s&&r===void 0)throw new pC(Xc.FetchBanResolveId);return this._fetchMany(e)}async _fetchSingle({user:e,cache:i,force:r=!1}){if(!r){let s=this.cache.get(e);if(s&&!s.partial)return s}let n=await this.client.rest.get(yg.guildBan(this.guild.id,e));return this._add(n,i)}async _fetchMany({cache:e,...i}={}){return(await this.client.rest.get(yg.guildBans(this.guild.id),{query:vHe(i)})).reduce((n,s)=>n.set(s.user.id,this._add(s,e)),new xse)}async create(e,i={}){if(typeof i!="object")throw new _R(Xc.InvalidType,"options","object",!0);let r=this.client.users.resolveId(e);if(!r)throw new pC(Xc.BanResolveId,!0);if(i.deleteMessageDays!==void 0&&!Sse&&(bHe.emitWarning("The deleteMessageDays option for GuildBanManager#create() is deprecated. Use the deleteMessageSeconds option instead.","DeprecationWarning"),Sse=!0),await this.client.rest.put(yg.guildBan(this.guild.id,r),{body:{delete_message_seconds:i.deleteMessageSeconds??(i.deleteMessageDays?i.deleteMessageDays*24*60*60:void 0)},reason:i.reason}),e instanceof DHe)return e;let n=this.client.users.cache.get(r);return n?this.guild.members.resolve(n)??n:r}async remove(e,i){let r=this.client.users.resolveId(e);if(!r)throw new pC(Xc.BanResolveId);return await this.client.rest.delete(yg.guildBan(this.guild.id,r),{reason:i}),this.client.users.resolve(e)}async bulkCreate(e,i={}){if(!e||!(Array.isArray(e)||e instanceof xse))throw new _R(Xc.InvalidType,"users","Array or Collection of UserResolvable",!0);if(typeof i!="object")throw new _R(Xc.InvalidType,"options","object",!0);let r=e.map(s=>this.client.users.resolveId(s));if(r.length===0)throw new pC(Xc.BulkBanUsersOptionEmpty);let n=await this.client.rest.post(yg.guildBulkBan(this.guild.id),{body:{delete_message_seconds:i.deleteMessageSeconds,user_ids:r},reason:i.reason});return{bannedUsers:n.banned_users,failedUsers:n.failed_users}}};Dse.exports=kR});var TR=A((Het,Fse)=>{"use strict";var _He=require("node:process"),{Collection:_se}=re(),{ChannelType:kHe,Routes:Wn}=k(),MHe=at(),RHe=mE(),{DiscordjsError:THe,DiscordjsTypeError:el,ErrorCodes:Ra}=se(),UHe=gs(),mC=Mm(),kse=Xd(),Mse=ys(),FHe=Wh(),{transformGuildForumTag:Rse,transformGuildDefaultReaction:Tse}=Zd(),{ThreadChannelTypes:LHe}=qn(),{resolveImage:NHe}=Ci(),{setPosition:qHe}=Re(),Use=!1,RR=class extends MHe{constructor(e,i){super(e.client,UHe,i);let r=this._cache.constructor.name==="Collection"||this._cache.maxSize===void 0||this._cache.maxSize===1/0;!Use&&!r&&(Use=!0,_He.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning")),this.guild=e}get channelCountWithoutThreads(){return this.cache.reduce((e,i)=>LHe.includes(i.type)?e:++e,0)}_add(e){let i=this.cache.get(e.id);return i||(this.cache.set(e.id,e),e)}resolve(e){return e instanceof kse?this.cache.get(e.id)??null:super.resolve(e)}resolveId(e){return e instanceof kse?super.resolveId(e.id):super.resolveId(e)}async addFollower(e,i,r){let n=this.resolveId(e);if(!n)throw new el(Ra.InvalidType,"channel","NewsChannelResolvable");let s=this.resolveId(i);if(!s)throw new el(Ra.InvalidType,"targetChannel","TextChannelResolvable");let{webhook_id:o}=await this.client.rest.post(Wn.channelFollowers(n),{body:{webhook_channel_id:s},reason:r});return o}async create({name:e,type:i,topic:r,nsfw:n,bitrate:s,userLimit:o,parent:a,permissionOverwrites:c,position:l,rateLimitPerUser:u,rtcRegion:h,videoQualityMode:d,defaultThreadRateLimitPerUser:p,availableTags:m,defaultReactionEmoji:B,defaultAutoArchiveDuration:f,defaultSortOrder:E,defaultForumLayout:D,reason:R}){a&&=this.client.channels.resolveId(a),c&&=c.map(V=>mC.resolve(V,this.guild));let G=await this.client.rest.post(Wn.guildChannels(this.guild.id),{body:{name:e,topic:r,type:i,nsfw:n,bitrate:s,user_limit:o,parent_id:a,position:l,permission_overwrites:c,rate_limit_per_user:u,rtc_region:h,video_quality_mode:d,default_thread_rate_limit_per_user:p,available_tags:m?.map(V=>Rse(V)),default_reaction_emoji:B&&Tse(B),default_auto_archive_duration:f,default_sort_order:E,default_forum_layout:D},reason:R});return this.client.actions.ChannelCreate.handle(G).channel}async createWebhook({channel:e,name:i,avatar:r,reason:n}){let s=this.resolveId(e);if(!s)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");let o=await NHe(r),a=await this.client.rest.post(Wn.channelWebhooks(s),{body:{name:i,avatar:o},reason:n});return new Mse(this.client,a)}async edit(e,i){let r=this.resolve(e);if(!r)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");let n=i.parent&&this.client.channels.resolveId(i.parent);i.position!==void 0&&await this.setPosition(r,i.position,{position:i.position,reason:i.reason});let s=i.permissionOverwrites?.map(a=>mC.resolve(a,this.guild));if(i.lockPermissions)if(n){let a=this.cache.get(n);a?.type===kHe.GuildCategory&&(s=a.permissionOverwrites.cache.map(c=>mC.resolve(c,this.guild)))}else r.parent&&(s=r.parent.permissionOverwrites.cache.map(a=>mC.resolve(a,this.guild)));let o=await this.client.rest.patch(Wn.channel(r.id),{body:{name:i.name,type:i.type,topic:i.topic,nsfw:i.nsfw,bitrate:i.bitrate,user_limit:i.userLimit,rtc_region:i.rtcRegion,video_quality_mode:i.videoQualityMode,parent_id:n,lock_permissions:i.lockPermissions,rate_limit_per_user:i.rateLimitPerUser,default_auto_archive_duration:i.defaultAutoArchiveDuration,permission_overwrites:s,available_tags:i.availableTags?.map(a=>Rse(a)),default_reaction_emoji:i.defaultReactionEmoji&&Tse(i.defaultReactionEmoji),default_thread_rate_limit_per_user:i.defaultThreadRateLimitPerUser,flags:"flags"in i?FHe.resolve(i.flags):void 0,default_sort_order:i.defaultSortOrder,default_forum_layout:i.defaultForumLayout},reason:i.reason});return this.client.actions.ChannelUpdate.handle(o).updated}async setPosition(e,i,{relative:r,reason:n}={}){if(e=this.resolve(e),!e)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");let s=await qHe(e,i,r,this.guild._sortedChannels(e),this.client,Wn.guildChannels(this.guild.id),n);return this.client.actions.GuildChannelsPositionUpdate.handle({guild_id:this.guild.id,channels:s}),e}async fetch(e,{cache:i=!0,force:r=!1}={}){if(e&&!r){let o=this.cache.get(e);if(o)return o}if(e){let o=await this.client.rest.get(Wn.channel(e));if(this.guild.id!==o.guild_id)throw new THe(Ra.GuildChannelUnowned);return this.client.channels._add(o,this.guild,{cache:i})}let n=await this.client.rest.get(Wn.guildChannels(this.guild.id)),s=new _se;for(let o of n)s.set(o.id,this.client.channels._add(o,this.guild,{cache:i}));return s}async fetchWebhooks(e){let i=this.resolveId(e);if(!i)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");return(await this.client.rest.get(Wn.channelWebhooks(i))).reduce((n,s)=>n.set(s.id,new Mse(this.client,s)),new _se)}async setPositions(e){return e=e.map(i=>({id:this.client.channels.resolveId(i.channel),position:i.position,lock_permissions:i.lockPermissions,parent_id:i.parent!==void 0?this.resolveId(i.parent):void 0})),await this.client.rest.patch(Wn.guildChannels(this.guild.id),{body:e}),this.client.actions.GuildChannelsPositionUpdate.handle({guild_id:this.guild.id,channels:e}).guild}async fetchActiveThreads(e=!0){let i=await this.rawFetchGuildActiveThreads();return RHe._mapThreads(i,this.client,{guild:this.guild,cache:e})}rawFetchGuildActiveThreads(){return this.client.rest.get(Wn.guildActiveThreads(this.guild.id))}async delete(e,i){let r=this.resolveId(e);if(!r)throw new el(Ra.InvalidType,"channel","GuildChannelResolvable");await this.client.rest.delete(Wn.channel(r),{reason:i}),this.client.actions.ChannelDelete.handle({id:r})}};Fse.exports=RR});var LR=A((jet,qse)=>{"use strict";var{Collection:Lse}=re(),{Routes:Eu,PermissionFlagsBits:Nse}=k(),PHe=dC(),{DiscordjsError:UR,DiscordjsTypeError:Cu,ErrorCodes:Qo}=se(),{resolveImage:OHe}=Ci(),FR=class extends PHe{constructor(e,i){super(e.client,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async create({attachment:e,name:i,roles:r,reason:n}){if(e=await OHe(e),!e)throw new Cu(Qo.ReqResourceType);let s={image:e,name:i};if(r){if(!Array.isArray(r)&&!(r instanceof Lse))throw new Cu(Qo.InvalidType,"options.roles","Array or Collection of Roles or Snowflakes",!0);s.roles=[];for(let a of r.values()){let c=this.guild.roles.resolveId(a);if(!c)throw new Cu(Qo.InvalidElement,"Array or Collection","options.roles",a);s.roles.push(c)}}let o=await this.client.rest.post(Eu.guildEmojis(this.guild.id),{body:s,reason:n});return this.client.actions.GuildEmojiCreate.handle(this.guild,o).emoji}async fetch(e,{cache:i=!0,force:r=!1}={}){if(e){if(!r){let a=this.cache.get(e);if(a)return a}let o=await this.client.rest.get(Eu.guildEmoji(this.guild.id,e));return this._add(o,i)}let n=await this.client.rest.get(Eu.guildEmojis(this.guild.id)),s=new Lse;for(let o of n)s.set(o.id,this._add(o,i));return s}async delete(e,i){let r=this.resolveId(e);if(!r)throw new Cu(Qo.InvalidType,"emoji","EmojiResolvable",!0);await this.client.rest.delete(Eu.guildEmoji(this.guild.id,r),{reason:i})}async edit(e,i){let r=this.resolveId(e);if(!r)throw new Cu(Qo.InvalidType,"emoji","EmojiResolvable",!0);let n=i.roles?.map(a=>this.guild.roles.resolveId(a)),s=await this.client.rest.patch(Eu.guildEmoji(this.guild.id,r),{body:{name:i.name,roles:n},reason:i.reason}),o=this.cache.get(r);if(o){let a=o._clone();return a._patch(s),a}return this._add(s)}async fetchAuthor(e){if(e=this.resolve(e),!e)throw new Cu(Qo.InvalidType,"emoji","EmojiResolvable",!0);if(e.managed)throw new UR(Qo.EmojiManaged);let{me:i}=this.guild.members;if(!i)throw new UR(Qo.GuildUncachedMe);if(!i.permissions.any(Nse.CreateGuildExpressions|Nse.ManageGuildExpressions))throw new UR(Qo.MissingManageGuildExpressionsPermission,this.guild);let r=await this.client.rest.get(Eu.guildEmoji(this.guild.id,e.id));return e._patch(r),e.author}};qse.exports=FR});var PR=A((Wet,Gse)=>{"use strict";var{Collection:Pse}=re(),{Routes:IC}=k(),GHe=at(),{DiscordjsError:Qg,ErrorCodes:wg}=se(),Ose=sa(),{resolveInviteCode:NR}=Ci(),qR=class extends GHe{constructor(e,i){super(e.client,Ose,i),this.guild=e}_add(e,i){return super._add(e,i,{id:e.code,extras:[this.guild]})}async fetch(e){if(!e)return this._fetchMany();if(typeof e=="string"){let i=NR(e);if(!i)throw new Qg(wg.InviteResolveCode);return this._fetchSingle({code:i,cache:!0})}if(!e.code){if(e.channelId){let i=this.guild.channels.resolveId(e.channelId);if(!i)throw new Qg(wg.GuildChannelResolve);return this._fetchChannelMany(i,e.cache)}if("cache"in e)return this._fetchMany(e.cache);throw new Qg(wg.InviteResolveCode)}return this._fetchSingle({...e,code:NR(e.code)})}async _fetchSingle({code:e,cache:i,force:r=!1}){if(!r){let o=this.cache.get(e);if(o)return o}let s=(await this._fetchMany(i)).get(e);if(!s)throw new Qg(wg.InviteNotFound);return s}async _fetchMany(e){return(await this.client.rest.get(IC.guildInvites(this.guild.id))).reduce((r,n)=>r.set(n.code,this._add(n,e)),new Pse)}async _fetchChannelMany(e,i){return(await this.client.rest.get(IC.channelInvites(e))).reduce((n,s)=>n.set(s.code,this._add(s,i)),new Pse)}async create(e,{temporary:i,maxAge:r,maxUses:n,unique:s,targetUser:o,targetApplication:a,targetType:c,reason:l}={}){let u=this.guild.channels.resolveId(e);if(!u)throw new Qg(wg.GuildChannelResolve);let h=await this.client.rest.post(IC.channelInvites(u),{body:{temporary:i,max_age:r,max_uses:n,unique:s,target_user_id:this.client.users.resolveId(o),target_application_id:a?.id??a?.applicationId??a,target_type:c},reason:l});return new Ose(this.client,h)}async delete(e,i){let r=NR(e);await this.client.rest.delete(IC.invite(r),{reason:i})}};Gse.exports=qR});var VR=A((Jet,jse)=>{"use strict";var{process:VHe}=require("node:process"),{setTimeout:YHe,clearTimeout:HHe}=require("node:timers"),{Collection:EC}=re(),{makeURLSearchParams:OR}=bt(),{GatewayRateLimitError:jHe}=Oe(),{DiscordSnowflake:WHe}=At(),{Routes:Jn,GatewayOpcodes:JHe,GatewayDispatchEvents:$He}=k(),zHe=at(),{DiscordjsError:Vse,DiscordjsTypeError:tl,DiscordjsRangeError:KHe,ErrorCodes:xs}=se(),ZHe=tg(),{GuildMember:XHe}=Qa(),{Role:eje}=no(),{resolveImage:Yse}=Ci(),CC=W(),{GuildMemberFlagsBitField:tje}=tE(),ije=wa(),Hse=!1,GR=class extends zHe{constructor(e,i){super(e.client,XHe,i),this.guild=e}_add(e,i=!0){return super._add(e,i,{id:e.user.id,extras:[this.guild]})}resolve(e){let i=super.resolve(e);if(i)return i;let r=this.client.users.resolveId(e);return r?this.cache.get(r)??null:null}resolveId(e){let i=super.resolveId(e);if(i)return i;let r=this.client.users.resolveId(e);return this.cache.has(r)?r:null}async add(e,i){let r=this.client.users.resolveId(e);if(!r)throw new tl(xs.InvalidType,"user","UserResolvable");if(!i.force){let o=this.cache.get(r);if(o)return o}let n={access_token:i.accessToken,nick:i.nick,mute:i.mute,deaf:i.deaf};if(i.roles){if(!Array.isArray(i.roles)&&!(i.roles instanceof EC))throw new tl(xs.InvalidType,"options.roles","Array or Collection of Roles or Snowflakes",!0);let o=[];for(let a of i.roles.values()){let c=this.guild.roles.resolveId(a);if(!c)throw new tl(xs.InvalidElement,"Array or Collection","options.roles",a);o.push(c)}n.roles=o}let s=await this.client.rest.put(Jn.guildMember(this.guild.id,r),{body:n});return s instanceof ArrayBuffer?i.fetchWhenExisting===!1?null:this.fetch(r):this._add(s)}get me(){return this.cache.get(this.client.user.id)??(this.client.options.partials.includes(ije.GuildMember)?this._add({user:{id:this.client.user.id}},!0):null)}fetch(e){if(!e)return this._fetchMany();let{user:i,limit:r,withPresences:n,cache:s,force:o}=e,a=this.client.users.resolveId(i??e);if(a&&!r&&!n)return this._fetchSingle({user:a,cache:s,force:o});let c=i?.map?.(l=>this.client.users.resolveId(l))??a??void 0;return this._fetchMany({...e,users:c})}async _fetchSingle({user:e,cache:i,force:r=!1}){if(!r){let s=this.cache.get(e);if(s&&!s.partial)return s}let n=await this.client.rest.get(Jn.guildMember(this.guild.id,e));return this._add(n,i)}async _fetchMany({limit:e=0,withPresences:i,users:r,query:n,time:s=12e4,nonce:o=WHe.generate().toString()}={}){if(o.length>32)throw new KHe(xs.MemberFetchNonceLength);return new Promise((a,c)=>{!n&&!r&&(n="");let l=new EC,u=0,h=()=>{HHe(d),this.client.removeListener(CC.Raw,B),this.client.decrementMaxListeners(),this.client.removeListener(CC.GuildMembersChunk,p),this.client.decrementMaxListeners()},d=YHe(()=>{h(),c(new Vse(xs.GuildMembersTimeout))},s).unref(),p=(f,E,D)=>{if(D.nonce===o){d.refresh(),u++;for(let R of f.values())l.set(R.id,R);(f.size<1e3||e&&l.size>=e||u===D.count)&&(h(),a(r&&!Array.isArray(r)&&l.size?l.first():l))}},m={guild_id:this.guild.id,presences:i,user_ids:r,query:n,nonce:o,limit:e},B=f=>{f.t===$He.RateLimited&&f.d.meta.nonce===o&&(h(),c(new jHe(f.d,m)))};this.client.incrementMaxListeners(),this.client.on(CC.Raw,B),this.client.incrementMaxListeners(),this.client.on(CC.GuildMembersChunk,p),this.guild.shard.send({op:JHe.RequestGuildMembers,d:m})})}fetchMe(e){return this.fetch({...e,user:this.client.user.id})}async search({query:e,limit:i,cache:r=!0}={}){return(await this.client.rest.get(Jn.guildMembersSearch(this.guild.id),{query:OR({query:e,limit:i})})).reduce((s,o)=>s.set(o.user.id,this._add(o,r)),new EC)}async list({after:e,limit:i,cache:r=!0}={}){let n=OR({limit:i,after:e});return(await this.client.rest.get(Jn.guildMembers(this.guild.id),{query:n})).reduce((o,a)=>o.set(a.user.id,this._add(a,r)),new EC)}async edit(e,{reason:i,...r}){let n=this.client.users.resolveId(e);if(!n)throw new tl(xs.InvalidType,"user","UserResolvable");if(r.channel){if(r.channel=this.guild.channels.resolve(r.channel),!(r.channel instanceof ZHe))throw new Vse(xs.GuildVoiceChannelResolve);r.channel_id=r.channel.id,r.channel=void 0}else r.channel===null&&(r.channel_id=null,r.channel=void 0);r.roles&&=r.roles.map(c=>c instanceof eje?c.id:c),r.communicationDisabledUntil!==void 0&&(r.communication_disabled_until=r.communicationDisabledUntil!=null?new Date(r.communicationDisabledUntil).toISOString():r.communicationDisabledUntil),r.flags!==void 0&&(r.flags=tje.resolve(r.flags));let s;if(n===this.client.user.id){let c=Object.keys(r);c.length===1&&c[0]==="nick"&&(s=Jn.guildMember(this.guild.id,"@me"),Hse||(VHe.emitWarning("You should use GuildMemberManager#editMe() when changing your nickname. Due to Discord's API changes, GuildMemberManager#edit() will end up requiring MANAGE_NICKNAMES in v15.","DeprecationWarning"),Hse=!0))}s??=Jn.guildMember(this.guild.id,n);let o=await this.client.rest.patch(s,{body:r,reason:i}),a=this.cache.get(n)?._clone();return a?._patch(o),a??this._add(o,!1)}async editMe({reason:e,...i}){let r=await this.client.rest.patch(Jn.guildMember(this.guild.id,"@me"),{body:{...i,banner:i.banner&&await Yse(i.banner),avatar:i.avatar&&await Yse(i.avatar)},reason:e}),n=this.me?._clone();return n?._patch(r),n??this._add(r,!1)}async prune({days:e,dry:i=!1,count:r,roles:n=[],reason:s}={}){if(typeof e!="number")throw new tl(xs.PruneDaysType);let o={days:e},a=[];for(let u of n){let h=this.guild.roles.resolveId(u);if(!h)throw new tl(xs.InvalidElement,"Array","options.roles",u);a.push(h)}a.length&&(o.include_roles=i?a.join(","):a);let c=Jn.guildPrune(this.guild.id),{pruned:l}=await(i?this.client.rest.get(c,{query:OR(o),reason:s}):this.client.rest.post(c,{body:{...o,compute_prune_count:r},reason:s}));return l}async kick(e,i){let r=this.client.users.resolveId(e);if(!r)throw new tl(xs.InvalidType,"user","UserResolvable");return await this.client.rest.delete(Jn.guildMember(this.guild.id,r),{reason:i}),this.resolve(e)??this.client.users.resolve(e)??r}ban(e,i){return this.guild.bans.create(e,i)}unban(e,i){return this.guild.bans.remove(e,i)}bulkBan(e,i={}){return this.guild.bans.bulkCreate(e,i)}async addRole(e){let{user:i,role:r,reason:n}=e,s=this.resolveId(i),o=this.guild.roles.resolveId(r);return await this.client.rest.put(Jn.guildMemberRole(this.guild.id,s,o),{reason:n}),this.resolve(i)??this.client.users.resolve(i)??s}async removeRole(e){let{user:i,role:r,reason:n}=e,s=this.resolveId(i),o=this.guild.roles.resolveId(r);return await this.client.rest.delete(Jn.guildMemberRole(this.guild.id,s,o),{reason:n}),this.resolve(i)??this.client.users.resolve(i)??s}};jse.exports=GR});var jR=A(($et,Kse)=>{"use strict";var{Collection:Wse}=re(),{makeURLSearchParams:YR}=bt(),{GuildScheduledEventEntityType:rje,Routes:Bu}=k(),nje=at(),{DiscordjsTypeError:Jse,DiscordjsError:BC,ErrorCodes:yu}=se(),{GuildScheduledEvent:sje}=Zh(),{resolveImage:$se}=Ci(),{_transformGuildScheduledEventRecurrenceRule:zse}=Kt(),HR=class extends nje{constructor(e,i){super(e.client,sje,i),this.guild=e}async create(e){if(typeof e!="object")throw new Jse(yu.InvalidType,"options","object",!0);let{privacyLevel:i,entityType:r,channel:n,name:s,scheduledStartTime:o,description:a,scheduledEndTime:c,entityMetadata:l,reason:u,image:h,recurrenceRule:d}=e,p,m;if(r===rje.External)m=n===void 0?n:null,p={location:l?.location};else{if(m=this.guild.channels.resolveId(n),!m)throw new BC(yu.GuildVoiceChannelResolve);p=l===void 0?l:null}let B=await this.client.rest.post(Bu.guildScheduledEvents(this.guild.id),{body:{channel_id:m,name:s,privacy_level:i,scheduled_start_time:new Date(o).toISOString(),scheduled_end_time:c&&new Date(c).toISOString(),description:a,entity_type:r,entity_metadata:p,image:h&&await $se(h),recurrence_rule:d&&zse(d)},reason:u});return this._add(B)}async fetch(e={}){let i=this.resolveId(e.guildScheduledEvent??e);if(i){if(!e.force){let s=this.cache.get(i);if(s)return s}let n=await this.client.rest.get(Bu.guildScheduledEvent(this.guild.id,i),{query:YR({with_user_count:e.withUserCount??!0})});return this._add(n,e.cache)}return(await this.client.rest.get(Bu.guildScheduledEvents(this.guild.id),{query:YR({with_user_count:e.withUserCount??!0})})).reduce((n,s)=>n.set(s.id,this._add(s,e.cache)),new Wse)}async edit(e,i){let r=this.resolveId(e);if(!r)throw new BC(yu.GuildScheduledEventResolve);if(typeof i!="object")throw new Jse(yu.InvalidType,"options","object",!0);let{privacyLevel:n,entityType:s,channel:o,status:a,name:c,scheduledStartTime:l,description:u,scheduledEndTime:h,entityMetadata:d,reason:p,image:m,recurrenceRule:B}=i,f;d&&(f={location:d.location});let E=await this.client.rest.patch(Bu.guildScheduledEvent(this.guild.id,r),{body:{channel_id:o===void 0?o:this.guild.channels.resolveId(o),name:c,privacy_level:n,scheduled_start_time:l?new Date(l).toISOString():void 0,scheduled_end_time:h&&new Date(h).toISOString(),description:u,entity_type:s,status:a,image:m&&await $se(m),entity_metadata:f,recurrence_rule:B&&zse(B)},reason:p});return this._add(E)}async delete(e){let i=this.resolveId(e);if(!i)throw new BC(yu.GuildScheduledEventResolve);await this.client.rest.delete(Bu.guildScheduledEvent(this.guild.id,i))}async fetchSubscribers(e,i={}){let r=this.resolveId(e);if(!r)throw new BC(yu.GuildScheduledEventResolve);let n=YR({limit:i.limit,with_member:i.withMember,before:i.before,after:i.after});return(await this.client.rest.get(Bu.guildScheduledEventUsers(this.guild.id,r),{query:n})).reduce((o,a)=>o.set(a.user.id,{guildScheduledEventId:a.guild_scheduled_event_id,user:this.client.users._add(a.user),member:a.member?this.guild.members._add({...a.member,user:a.user}):null}),new Wse)}};Kse.exports=HR});var yC=A(eoe=>{"use strict";var{DiscordSnowflake:oje}=At(),aje=_e(),{Emoji:cje}=Pn(),{DiscordjsError:Zse,ErrorCodes:Xse}=se(),WR=class t extends aje{constructor(e,i){super(e),this.soundId=i.sound_id,this._patch(i)}_patch(e){"available"in e?this.available=e.available:this.available??=null,"name"in e?this.name=e.name:this.name??=null,"volume"in e?this.volume=e.volume:this.volume??=null,"emoji_id"in e?this._emoji={id:e.emoji_id,name:e.emoji_name}:this._emoji??=null,"guild_id"in e?this.guildId=e.guild_id:this.guildId??=null,"user"in e?this.user=this.client.users._add(e.user):this.user??=null}get createdTimestamp(){return oje.timestampFrom(this.soundId)}get createdAt(){return new Date(this.createdTimestamp)}get emoji(){return this._emoji?this.guild?.emojis.cache.get(this._emoji.id)??new cje(this.client,this._emoji):null}get guild(){return this.client.guilds.resolve(this.guildId)}get url(){return this.client.rest.cdn.soundboardSound(this.soundId)}async edit(e){if(!this.guildId)throw new Zse(Xse.NotGuildSoundboardSound,"edited");return this.guild.soundboardSounds.edit(this,e)}async delete(e){if(!this.guildId)throw new Zse(Xse.NotGuildSoundboardSound,"deleted");return await this.guild.soundboardSounds.delete(this,e),this}equals(e){return e instanceof t?this.soundId===e.soundId&&this.available===e.available&&this.name===e.name&&this.volume===e.volume&&this._emoji?.id===e._emoji?.id&&this._emoji?.name===e._emoji?.name&&this.guildId===e.guildId&&this.user?.id===e.user?.id:this.soundId===e.sound_id&&this.available===e.available&&this.name===e.name&&this.volume===e.volume&&(this._emoji?.id??null)===e.emoji_id&&(this._emoji?.name??null)===e.emoji_name&&this.guildId===e.guild_id&&this.user?.id===e.user?.id}};eoe.SoundboardSound=WR});var $R=A(roe=>{"use strict";var{Collection:lje}=re(),{lazy:Aje}=Oe(),{Routes:bg}=k(),uje=at(),{DiscordjsTypeError:toe,ErrorCodes:ioe}=se(),{SoundboardSound:hje}=yC(),{resolveBase64:dje,resolveFile:gje}=Ci(),fje=Aje(()=>i0().filetypemime),JR=class extends uje{constructor(e,i){super(e.client,hje,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild],id:e.sound_id})}resolveId(e){return e instanceof this.holds?e.soundId:typeof e=="string"?e:null}async create({contentType:e,emojiId:i,emojiName:r,file:n,name:s,reason:o,volume:a}){let c=await gje(n),l=e??c.contentType??fje()(c.data)[0],u=dje(c.data,l),h={emoji_id:i,emoji_name:r,name:s,sound:u,volume:a},d=await this.client.rest.post(bg.guildSoundboardSounds(this.guild.id),{body:h,reason:o});return this._add(d)}async edit(e,i={}){let r=this.resolveId(e);if(!r)throw new toe(ioe.InvalidType,"soundboardSound","SoundboardSoundResolvable");let{emojiId:n,emojiName:s,name:o,reason:a,volume:c}=i,l={emoji_id:n,emoji_name:s,name:o,volume:c},u=await this.client.rest.patch(bg.guildSoundboardSound(this.guild.id,r),{body:l,reason:a}),h=this.cache.get(r);if(h){let d=h._clone();return d._patch(u),d}return this._add(u)}async delete(e,i){let r=this.resolveId(e);if(!r)throw new toe(ioe.InvalidType,"soundboardSound","SoundboardSoundResolvable");await this.client.rest.delete(bg.guildSoundboardSound(this.guild.id,r),{reason:i})}async fetch(e){if(!e)return this._fetchMany();let{cache:i,force:r,soundboardSound:n}=e,s=this.resolveId(n??e);return s?this._fetchSingle({cache:i,force:r,soundboardSound:s}):this._fetchMany({cache:i})}async _fetchSingle({cache:e,force:i,soundboardSound:r}={}){if(!i){let s=this.cache.get(r);if(s)return s}let n=await this.client.rest.get(bg.guildSoundboardSound(this.guild.id,r));return this._add(n,e)}async _fetchMany({cache:e}={}){return(await this.client.rest.get(bg.guildSoundboardSounds(this.guild.id))).items.reduce((r,n)=>r.set(n.sound_id,this._add(n,e)),new lje)}};roe.GuildSoundboardSoundManager=JR});var KR=A((Zet,noe)=>{"use strict";var{Collection:pje}=re(),{Routes:Qu}=k(),mje=at(),{DiscordjsTypeError:QC,ErrorCodes:wC}=se(),Ije=fo(),{Sticker:Eje}=Ca(),zR=class extends mje{constructor(e,i){super(e.client,Eje,i),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async create({file:e,name:i,tags:r,description:n,reason:s}={}){let o=await Ije.resolveFile(e);if(!o)throw new QC(wC.ReqResourceType);e={...o,key:"file"};let a={name:i,tags:r,description:n??""},c=await this.client.rest.post(Qu.guildStickers(this.guild.id),{appendToFormData:!0,body:a,files:[e],reason:s});return this.client.actions.GuildStickerCreate.handle(this.guild,c).sticker}async edit(e,i={}){let r=this.resolveId(e);if(!r)throw new QC(wC.InvalidType,"sticker","StickerResolvable");let n=await this.client.rest.patch(Qu.guildSticker(this.guild.id,r),{body:i,reason:i.reason}),s=this.cache.get(r);if(s){let o=s._clone();return o._patch(n),o}return this._add(n)}async delete(e,i){if(e=this.resolveId(e),!e)throw new QC(wC.InvalidType,"sticker","StickerResolvable");await this.client.rest.delete(Qu.guildSticker(this.guild.id,e),{reason:i})}async fetch(e,{cache:i=!0,force:r=!1}={}){if(e){if(!r){let o=this.cache.get(e);if(o)return o}let s=await this.client.rest.get(Qu.guildSticker(this.guild.id,e));return this._add(s,i)}let n=await this.client.rest.get(Qu.guildStickers(this.guild.id));return new pje(n.map(s=>[s.id,this._add(s,i)]))}async fetchUser(e){if(e=this.resolve(e),!e)throw new QC(wC.InvalidType,"sticker","StickerResolvable");let i=await this.client.rest.get(Qu.guildSticker(this.guild.id,e.id));return e._patch(i),e.user}};noe.exports=zR});var XR=A((Xet,soe)=>{"use strict";var{ActivityFlags:Cje}=k(),Bje=Ni(),ZR=class extends Bje{static Flags=Cje};soe.exports=ZR});var wu=A(xC=>{"use strict";var yje=_e(),{Emoji:Qje}=Pn(),wje=XR(),{flatten:bje}=Re(),eT=class extends yje{constructor(e,i={}){super(e),this.userId=i.user.id,this.guild=i.guild??null,this._patch(i)}get user(){return this.client.users.resolve(this.userId)}get member(){return this.guild.members.resolve(this.userId)}_patch(e){return"status"in e?this.status=e.status:this.status??="offline","activities"in e?this.activities=e.activities.map(i=>new bC(this,i)):this.activities??=[],"client_status"in e?this.clientStatus=e.client_status:this.clientStatus??=null,this}_clone(){let e=Object.assign(Object.create(this),this);return e.activities=this.activities.map(i=>i._clone()),e}equals(e){return this===e||e&&this.status===e.status&&this.clientStatus?.web===e.clientStatus?.web&&this.clientStatus?.mobile===e.clientStatus?.mobile&&this.clientStatus?.desktop===e.clientStatus?.desktop&&this.activities.length===e.activities.length&&this.activities.every((i,r)=>i.equals(e.activities[r]))}toJSON(){return bje(this)}},bC=class{constructor(e,i){Object.defineProperty(this,"presence",{value:e}),this.name=i.name,this.type=i.type,this.url=i.url??null,this.details=i.details??null,this.state=i.state??null,this.applicationId=i.application_id??null,this.timestamps=i.timestamps?{start:i.timestamps.start?new Date(Number(i.timestamps.start)):null,end:i.timestamps.end?new Date(Number(i.timestamps.end)):null}:null,this.party=i.party??null,this.syncId=i.sync_id??null,this.assets=i.assets?new vC(this,i.assets):null,this.flags=new wje(i.flags).freeze(),this.emoji=i.emoji?new Qje(e.client,i.emoji):null,this.buttons=i.buttons??[],this.createdTimestamp=i.created_at}equals(e){return this===e||e&&this.name===e.name&&this.type===e.type&&this.url===e.url&&this.state===e.state&&this.details===e.details&&this.emoji?.id===e.emoji?.id&&this.emoji?.name===e.emoji?.name}get createdAt(){return new Date(this.createdTimestamp)}toString(){return this.name}_clone(){return Object.assign(Object.create(this),this)}},vC=class{constructor(e,i){Object.defineProperty(this,"activity",{value:e}),this.largeText=i.large_text??null,this.smallText=i.small_text??null,this.largeImage=i.large_image??null,this.smallImage=i.small_image??null}smallImageURL(e={}){if(!this.smallImage)return null;if(this.smallImage.includes(":")){let[i,r]=this.smallImage.split(":");switch(i){case"mp":return`https://media.discordapp.net/${r}`;default:return null}}return this.activity.presence.client.rest.cdn.appAsset(this.activity.applicationId,this.smallImage,e)}largeImageURL(e={}){if(!this.largeImage)return null;if(this.largeImage.includes(":")){let[i,r]=this.largeImage.split(":");switch(i){case"mp":return`https://media.discordapp.net/${r}`;case"spotify":return`https://i.scdn.co/image/${r}`;case"youtube":return`https://i.ytimg.com/vi/${r}/hqdefault_live.jpg`;case"twitch":return`https://static-cdn.jtvnw.net/previews-ttv/live_user_${r}.png`;default:return null}}return this.activity.presence.client.rest.cdn.appAsset(this.activity.applicationId,this.largeImage,e)}};xC.Presence=eT;xC.Activity=bC;xC.RichPresenceAssets=vC});var iT=A((ttt,ooe)=>{"use strict";var vje=at(),{Presence:xje}=wu(),tT=class extends vje{constructor(e,i){super(e,xje,i)}_add(e,i){return super._add(e,i,{id:e.user.id})}resolve(e){let i=super.resolve(e);if(i)return i;let r=this.client.users.resolveId(e);return super.cache.get(r)??null}resolveId(e){let i=super.resolveId(e);if(i)return i;let r=this.client.users.resolveId(e);return this.cache.has(r)?r:null}};ooe.exports=tT});var aT=A((itt,uoe)=>{"use strict";var rT=require("node:process"),{Collection:Sje}=re(),{DiscordAPIError:Dje}=bt(),{RESTJSONErrorCodes:_je,Routes:il}=k(),kje=at(),{DiscordjsTypeError:nT,ErrorCodes:sT}=se(),{Role:Mje}=no(),{resolveImage:SC}=Ci(),aoe=$i(),{setPosition:Rje,resolveColor:Ta}=Re(),coe=!1,loe=!1,Aoe=!1,oT=class extends kje{constructor(e,i){super(e.client,Mje,i),!coe&&this._cache.constructor.name!=="Collection"&&(coe=!0,rT.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning")),this.guild=e}_add(e,i){return super._add(e,i,{extras:[this.guild]})}async fetch(e,{cache:i=!0,force:r=!1}={}){if(!e){let n=await this.client.rest.get(il.guildRoles(this.guild.id)),s=new Sje;for(let o of n)s.set(o.id,this._add(o,i));return s}if(!r){let n=this.cache.get(e);if(n)return n}try{let n=await this.client.rest.get(il.guildRole(this.guild.id,e));return this._add(n,i)}catch(n){if(n instanceof Dje&&n.code===_je.UnknownRole)return null;throw n}}async create(e={}){let{permissions:i,icon:r}=e,{name:n,color:s,hoist:o,position:a,mentionable:c,reason:l,unicodeEmoji:u}=e;if(i!==void 0&&(i=new aoe(i)),r){let m=this.guild.emojis.resolve(r)?.imageURL();r=m?await SC(m):await SC(r),typeof r!="string"&&(r=void 0)}let h=e.colors&&{primary_color:Ta(e.colors.primaryColor),secondary_color:e.colors.secondaryColor&&Ta(e.colors.secondaryColor),tertiary_color:e.colors.tertiaryColor&&Ta(e.colors.tertiaryColor)};s!==void 0&&(loe||rT.emitWarning('Passing "color" to RoleManager#create() is deprecated. Use "colors" instead.'),loe=!0,h={primary_color:Ta(s),secondary_color:null,tertiary_color:null});let d=await this.client.rest.post(il.guildRoles(this.guild.id),{body:{name:n,colors:h,hoist:o,permissions:i,mentionable:c,icon:r,unicode_emoji:u},reason:l}),{role:p}=this.client.actions.GuildRoleCreate.handle({guild_id:this.guild.id,role:d});return a?this.setPosition(p,a,{reason:l}):p}async edit(e,i){if(e=this.resolve(e),!e)throw new nT(sT.InvalidType,"role","RoleResolvable");typeof i.position=="number"&&await this.setPosition(e,i.position,{reason:i.reason});let r=i.icon;if(r){let c=this.guild.emojis.resolve(r)?.imageURL();r=c?await SC(c):await SC(r),typeof r!="string"&&(r=void 0)}let n=i.colors&&{primary_color:Ta(i.colors.primaryColor),secondary_color:i.colors.secondaryColor&&Ta(i.colors.secondaryColor),tertiary_color:i.colors.tertiaryColor&&Ta(i.colors.tertiaryColor)};i.color!==void 0&&(Aoe||rT.emitWarning('Passing "color" to RoleManager#edit() is deprecated. Use "colors" instead.'),Aoe=!0,n={primary_color:Ta(i.color),secondary_color:null,tertiary_color:null});let s={name:i.name,colors:n,hoist:i.hoist,permissions:i.permissions===void 0?void 0:new aoe(i.permissions),mentionable:i.mentionable,icon:r,unicode_emoji:i.unicodeEmoji},o=await this.client.rest.patch(il.guildRole(this.guild.id,e.id),{body:s,reason:i.reason}),a=e._clone();return a._patch(o),a}async delete(e,i){let r=this.resolveId(e);await this.client.rest.delete(il.guildRole(this.guild.id,r),{reason:i}),this.client.actions.GuildRoleDelete.handle({guild_id:this.guild.id,role_id:r})}async setPosition(e,i,{relative:r,reason:n}={}){if(e=this.resolve(e),!e)throw new nT(sT.InvalidType,"role","RoleResolvable");let s=await Rje(e,i,r,this.guild._sortedRoles(),this.client,il.guildRoles(this.guild.id),n);return this.client.actions.GuildRolesPositionUpdate.handle({guild_id:this.guild.id,roles:s}),e}async setPositions(e){return e=e.map(i=>({id:this.resolveId(i.role),position:i.position})),await this.client.rest.patch(il.guildRoles(this.guild.id),{body:e}),this.client.actions.GuildRolesPositionUpdate.handle({guild_id:this.guild.id,roles:e}).guild}comparePositions(e,i){let r=this.resolve(e),n=this.resolve(i);if(!r||!n)throw new nT(sT.InvalidType,"role","Role nor a Snowflake");let s=r.position,o=n.position;return s===o?Number(BigInt(n.id)-BigInt(r.id)):s-o}botRoleFor(e){let i=this.client.users.resolveId(e);return i?this.cache.find(r=>r.tags?.botId===i)??null:null}get everyone(){return this.cache.get(this.guild.id)}get premiumSubscriberRole(){return this.cache.find(e=>e.tags?.premiumSubscriberRole)??null}get highest(){return this.cache.reduce((e,i)=>i.comparePositionTo(e)>0?i:e,this.cache.first())}};uoe.exports=oT});var lT=A((rtt,doe)=>{"use strict";var{Routes:DC}=k(),Tje=at(),{DiscordjsTypeError:hoe,DiscordjsError:_C,ErrorCodes:bu}=se(),{StageInstance:Uje}=wE(),cT=class extends Tje{constructor(e,i){super(e.client,Uje,i),this.guild=e}async create(e,i){let r=this.guild.channels.resolveId(e);if(!r)throw new _C(bu.StageChannelResolve);if(typeof i!="object")throw new hoe(bu.InvalidType,"options","object",!0);let{guildScheduledEvent:n,topic:s,privacyLevel:o,sendStartNotification:a}=i,c=n&&this.resolveId(n),l=await this.client.rest.post(DC.stageInstances(),{body:{channel_id:r,topic:s,privacy_level:o,send_start_notification:a,guild_scheduled_event_id:c}});return this._add(l)}async fetch(e,{cache:i=!0,force:r=!1}={}){let n=this.guild.channels.resolveId(e);if(!n)throw new _C(bu.StageChannelResolve);if(!r){let o=this.cache.find(a=>a.channelId===n);if(o)return o}let s=await this.client.rest.get(DC.stageInstance(n));return this._add(s,i)}async edit(e,i){if(typeof i!="object")throw new hoe(bu.InvalidType,"options","object",!0);let r=this.guild.channels.resolveId(e);if(!r)throw new _C(bu.StageChannelResolve);let{topic:n,privacyLevel:s}=i,o=await this.client.rest.patch(DC.stageInstance(r),{body:{topic:n,privacy_level:s}});if(this.cache.has(o.id)){let a=this.cache.get(o.id)._clone();return a._patch(o),a}return this._add(o)}async delete(e){let i=this.guild.channels.resolveId(e);if(!i)throw new _C(bu.StageChannelResolve);await this.client.rest.delete(DC.stageInstance(i))}};doe.exports=cT});var uT=A((ntt,goe)=>{"use strict";var{Routes:Fje}=k(),Lje=at(),Nje=zd(),AT=class extends Lje{constructor(e,i){super(e.client,Nje,i),this.guild=e}_add(e,i=!0){let r=this.cache.get(e.user_id);if(r)return r._patch(e);let n=new this.holds(this.guild,e);return i&&this.cache.set(e.user_id,n),n}async fetch(e,{cache:i=!0,force:r=!1}={}){let n=e==="@me"?e:this.guild.members.resolveId(e);if(!r){let o=this.cache.get(n==="@me"?this.client.user.id:n);if(o)return o}let s=await this.client.rest.get(Fje.guildVoiceState(this.guild.id,n));return this._add(s,i)}};goe.exports=AT});var kC=A((stt,foe)=>{"use strict";var{GuildSystemChannelFlags:qje}=k(),Pje=Ni(),hT=class extends Pje{static Flags=qje};foe.exports=hT});var IT=A(yoe=>{"use strict";var{Collection:dT}=re(),{makeURLSearchParams:Oje}=bt(),{DiscordSnowflake:Gje}=At(),{ChannelType:Vje,GuildPremiumTier:gT,Routes:xi,GuildFeature:fT}=k(),Yje=Gm(),Hje=CR(),{GuildOnboarding:poe}=yR(),jje=fC(),moe=Xh(),Wje=ig(),Jje=ys(),Ioe=Vm(),{DiscordjsError:Eoe,DiscordjsTypeError:$je,ErrorCodes:pT}=se(),zje=xR(),Kje=DR(),Zje=MR(),Xje=TR(),eWe=LR(),tWe=PR(),iWe=VR(),rWe=jR(),{GuildSoundboardSoundManager:nWe}=$R(),sWe=KR(),oWe=iT(),aWe=aT(),cWe=lT(),lWe=uT(),{resolveImage:MC}=Ci(),AWe=ws(),Coe=kC(),{_transformAPIIncidentsData:uWe}=Kt(),{discordSort:Boe,getSortableGroupTypes:hWe,resolvePartialEmoji:dWe}=Re(),mT=class extends Yje{constructor(e,i){super(e,i,!1),this.commands=new Kje(this),this.members=new iWe(this),this.channels=new Xje(this),this.bans=new Zje(this),this.roles=new aWe(this),this.presences=new oWe(this.client),this.voiceStates=new lWe(this),this.stageInstances=new cWe(this),this.invites=new tWe(this),this.scheduledEvents=new rWe(this),this.autoModerationRules=new zje(this),this.soundboardSounds=new nWe(this),i&&(i.unavailable?this.available=!1:(this._patch(i),i.channels||(this.available=!1)),this.shardId=i.shardId)}get shard(){return this.client.ws.shards.get(this.shardId)}_patch(e){if(super._patch(e),this.id=e.id,"name"in e&&(this.name=e.name),"icon"in e&&(this.icon=e.icon),"unavailable"in e?this.available=!e.unavailable:this.available??=!0,"discovery_splash"in e&&(this.discoverySplash=e.discovery_splash),"member_count"in e&&(this.memberCount=e.member_count),"large"in e&&(this.large=!!e.large),"premium_progress_bar_enabled"in e&&(this.premiumProgressBarEnabled=e.premium_progress_bar_enabled),"application_id"in e&&(this.applicationId=e.application_id),"afk_timeout"in e&&(this.afkTimeout=e.afk_timeout),"afk_channel_id"in e&&(this.afkChannelId=e.afk_channel_id),"system_channel_id"in e&&(this.systemChannelId=e.system_channel_id),"premium_tier"in e&&(this.premiumTier=e.premium_tier),"widget_enabled"in e?this.widgetEnabled=e.widget_enabled:this.widgetEnabled??=null,"widget_channel_id"in e?this.widgetChannelId=e.widget_channel_id:this.widgetChannelId??=null,"explicit_content_filter"in e&&(this.explicitContentFilter=e.explicit_content_filter),"mfa_level"in e&&(this.mfaLevel=e.mfa_level),"joined_at"in e&&(this.joinedTimestamp=Date.parse(e.joined_at)),"default_message_notifications"in e&&(this.defaultMessageNotifications=e.default_message_notifications),"system_channel_flags"in e&&(this.systemChannelFlags=new Coe(e.system_channel_flags).freeze()),"max_members"in e?this.maximumMembers=e.max_members:this.maximumMembers??=null,"max_presences"in e?this.maximumPresences=e.max_presences:this.maximumPresences??=null,"max_video_channel_users"in e?this.maxVideoChannelUsers=e.max_video_channel_users:this.maxVideoChannelUsers??=null,"max_stage_video_channel_users"in e?this.maxStageVideoChannelUsers=e.max_stage_video_channel_users:this.maxStageVideoChannelUsers??=null,"approximate_member_count"in e?this.approximateMemberCount=e.approximate_member_count:this.approximateMemberCount??=null,"approximate_presence_count"in e?this.approximatePresenceCount=e.approximate_presence_count:this.approximatePresenceCount??=null,this.vanityURLUses??=null,"rules_channel_id"in e&&(this.rulesChannelId=e.rules_channel_id),"public_updates_channel_id"in e&&(this.publicUpdatesChannelId=e.public_updates_channel_id),"preferred_locale"in e&&(this.preferredLocale=e.preferred_locale),"safety_alerts_channel_id"in e?this.safetyAlertsChannelId=e.safety_alerts_channel_id:this.safetyAlertsChannelId??=null,e.channels){this.channels.cache.clear();for(let i of e.channels)this.client.channels._add(i,this)}if(e.threads)for(let i of e.threads)this.client.channels._add(i,this);if(e.roles){this.roles.cache.clear();for(let i of e.roles)this.roles._add(i)}if(e.members){this.members.cache.clear();for(let i of e.members)this.members._add(i)}if("owner_id"in e&&(this.ownerId=e.owner_id),e.presences)for(let i of e.presences)this.presences._add(Object.assign(i,{guild:this}));if(e.stage_instances){this.stageInstances.cache.clear();for(let i of e.stage_instances)this.stageInstances._add(i)}if(e.guild_scheduled_events){this.scheduledEvents.cache.clear();for(let i of e.guild_scheduled_events)this.scheduledEvents._add(i)}if(e.voice_states){this.voiceStates.cache.clear();for(let i of e.voice_states)this.voiceStates._add(i)}if(this.emojis)e.emojis&&this.client.actions.GuildEmojisUpdate.handle({guild_id:this.id,emojis:e.emojis});else if(this.emojis=new eWe(this),e.emojis)for(let i of e.emojis)this.emojis._add(i);if(this.stickers)e.stickers&&this.client.actions.GuildStickersUpdate.handle({guild_id:this.id,stickers:e.stickers});else if(this.stickers=new sWe(this),e.stickers)for(let i of e.stickers)this.stickers._add(i);if("incidents_data"in e?this.incidentsData=e.incidents_data&&uWe(e.incidents_data):this.incidentsData??=null,e.soundboard_sounds){this.soundboardSounds.cache.clear();for(let i of e.soundboard_sounds)this.soundboardSounds._add(i)}}get joinedAt(){return new Date(this.joinedTimestamp)}discoverySplashURL(e={}){return this.discoverySplash&&this.client.rest.cdn.discoverySplash(this.id,this.discoverySplash,e)}async fetchOwner(e){if(!this.ownerId)throw new Eoe(pT.FetchOwnerId,"guild");return await this.members.fetch({...e,user:this.ownerId})}get afkChannel(){return this.client.channels.resolve(this.afkChannelId)}get systemChannel(){return this.client.channels.resolve(this.systemChannelId)}get widgetChannel(){return this.client.channels.resolve(this.widgetChannelId)}get rulesChannel(){return this.client.channels.resolve(this.rulesChannelId)}get publicUpdatesChannel(){return this.client.channels.resolve(this.publicUpdatesChannelId)}get safetyAlertsChannel(){return this.client.channels.resolve(this.safetyAlertsChannelId)}get maximumBitrate(){if(this.features.includes(fT.VIPRegions))return 384e3;switch(this.premiumTier){case gT.Tier1:return 128e3;case gT.Tier2:return 256e3;case gT.Tier3:return 384e3;default:return 96e3}}async fetchIntegrations(){return(await this.client.rest.get(xi.guildIntegrations(this.id))).reduce((i,r)=>i.set(r.id,new Wje(this.client,r,this)),new dT)}async fetchTemplates(){return(await this.client.rest.get(xi.guildTemplates(this.id))).reduce((i,r)=>i.set(r.code,new moe(this.client,r)),new dT)}async fetchWelcomeScreen(){let e=await this.client.rest.get(xi.guildWelcomeScreen(this.id));return new Ioe(this,e)}async createTemplate(e,i){let r=await this.client.rest.post(xi.guildTemplates(this.id),{body:{name:e,description:i}});return new moe(this.client,r)}async fetchPreview(){let e=await this.client.rest.get(xi.guildPreview(this.id));return new jje(this.client,e)}async fetchVanityData(){let e=await this.client.rest.get(xi.guildVanityUrl(this.id));return this.vanityURLCode=e.code,this.vanityURLUses=e.uses,e}async fetchWebhooks(){let e=await this.client.rest.get(xi.guildWebhooks(this.id)),i=new dT;for(let r of e)i.set(r.id,new Jje(this.client,r));return i}fetchWidget(){return this.client.fetchGuildWidget(this.id)}async fetchWidgetSettings(){let e=await this.client.rest.get(xi.guildWidgetSettings(this.id));return this.widgetEnabled=e.enabled,this.widgetChannelId=e.channel_id,{enabled:e.enabled,channel:e.channel_id?this.channels.cache.get(e.channel_id):null}}widgetImageURL(e){return this.client.guilds.widgetImageURL(this.id,e)}async fetchAuditLogs({before:e,after:i,limit:r,user:n,type:s}={}){let o=Oje({before:e?.id??e,after:i?.id??i,limit:r,action_type:s});if(n){let c=this.client.users.resolveId(n);if(!c)throw new $je(pT.InvalidType,"user","UserResolvable");o.set("user_id",c)}let a=await this.client.rest.get(xi.guildAuditLog(this.id),{query:o});return new Hje(this,a)}async fetchOnboarding(){let e=await this.client.rest.get(xi.guildOnboarding(this.id));return new poe(this.client,e)}async edit({verificationLevel:e,defaultMessageNotifications:i,explicitContentFilter:r,afkChannel:n,afkTimeout:s,icon:o,owner:a,splash:c,discoverySplash:l,banner:u,systemChannel:h,systemChannelFlags:d,rulesChannel:p,publicUpdatesChannel:m,preferredLocale:B,premiumProgressBarEnabled:f,safetyAlertsChannel:E,...D}){let R=await this.client.rest.patch(xi.guild(this.id),{body:{...D,verification_level:e,default_message_notifications:i,explicit_content_filter:r,afk_channel_id:n&&this.client.channels.resolveId(n),afk_timeout:s,icon:o&&await MC(o),owner_id:a&&this.client.users.resolveId(a),splash:c&&await MC(c),discovery_splash:l&&await MC(l),banner:u&&await MC(u),system_channel_id:h&&this.client.channels.resolveId(h),system_channel_flags:d===void 0?void 0:Coe.resolve(d),rules_channel_id:p&&this.client.channels.resolveId(p),public_updates_channel_id:m&&this.client.channels.resolveId(m),preferred_locale:B,premium_progress_bar_enabled:f,safety_alerts_channel_id:E&&this.client.channels.resolveId(E)},reason:D.reason});return this.client.actions.GuildUpdate.handle(R).updated}async editOnboarding(e){let i=await this.client.rest.put(xi.guildOnboarding(this.id),{body:{prompts:e.prompts?.map(r=>({id:r.id??Gje.generate().toString(),title:r.title,single_select:r.singleSelect,required:r.required,in_onboarding:r.inOnboarding,type:r.type,options:r.options.map(n=>{let s=dWe(n.emoji);return{id:n.id,channel_ids:n.channels?.map(o=>this.channels.resolveId(o)),role_ids:n.roles?.map(o=>this.roles.resolveId(o)),title:n.title,description:n.description,emoji_animated:s?.animated,emoji_id:s?.id,emoji_name:s?.name}})})),default_channel_ids:e.defaultChannels?.map(r=>this.channels.resolveId(r)),enabled:e.enabled,mode:e.mode},reason:e.reason});return new poe(this.client,i)}async editWelcomeScreen(e){let{enabled:i,description:r,welcomeChannels:n}=e,s=n?.map(a=>{let c=this.emojis.resolve(a.emoji);return{emoji_id:c?.id,emoji_name:c?.name??a.emoji,channel_id:this.channels.resolveId(a.channel),description:a.description}}),o=await this.client.rest.patch(xi.guildWelcomeScreen(this.id),{body:{welcome_channels:s,description:r,enabled:i}});return new Ioe(this,o)}setExplicitContentFilter(e,i){return this.edit({explicitContentFilter:e,reason:i})}setDefaultMessageNotifications(e,i){return this.edit({defaultMessageNotifications:e,reason:i})}setSystemChannelFlags(e,i){return this.edit({systemChannelFlags:e,reason:i})}setName(e,i){return this.edit({name:e,reason:i})}setVerificationLevel(e,i){return this.edit({verificationLevel:e,reason:i})}setAFKChannel(e,i){return this.edit({afkChannel:e,reason:i})}setSystemChannel(e,i){return this.edit({systemChannel:e,reason:i})}setAFKTimeout(e,i){return this.edit({afkTimeout:e,reason:i})}setIcon(e,i){return this.edit({icon:e,reason:i})}setOwner(e,i){return this.edit({owner:e,reason:i})}setSplash(e,i){return this.edit({splash:e,reason:i})}setDiscoverySplash(e,i){return this.edit({discoverySplash:e,reason:i})}setBanner(e,i){return this.edit({banner:e,reason:i})}setRulesChannel(e,i){return this.edit({rulesChannel:e,reason:i})}setPublicUpdatesChannel(e,i){return this.edit({publicUpdatesChannel:e,reason:i})}setPreferredLocale(e,i){return this.edit({preferredLocale:e,reason:i})}setPremiumProgressBarEnabled(e=!0,i){return this.edit({premiumProgressBarEnabled:e,reason:i})}setSafetyAlertsChannel(e,i){return this.edit({safetyAlertsChannel:e,reason:i})}async setWidgetSettings(e,i){return await this.client.rest.patch(xi.guildWidgetSettings(this.id),{body:{enabled:e.enabled,channel_id:this.channels.resolveId(e.channel)},reason:i}),this}async setMFALevel(e,i){return await this.client.rest.post(xi.guildMFA(this.id),{body:{level:e},reason:i}),this}async leave(){if(this.ownerId===this.client.user.id)throw new Eoe(pT.GuildOwned);return await this.client.rest.delete(xi.userGuild(this.id)),this}async delete(){return await this.client.rest.delete(xi.guild(this.id)),this}async disableInvites(e=!0){let i=this.features.filter(r=>r!==fT.InvitesDisabled);return e&&i.push(fT.InvitesDisabled),this.edit({features:i})}async setIncidentActions(e){return this.client.guilds.setIncidentActions(this.id,e)}equals(e){return e&&e instanceof this.constructor&&this.id===e.id&&this.available===e.available&&this.splash===e.splash&&this.discoverySplash===e.discoverySplash&&this.name===e.name&&this.memberCount===e.memberCount&&this.large===e.large&&this.icon===e.icon&&this.ownerId===e.ownerId&&this.verificationLevel===e.verificationLevel&&(this.features===e.features||this.features.length===e.features.length&&this.features.every((i,r)=>i===e.features[r]))}toJSON(){let e=super.toJSON({available:!1,createdTimestamp:!0,nameAcronym:!0,presences:!1,voiceStates:!1});return e.iconURL=this.iconURL(),e.splashURL=this.splashURL(),e.discoverySplashURL=this.discoverySplashURL(),e.bannerURL=this.bannerURL(),e}get voiceAdapterCreator(){return e=>(this.client.voice.adapters.set(this.id,e),{sendPayload:i=>this.shard.status!==AWe.Ready?!1:(this.shard.send(i),!0),destroy:()=>{this.client.voice.adapters.delete(this.id)}})}_sortedRoles(){return Boe(this.roles.cache)}_sortedChannels(e){let i=e.type===Vje.GuildCategory,r=hWe(e.type);return Boe(this.channels.cache.filter(({parentId:n,type:s})=>r.includes(s)&&(i||n===e.parentId)))}};yoe.Guild=mT});var CT=A((att,Qoe)=>{"use strict";var gWe=Om(),fWe=$i(),ET=class extends gWe{constructor(e,i){super(e,i),this.owner=i.owner,this.permissions=new fWe(BigInt(i.permissions)).freeze()}};Qoe.exports=ET});var wT=A((ctt,Toe)=>{"use strict";var pWe=require("node:process"),{setTimeout:woe,clearTimeout:boe}=require("node:timers"),{Collection:voe}=re(),{makeURLSearchParams:BT}=bt(),{GatewayOpcodes:mWe,Routes:vg,RouteBases:IWe}=k(),EWe=at(),{ErrorCodes:CWe,DiscordjsError:BWe}=se(),xoe=gC(),{Guild:yWe}=IT(),Soe=gs(),Doe=Hd(),{GuildMember:_oe}=Qa(),koe=sa(),QWe=CT(),{Role:Moe}=no(),{resolveImage:wWe}=Ci(),xg=W(),yT=$i(),bWe=kC(),{_transformAPIIncidentsData:vWe}=Kt(),{resolveColor:xWe}=Re(),Roe=!1,QT=class extends EWe{constructor(e,i){super(e,yWe,i),!Roe&&this._cache.constructor.name!=="Collection"&&(Roe=!0,pWe.emitWarning(`Overriding the cache handling for ${this.constructor.name} is unsupported and breaks functionality.`,"UnsupportedCacheOverwriteWarning"))}resolve(e){return e instanceof Soe||e instanceof _oe||e instanceof Doe||e instanceof Moe||e instanceof koe&&e.guild?super.resolve(e.guild):super.resolve(e)}resolveId(e){return e instanceof Soe||e instanceof _oe||e instanceof Doe||e instanceof Moe||e instanceof koe&&e.guild?super.resolveId(e.guild.id):super.resolveId(e)}async create({name:e,icon:i=null,verificationLevel:r,defaultMessageNotifications:n,explicitContentFilter:s,roles:o=[],channels:a=[],afkChannelId:c,afkTimeout:l,systemChannelId:u,systemChannelFlags:h}){let d=await this.client.rest.post(vg.guilds(),{body:{name:e,icon:i&&await wWe(i),verification_level:r,default_message_notifications:n,explicit_content_filter:s,roles:o.map(({color:p,permissions:m,...B})=>({...B,color:p&&xWe(p),permissions:m===void 0?void 0:yT.resolve(m).toString()})),channels:a.map(({parentId:p,userLimit:m,rtcRegion:B,videoQualityMode:f,permissionOverwrites:E,rateLimitPerUser:D,...R})=>({...R,parent_id:p,user_limit:m,rtc_region:B,video_quality_mode:f,permission_overwrites:E?.map(({allow:G,deny:V,...ee})=>({...ee,allow:G===void 0?void 0:yT.resolve(G).toString(),deny:V===void 0?void 0:yT.resolve(V).toString()})),rate_limit_per_user:D})),afk_channel_id:c,afk_timeout:l,system_channel_id:u,system_channel_flags:h===void 0?void 0:bWe.resolve(h)}});return this.client.guilds.cache.get(d.id)??new Promise(p=>{let m=f=>{f.id===d.id&&(boe(B),this.client.decrementMaxListeners(),p(f))};this.client.incrementMaxListeners(),this.client.once(xg.GuildCreate,m);let B=woe(()=>{this.client.removeListener(xg.GuildCreate,m),this.client.decrementMaxListeners(),p(this.client.guilds._add(d))},1e4).unref()})}async fetch(e={}){let i=this.resolveId(e)??this.resolveId(e.guild);if(i){if(!e.force){let s=this.cache.get(i);if(s)return s}let n=await this.client.rest.get(vg.guild(i),{query:BT({with_counts:e.withCounts??!0})});return n.shardId=xoe.shardIdForGuildId(i,this.client.options.shardCount),this._add(n,e.cache)}return(await this.client.rest.get(vg.userGuilds(),{query:BT(e)})).reduce((n,s)=>n.set(s.id,new QWe(this.client,s)),new voe)}async fetchSoundboardSounds({guildIds:e,time:i=1e4}){let r=this.client.options.shardCount,n=new Map;for(let s of e){let o=xoe.shardIdForGuildId(s,r),a=n.get(o);a?a.push(s):n.set(o,[s])}for(let[s,o]of n)this.client.ws.shards.get(s).send({op:mWe.RequestSoundboardSounds,d:{guild_ids:o}});return new Promise((s,o)=>{let a=new Set(e),c=new voe,l=(h,d)=>{u.refresh(),a.has(d.id)&&(c.set(d.id,h),a.delete(d.id),a.size===0&&(boe(u),this.client.removeListener(xg.SoundboardSounds,l),this.client.decrementMaxListeners(),s(c)))},u=woe(()=>{this.client.removeListener(xg.SoundboardSounds,l),this.client.decrementMaxListeners(),o(new BWe(CWe.GuildSoundboardSoundsTimeout))},i).unref();this.client.incrementMaxListeners(),this.client.on(xg.SoundboardSounds,l)})}async setIncidentActions(e,{invitesDisabledUntil:i,dmsDisabledUntil:r}){let n=this.resolveId(e),s=await this.client.rest.put(vg.guildIncidentActions(n),{body:{invites_disabled_until:i&&new Date(i).toISOString(),dms_disabled_until:r&&new Date(r).toISOString()}}),o=vWe(s),a=this.resolve(e);return a&&(a.incidentsData=o),o}widgetImageURL(e,i){let r=String(BT({style:i}));return`${IWe.api}${vg.guildWidgetImage(this.resolveId(e))}${r?`?${r}`:""}`}};Toe.exports=QT});var xT=A((ltt,Noe)=>{"use strict";var{ChannelType:SWe,Routes:bT}=k(),DWe=at(),{DiscordjsError:_We,ErrorCodes:kWe}=se(),{GuildMember:Uoe}=Qa(),{Message:Foe}=Bs(),Loe=gE(),MWe=Ba(),{emitDeprecationWarningForUserFetchFlags:RWe}=Re(),vT=class extends DWe{constructor(e,i){super(e,MWe,i)}dmChannel(e){return this.client.channels.cache.find(i=>i.type===SWe.DM&&i.recipientId===e)??null}async createDM(e,{cache:i=!0,force:r=!1}={}){let n=this.resolveId(e);if(!r){let o=this.dmChannel(n);if(o&&!o.partial)return o}let s=await this.client.rest.post(bT.userChannels(),{body:{recipient_id:n}});return this.client.channels._add(s,null,{cache:i})}async deleteDM(e){let i=this.resolveId(e),r=this.dmChannel(i);if(!r)throw new _We(kWe.UserNoDMChannel);return await this.client.rest.delete(bT.channel(r.id)),this.client.channels._remove(r.id),r}async fetch(e,{cache:i=!0,force:r=!1}={}){let n=this.resolveId(e);if(!r){let o=this.cache.get(n);if(o&&!o.partial)return o}let s=await this.client.rest.get(bT.user(n));return this._add(s,i)}async fetchFlags(e,i){return RWe(this.constructor.name),(await this.fetch(e,i)).flags}async send(e,i){return(await this.createDM(e)).send(i)}resolve(e){return e instanceof Uoe||e instanceof Loe?e.user:e instanceof Foe?e.author:super.resolve(e)}resolveId(e){return e instanceof Loe?e.id:e instanceof Uoe?e.user.id:e instanceof Foe?e.author.id:super.resolveId(e)}};Noe.exports=vT});var _T=A((Att,Poe)=>{"use strict";var{GatewayOpcodes:ST,ActivityType:qoe}=k(),{Presence:TWe}=wu(),{DiscordjsTypeError:UWe,ErrorCodes:FWe}=se(),DT=class extends TWe{constructor(e,i={}){super(e,Object.assign(i,{status:i.status??"online",user:{id:null}}))}set(e){let i=this._parse(e);if(this._patch(i),e.shardId===void 0)this.client.ws.broadcast({op:ST.PresenceUpdate,d:i});else if(Array.isArray(e.shardId))for(let r of e.shardId)this.client.ws.shards.get(r).send({op:ST.PresenceUpdate,d:i});else this.client.ws.shards.get(e.shardId).send({op:ST.PresenceUpdate,d:i});return this}_parse({status:e,since:i,afk:r,activities:n}){let s={activities:[],afk:typeof r=="boolean"?r:!1,since:typeof i=="number"&&!Number.isNaN(i)?i:null,status:e??this.status};if(n?.length)for(let[o,a]of n.entries()){if(typeof a.name!="string")throw new UWe(FWe.InvalidType,`activities[${o}].name`,"string");a.type??=qoe.Playing,a.type===qoe.Custom&&!a.state&&(a.state=a.name,a.name="Custom Status"),s.activities.push({type:a.type,name:a.name,state:a.state,url:a.url})}else!n&&(e||r||i)&&this.activities.length&&s.activities.push(...this.activities.map(o=>({name:o.name,state:o.state??void 0,type:o.type,url:o.url??void 0})));return s}};Poe.exports=DT});var MT=A((utt,Ooe)=>{"use strict";var{Collection:LWe}=re(),{DiscordSnowflake:NWe}=At(),qWe=_e(),{Sticker:PWe}=Ca(),kT=class extends qWe{constructor(e,i){super(e),this.id=i.id,this.stickers=new LWe(i.stickers.map(r=>[r.id,new PWe(e,r)])),this.name=i.name,this.skuId=i.sku_id,this.coverStickerId=i.cover_sticker_id??null,this.description=i.description,this.bannerId=i.banner_asset_id??null}get createdTimestamp(){return NWe.timestampFrom(this.id)}get createdAt(){return new Date(this.createdTimestamp)}get coverSticker(){return this.coverStickerId&&this.stickers.get(this.coverStickerId)}bannerURL(e={}){return this.bannerId&&this.client.rest.cdn.stickerPackBanner(this.bannerId,e)}};Ooe.exports=kT});var TT=A((htt,Goe)=>{"use strict";var{flatten:OWe}=Re(),RT=class{constructor(e){this.id=e.id,this.name=e.name,this.deprecated=e.deprecated,this.optimal=e.optimal,this.custom=e.custom}toJSON(){return OWe(this)}};Goe.exports=RT});var FT=A((dtt,Voe)=>{"use strict";var GWe=_e(),UT=class extends GWe{constructor(e,i){super(e),this.id=i.id,this.username=i.username,this.discriminator=i.discriminator,this.avatar=i.avatar,this.status=i.status,this.deaf=i.deaf??null,this.mute=i.mute??null,this.selfDeaf=i.self_deaf??null,this.selfMute=i.self_mute??null,this.suppress=i.suppress??null,this.channelId=i.channel_id??null,this.avatarURL=i.avatar_url,this.activity=i.activity??null}};Voe.exports=UT});var NT=A((gtt,Hoe)=>{"use strict";var{Collection:Yoe}=re(),{Routes:VWe}=k(),YWe=_e(),HWe=FT(),LT=class extends YWe{constructor(e,i){super(e),this._patch(i)}_patch(e){this.id=e.id,"name"in e&&(this.name=e.name),"instant_invite"in e&&(this.instantInvite=e.instant_invite),this.channels=new Yoe;for(let i of e.channels)this.channels.set(i.id,i);this.members=new Yoe;for(let i of e.members)this.members.set(i.id,new HWe(this.client,i));"presence_count"in e&&(this.presenceCount=e.presence_count)}async fetch(){let e=await this.client.rest.get(VWe.guildWidgetJSON(this.id));return this._patch(e),this}imageURL(e){return this.client.guilds.widgetImageURL(this.id,e)}};Hoe.exports=LT});var PT=A((ftt,joe)=>{"use strict";var{GatewayIntentBits:jWe}=k(),WWe=Ni(),qT=class extends WWe{static Flags=jWe};joe.exports=qT});var VT=A((ptt,Joe)=>{"use strict";var{setInterval:JWe,clearInterval:$We}=require("node:timers"),{ThreadChannelTypes:Woe,SweeperKeys:OT}=qn(),Ua=W(),{DiscordjsTypeError:tr,ErrorCodes:ir}=se(),GT=class{constructor(e,i){Object.defineProperty(this,"client",{value:e}),this.options=i,this.intervals=Object.fromEntries(OT.map(r=>[r,null]));for(let r of OT){if(!(r in i))continue;this._validateProperties(r);let n={...this.options[r]};if(!("filter"in n))switch(r){case"invites":n.filter=this.constructor.expiredInviteSweepFilter(n.lifetime);break;case"messages":n.filter=this.constructor.outdatedMessageSweepFilter(n.lifetime);break;case"threads":n.filter=this.constructor.archivedThreadSweepFilter(n.lifetime)}this._initInterval(r,`sweep${r[0].toUpperCase()}${r.slice(1)}`,n)}}sweepApplicationCommands(e){let{guilds:i,items:r}=this._sweepGuildDirectProp("commands",e,{emit:!1}),n=this.client.application?.commands.cache.sweep(e)??0;return this.client.emit(Ua.CacheSweep,`Swept ${n} global application commands and ${r} guild commands in ${i} guilds.`),r+n}sweepAutoModerationRules(e){return this._sweepGuildDirectProp("autoModerationRules",e).items}sweepBans(e){return this._sweepGuildDirectProp("bans",e).items}sweepEmojis(e){return this._sweepGuildDirectProp("emojis",e).items}sweepEntitlements(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=this.client.application.entitlements.cache.sweep(e);return this.client.emit(Ua.CacheSweep,`Swept ${i} entitlements.`),i}sweepInvites(e){return this._sweepGuildDirectProp("invites",e).items}sweepGuildMembers(e){return this._sweepGuildDirectProp("members",e,{outputName:"guild members"}).items}sweepMessages(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0,r=0;for(let n of this.client.channels.cache.values())n.isTextBased()&&(i++,r+=n.messages.cache.sweep(e));return this.client.emit(Ua.CacheSweep,`Swept ${r} messages in ${i} text-based channels.`),r}sweepPresences(e){return this._sweepGuildDirectProp("presences",e).items}sweepReactions(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0,r=0,n=0;for(let s of this.client.channels.cache.values())if(s.isTextBased()){i++;for(let o of s.messages.cache.values())r++,n+=o.reactions.cache.sweep(e)}return this.client.emit(Ua.CacheSweep,`Swept ${n} reactions on ${r} messages in ${i} text-based channels.`),n}sweepStageInstances(e){return this._sweepGuildDirectProp("stageInstances",e,{outputName:"stage instances"}).items}sweepStickers(e){return this._sweepGuildDirectProp("stickers",e).items}sweepThreadMembers(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0,r=0;for(let n of this.client.channels.cache.values())Woe.includes(n.type)&&(i++,r+=n.members.cache.sweep(e));return this.client.emit(Ua.CacheSweep,`Swept ${r} thread members in ${i} threads.`),r}sweepThreads(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=0;for(let[r,n]of this.client.channels.cache.entries())Woe.includes(n.type)&&e(n,r,this.client.channels.cache)&&(i++,this.client.channels._remove(r));return this.client.emit(Ua.CacheSweep,`Swept ${i} threads.`),i}sweepUsers(e){if(typeof e!="function")throw new tr(ir.InvalidType,"filter","function");let i=this.client.users.cache.sweep(e);return this.client.emit(Ua.CacheSweep,`Swept ${i} users.`),i}sweepVoiceStates(e){return this._sweepGuildDirectProp("voiceStates",e,{outputName:"voice states"}).items}destroy(){for(let e of OT)this.intervals[e]&&$We(this.intervals[e])}static filterByLifetime({lifetime:e=14400,getComparisonTimestamp:i=n=>n?.createdTimestamp,excludeFromSweep:r=()=>!1}={}){if(typeof e!="number")throw new tr(ir.InvalidType,"lifetime","number");if(typeof i!="function")throw new tr(ir.InvalidType,"getComparisonTimestamp","function");if(typeof r!="function")throw new tr(ir.InvalidType,"excludeFromSweep","function");return()=>{if(e<=0)return null;let n=e*1e3,s=Date.now();return(o,a,c)=>{if(r(o,a,c))return!1;let l=i(o,a,c);return!l||typeof l!="number"?!1:s-l>n}}}static archivedThreadSweepFilter(e=14400){return this.filterByLifetime({lifetime:e,getComparisonTimestamp:i=>i.archiveTimestamp,excludeFromSweep:i=>!i.archived})}static expiredInviteSweepFilter(e=14400){return this.filterByLifetime({lifetime:e,getComparisonTimestamp:i=>i.expiresTimestamp})}static outdatedMessageSweepFilter(e=3600){return this.filterByLifetime({lifetime:e,getComparisonTimestamp:i=>i.editedTimestamp??i.createdTimestamp})}_sweepGuildDirectProp(e,i,{emit:r=!0,outputName:n}={}){if(typeof i!="function")throw new tr(ir.InvalidType,"filter","function");let s=0,o=0;for(let a of this.client.guilds.cache.values()){if(!a.available)continue;let{cache:c}=a[e];s++,o+=c.sweep(i)}return r&&this.client.emit(Ua.CacheSweep,`Swept ${o} ${n??e} in ${s} guilds.`),{guilds:s,items:o}}_validateProperties(e){let i=this.options[e];if(typeof i!="object")throw new tr(ir.InvalidType,`sweepers.${e}`,"object",!0);if(typeof i.interval!="number")throw new tr(ir.InvalidType,`sweepers.${e}.interval`,"number");if(["invites","messages","threads"].includes(e)&&!("filter"in i)){if(typeof i.lifetime!="number")throw new tr(ir.InvalidType,`sweepers.${e}.lifetime`,"number");return}if(typeof i.filter!="function")throw new tr(ir.InvalidType,`sweepers.${e}.filter`,"function")}_initInterval(e,i,r){r.interval<=0||r.interval===1/0||(this.intervals[e]=JWe(()=>{let n=r.filter();if(n!==null){if(typeof n!="function")throw new tr(ir.SweepFilterReturn);this[i](n)}},r.interval*1e3).unref())}};Joe.exports=GT});var $oe=A((exports,module)=>{"use strict";var process=require("node:process"),{Collection}=re(),{makeURLSearchParams}=bt(),{OAuth2Scopes,Routes}=k(),BaseClient=Lm(),ActionsManager=Tee(),ClientVoiceManager=DM(),WebSocketManager=hR(),{DiscordjsError,DiscordjsTypeError,DiscordjsRangeError,ErrorCodes}=se(),BaseGuildEmojiManager=dC(),ChannelManager=mR(),GuildManager=wT(),UserManager=xT(),ShardClientUtil=gC(),ClientPresence=_T(),GuildPreview=fC(),GuildTemplate=Xh(),Invite=sa(),{SoundboardSound}=yC(),{Sticker}=Ca(),StickerPack=MT(),VoiceRegion=TT(),Webhook=ys(),Widget=NT(),{resolveInviteCode,resolveGuildTemplateCode}=Ci(),Events=W(),IntentsBitField=PT(),Options=Fm(),PermissionsBitField=$i(),Status=ws(),Sweepers=VT(),deprecationEmittedForPremiumStickerPacks=!1,Client=class extends BaseClient{constructor(t){super(t);let e=require("node:worker_threads").workerData??process.env,i=Options.createDefault();this.options.shards===i.shards&&"SHARDS"in e&&(this.options.shards=JSON.parse(e.SHARDS)),this.options.shardCount===i.shardCount&&("SHARD_COUNT"in e?this.options.shardCount=Number(e.SHARD_COUNT):Array.isArray(this.options.shards)&&(this.options.shardCount=this.options.shards.length));let r=typeof this.options.shards;r==="undefined"&&typeof this.options.shardCount=="number"&&(this.options.shards=Array.from({length:this.options.shardCount},(n,s)=>s)),r==="number"&&(this.options.shards=[this.options.shards]),Array.isArray(this.options.shards)&&(this.options.shards=[...new Set(this.options.shards.filter(n=>!isNaN(n)&&n>=0&&n<1/0&&n===(n|0)))]),this._validateOptions(),this.ws=new WebSocketManager(this),this.actions=new ActionsManager(this),this.voice=new ClientVoiceManager(this),this.shard=process.env.SHARDING_MANAGER?ShardClientUtil.singleton(this,process.env.SHARDING_MANAGER_MODE):null,this.users=new UserManager(this),this.guilds=new GuildManager(this),this.channels=new ChannelManager(this),this.sweepers=new Sweepers(this,this.options.sweepers),this.presence=new ClientPresence(this,this.options.presence),Object.defineProperty(this,"token",{writable:!0}),!this.token&&"DISCORD_TOKEN"in process.env?this.token=process.env.DISCORD_TOKEN:this.token=null,this.user=null,this.application=null,this.readyTimestamp=null}get emojis(){let t=new BaseGuildEmojiManager(this);for(let e of this.guilds.cache.values())if(e.available)for(let i of e.emojis.cache.values())t.cache.set(i.id,i);return t}get readyAt(){return this.readyTimestamp&&new Date(this.readyTimestamp)}get uptime(){return this.readyTimestamp&&Date.now()-this.readyTimestamp}async login(t=this.token){if(!t||typeof t!="string")throw new DiscordjsError(ErrorCodes.TokenInvalid);this.token=t=t.replace(/^(Bot|Bearer)\s*/i,""),this.rest.setToken(t),this.emit(Events.Debug,`Provided token: ${this._censoredToken}`),this.options.presence&&(this.options.ws.presence=this.presence._parse(this.options.presence)),this.emit(Events.Debug,"Preparing to connect to the gateway...");try{return await this.ws.connect(),this.token}catch(e){throw await this.destroy(),e}}isReady(){return!this.ws.destroyed&&this.ws.status===Status.Ready}async destroy(){super.destroy(),this.sweepers.destroy(),await this.ws.destroy(),this.token=null,this.rest.setToken(null)}async fetchInvite(t,e){let i=resolveInviteCode(t),r=makeURLSearchParams({with_counts:!0,guild_scheduled_event_id:e?.guildScheduledEventId}),n=await this.rest.get(Routes.invite(i),{query:r});return new Invite(this,n)}async fetchGuildTemplate(t){let e=resolveGuildTemplateCode(t),i=await this.rest.get(Routes.template(e));return new GuildTemplate(this,i)}async fetchWebhook(t,e){let i=await this.rest.get(Routes.webhook(t,e),{auth:e===void 0});return new Webhook(this,{token:e,...i})}async fetchVoiceRegions(){let t=await this.rest.get(Routes.voiceRegions()),e=new Collection;for(let i of t)e.set(i.id,new VoiceRegion(i));return e}async fetchSticker(t){let e=await this.rest.get(Routes.sticker(t));return new Sticker(this,e)}async fetchStickerPacks({packId:t}={}){if(t){let i=await this.rest.get(Routes.stickerPack(t));return new StickerPack(this,i)}let e=await this.rest.get(Routes.stickerPacks());return new Collection(e.sticker_packs.map(i=>[i.id,new StickerPack(this,i)]))}fetchPremiumStickerPacks(){return deprecationEmittedForPremiumStickerPacks||(process.emitWarning("The Client#fetchPremiumStickerPacks() method is deprecated. Use Client#fetchStickerPacks() instead.","DeprecationWarning"),deprecationEmittedForPremiumStickerPacks=!0),this.fetchStickerPacks()}async fetchDefaultSoundboardSounds(){let t=await this.rest.get(Routes.soundboardDefaultSounds());return new Collection(t.map(e=>[e.sound_id,new SoundboardSound(this,e)]))}async fetchGuildPreview(t){let e=this.guilds.resolveId(t);if(!e)throw new DiscordjsTypeError(ErrorCodes.InvalidType,"guild","GuildResolvable");let i=await this.rest.get(Routes.guildPreview(e));return new GuildPreview(this,i)}async fetchGuildWidget(t){let e=this.guilds.resolveId(t);if(!e)throw new DiscordjsTypeError(ErrorCodes.InvalidType,"guild","GuildResolvable");let i=await this.rest.get(Routes.guildWidgetJSON(e));return new Widget(this,i)}generateInvite(t={}){if(typeof t!="object")throw new DiscordjsTypeError(ErrorCodes.InvalidType,"options","object",!0);if(!this.application)throw new DiscordjsError(ErrorCodes.ClientNotReady,"generate an invite link");let{scopes:e}=t;if(e===void 0)throw new DiscordjsTypeError(ErrorCodes.InvalidMissingScopes);if(!Array.isArray(e))throw new DiscordjsTypeError(ErrorCodes.InvalidType,"scopes","Array of Invite Scopes",!0);if(!e.some(s=>[OAuth2Scopes.Bot,OAuth2Scopes.ApplicationsCommands].includes(s)))throw new DiscordjsTypeError(ErrorCodes.InvalidMissingScopes);if(!e.includes(OAuth2Scopes.Bot)&&t.permissions)throw new DiscordjsTypeError(ErrorCodes.InvalidScopesWithPermissions);let i=Object.values(OAuth2Scopes),r=e.find(s=>!i.includes(s));if(r)throw new DiscordjsTypeError(ErrorCodes.InvalidElement,"Array","scopes",r);let n=makeURLSearchParams({client_id:this.application.id,scope:e.join(" "),disable_guild_select:t.disableGuildSelect});if(t.permissions){let s=PermissionsBitField.resolve(t.permissions);s&&n.set("permissions",s.toString())}if(t.guild){let s=this.guilds.resolveId(t.guild);if(!s)throw new DiscordjsTypeError(ErrorCodes.InvalidType,"options.guild","GuildResolvable");n.set("guild_id",s)}return`${this.options.rest.api}${Routes.oauth2Authorization()}?${n}`}toJSON(){return super.toJSON({actions:!1,presence:!1})}get _censoredToken(){return this.token?this.token.split(".").map((t,e)=>e>1?t.replace(/./g,"*"):t).join("."):null}_eval(script){return eval(script)}_validateOptions(t=this.options){if(t.intents===void 0)throw new DiscordjsTypeError(ErrorCodes.ClientMissingIntents);if(t.intents=new IntentsBitField(t.intents).freeze(),typeof t.shardCount!="number"||isNaN(t.shardCount)||t.shardCount<1)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"shardCount","a number greater than or equal to 1");if(t.shards&&!(t.shards==="auto"||Array.isArray(t.shards)))throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"shards","'auto', a number or array of numbers");if(t.shards&&!t.shards.length)throw new DiscordjsRangeError(ErrorCodes.ClientInvalidProvidedShards);if(typeof t.makeCache!="function")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"makeCache","a function");if(typeof t.sweepers!="object"||t.sweepers===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"sweepers","an object");if(!Array.isArray(t.partials))throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"partials","an Array");if(typeof t.waitGuildTimeout!="number"||isNaN(t.waitGuildTimeout))throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"waitGuildTimeout","a number");if(typeof t.failIfNotExists!="boolean")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"failIfNotExists","a boolean");if(typeof t.enforceNonce!="boolean")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"enforceNonce","a boolean");if(typeof t.allowedMentions!="object"&&t.allowedMentions!==void 0||t.allowedMentions===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"allowedMentions","an object");if(typeof t.presence!="object"||t.presence===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"presence","an object");if(typeof t.ws!="object"||t.ws===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"ws","an object");if(typeof t.rest!="object"||t.rest===null)throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"rest","an object");if(typeof t.jsonTransformer!="function")throw new DiscordjsTypeError(ErrorCodes.ClientInvalidOption,"jsonTransformer","a function")}};module.exports=Client});var YT=A((mtt,zoe)=>{"use strict";zoe.exports={Death:"death",Disconnect:"disconnect",Error:"error",Message:"message",Ready:"ready",Reconnecting:"reconnecting",Resume:"resume",Spawn:"spawn"}});var jT=A((Itt,iae)=>{"use strict";var zWe=require("node:events"),Koe=require("node:path"),KWe=require("node:process"),{setTimeout:ZWe,clearTimeout:XWe}=require("node:timers"),{setTimeout:eJe}=require("node:timers/promises"),{SHARE_ENV:tJe}=require("node:worker_threads"),{DiscordjsError:rl,ErrorCodes:nl}=se(),Fa=YT(),{makeError:Zoe,makePlainError:Xoe}=Re(),eae=null,tae=null,HT=class extends zWe{constructor(e,i){switch(super(),e.mode){case"process":eae=require("node:child_process");break;case"worker":tae=require("node:worker_threads").Worker;break}this.manager=e,this.id=i,this.silent=e.silent,this.args=e.shardArgs??[],this.execArgv=e.execArgv,this.env=Object.assign({},KWe.env,{SHARDING_MANAGER:!0,SHARDS:this.id,SHARD_COUNT:this.manager.totalShards,DISCORD_TOKEN:this.manager.token}),this.ready=!1,this.process=null,this.worker=null,this._evals=new Map,this._fetches=new Map,this._exitListener=null}async spawn(e=3e4){if(this.process)throw new rl(nl.ShardingProcessExists,this.id);if(this.worker)throw new rl(nl.ShardingWorkerExists,this.id);switch(this._exitListener=this._handleExit.bind(this,void 0,e),this.manager.mode){case"process":this.process=eae.fork(Koe.resolve(this.manager.file),this.args,{env:this.env,execArgv:this.execArgv,silent:this.silent}).on("message",this._handleMessage.bind(this)).on("exit",this._exitListener);break;case"worker":this.worker=new tae(Koe.resolve(this.manager.file),{workerData:this.env,env:tJe,execArgv:this.execArgv,argv:this.args}).on("message",this._handleMessage.bind(this)).on("exit",this._exitListener);break}this._evals.clear(),this._fetches.clear();let i=this.process??this.worker;return this.emit(Fa.Spawn,i),e===-1||e===1/0?i:new Promise((r,n)=>{let s=()=>{XWe(u),this.off("ready",o),this.off("disconnect",a),this.off("death",c)},o=()=>{s(),r(i)},a=()=>{s(),n(new rl(nl.ShardingReadyDisconnected,this.id))},c=()=>{s(),n(new rl(nl.ShardingReadyDied,this.id))},u=ZWe(()=>{s(),n(new rl(nl.ShardingReadyTimeout,this.id))},e);this.once("ready",o),this.once("disconnect",a),this.once("death",c)})}kill(){this.process?(this.process.removeListener("exit",this._exitListener),this.process.kill()):(this.worker.removeListener("exit",this._exitListener),this.worker.terminate()),this._handleExit(!1)}async respawn({delay:e=500,timeout:i=3e4}={}){return this.kill(),e>0&&await eJe(e),this.spawn(i)}send(e){return new Promise((i,r)=>{this.process?this.process.send(e,n=>{n?r(n):i(this)}):(this.worker.postMessage(e),i(this))})}async fetchClientValue(e){if(!this.process&&!this.worker)throw new rl(nl.ShardingNoChildExists,this.id);if(this._fetches.has(e))return this._fetches.get(e);let i=new Promise((r,n)=>{let s=this.process??this.worker,o=a=>{a?._fetchProp===e&&(s.removeListener("message",o),this.decrementMaxListeners(s),this._fetches.delete(e),a._error?n(Zoe(a._error)):r(a._result))};this.incrementMaxListeners(s),s.on("message",o),this.send({_fetchProp:e}).catch(a=>{s.removeListener("message",o),this.decrementMaxListeners(s),this._fetches.delete(e),n(a)})});return this._fetches.set(e,i),i}async eval(e,i){let r=typeof e=="function"?`(${e})(this, ${JSON.stringify(i)})`:e;if(!this.process&&!this.worker)throw new rl(nl.ShardingNoChildExists,this.id);if(this._evals.has(r))return this._evals.get(r);let n=new Promise((s,o)=>{let a=this.process??this.worker,c=l=>{l?._eval===r&&(a.removeListener("message",c),this.decrementMaxListeners(a),this._evals.delete(r),l._error?o(Zoe(l._error)):s(l._result))};this.incrementMaxListeners(a),a.on("message",c),this.send({_eval:r}).catch(l=>{a.removeListener("message",c),this.decrementMaxListeners(a),this._evals.delete(r),o(l)})});return this._evals.set(r,n),n}_handleMessage(e){if(e){if(e._ready){this.ready=!0,this.emit(Fa.Ready);return}if(e._disconnect){this.ready=!1,this.emit(Fa.Disconnect);return}if(e._reconnecting){this.ready=!1,this.emit(Fa.Reconnecting);return}if(e._resume){this.ready=!0,this.emit(Fa.Resume);return}if(e._sFetchProp){let i={_sFetchProp:e._sFetchProp,_sFetchPropShard:e._sFetchPropShard};this.manager.fetchClientValues(e._sFetchProp,e._sFetchPropShard).then(r=>this.send({...i,_result:r}),r=>this.send({...i,_error:Xoe(r)}));return}if(e._sEval){let i={_sEval:e._sEval,_sEvalShard:e._sEvalShard};this.manager._performOnShards("eval",[e._sEval],e._sEvalShard).then(r=>this.send({...i,_result:r}),r=>this.send({...i,_error:Xoe(r)}));return}if(e._sRespawnAll){let{shardDelay:i,respawnDelay:r,timeout:n}=e._sRespawnAll;this.manager.respawnAll({shardDelay:i,respawnDelay:r,timeout:n}).catch(()=>{});return}}this.emit(Fa.Message,e)}_handleExit(e=this.manager.respawn,i){this.emit(Fa.Death,this.process??this.worker),this.ready=!1,this.process=null,this.worker=null,this._evals.clear(),this._fetches.clear(),e&&this.spawn(i).catch(r=>this.emit(Fa.Error,r))}incrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i+1)}decrementMaxListeners(e){let i=e.getMaxListeners();i!==0&&e.setMaxListeners(i-1)}};iae.exports=HT});var oae=A((Ett,sae)=>{"use strict";var iJe=require("node:events"),rJe=require("node:fs"),rae=require("node:path"),Sg=require("node:process"),{setTimeout:nae}=require("node:timers/promises"),{Collection:nJe}=re(),sJe=jT(),{DiscordjsError:vu,DiscordjsTypeError:xu,DiscordjsRangeError:Su,ErrorCodes:gi}=se(),{fetchRecommendedShardCount:oJe}=Re(),WT=class extends iJe{constructor(e,i){super();let r={totalShards:"auto",mode:"process",respawn:!0,silent:!1,shardArgs:[],execArgv:[],token:Sg.env.DISCORD_TOKEN,...i};if(this.file=e,!e)throw new vu(gi.ClientInvalidOption,"File","specified.");if(rae.isAbsolute(e)||(this.file=rae.resolve(Sg.cwd(),e)),!rJe.statSync(this.file).isFile())throw new vu(gi.ClientInvalidOption,"File","a file");if(this.shardList=r.shardList??"auto",this.shardList!=="auto"){if(!Array.isArray(this.shardList))throw new xu(gi.ClientInvalidOption,"shardList","an array.");if(this.shardList=[...new Set(this.shardList)],this.shardList.length<1)throw new Su(gi.ClientInvalidOption,"shardList","at least 1 id.");if(this.shardList.some(s=>typeof s!="number"||isNaN(s)||!Number.isInteger(s)||s<0))throw new xu(gi.ClientInvalidOption,"shardList","an array of positive integers.")}if(this.totalShards=r.totalShards||"auto",this.totalShards!=="auto"){if(typeof this.totalShards!="number"||isNaN(this.totalShards))throw new xu(gi.ClientInvalidOption,"Amount of shards","a number.");if(this.totalShards<1)throw new Su(gi.ClientInvalidOption,"Amount of shards","at least 1.");if(!Number.isInteger(this.totalShards))throw new Su(gi.ClientInvalidOption,"Amount of shards","an integer.")}if(this.mode=r.mode,this.mode!=="process"&&this.mode!=="worker")throw new Su(gi.ClientInvalidOption,"Sharding mode",'"process" or "worker"');this.respawn=r.respawn,this.silent=r.silent,this.shardArgs=r.shardArgs,this.execArgv=r.execArgv,this.token=r.token?.replace(/^Bot\s*/i,"")??null,this.shards=new nJe,Sg.env.SHARDING_MANAGER=!0,Sg.env.SHARDING_MANAGER_MODE=this.mode,Sg.env.DISCORD_TOKEN=this.token}createShard(e=this.shards.size){let i=new sJe(this,e);return this.shards.set(e,i),this.emit("shardCreate",i),i}async spawn({amount:e=this.totalShards,delay:i=5500,timeout:r=3e4}={}){if(e==="auto")e=await oJe(this.token);else{if(typeof e!="number"||isNaN(e))throw new xu(gi.ClientInvalidOption,"Amount of shards","a number.");if(e<1)throw new Su(gi.ClientInvalidOption,"Amount of shards","at least 1.");if(!Number.isInteger(e))throw new xu(gi.ClientInvalidOption,"Amount of shards","an integer.")}if(this.shards.size>=e)throw new vu(gi.ShardingAlreadySpawned,this.shards.size);if((this.shardList==="auto"||this.totalShards==="auto"||this.totalShards!==e)&&(this.shardList=[...Array(e).keys()]),(this.totalShards==="auto"||this.totalShards!==e)&&(this.totalShards=e),this.shardList.some(n=>n>=e))throw new Su(gi.ClientInvalidOption,"Amount of shards","bigger than the highest shardId in the shardList option.");for(let n of this.shardList){let s=[],o=this.createShard(n);s.push(o.spawn(r)),i>0&&this.shards.size!==this.shardList.length&&s.push(nae(i)),await Promise.all(s)}return this.shards}broadcast(e){let i=[];for(let r of this.shards.values())i.push(r.send(e));return Promise.all(i)}async broadcastEval(e,i={}){if(typeof e!="function")throw new xu(gi.ShardingInvalidEvalBroadcast);return this._performOnShards("eval",[`(${e})(this, ${JSON.stringify(i.context)})`],i.shard)}fetchClientValues(e,i){return this._performOnShards("fetchClientValue",[e],i)}async _performOnShards(e,i,r){if(this.shards.size===0)throw new vu(gi.ShardingNoShards);if(typeof r=="number"){if(this.shards.has(r))return this.shards.get(r)[e](...i);throw new vu(gi.ShardingShardNotFound,r)}if(this.shards.size!==this.shardList.length)throw new vu(gi.ShardingInProcess);let n=[];for(let s of this.shards.values())n.push(s[e](...i));return Promise.all(n)}async respawnAll({shardDelay:e=5e3,respawnDelay:i=500,timeout:r=3e4}={}){let n=0;for(let s of this.shards.values()){let o=[s.respawn({delay:i,timeout:r})];++n<this.shards.size&&e>0&&o.push(nae(e)),await Promise.all(o)}return this.shards}};sae.exports=WT});var cae=A((Ctt,aae)=>{"use strict";var{deprecate:Gi}=require("node:util"),{blockQuote:aJe,bold:cJe,channelMention:lJe,codeBlock:AJe,formatEmoji:uJe,hideLinkEmbed:hJe,hyperlink:dJe,inlineCode:gJe,italic:fJe,quote:pJe,roleMention:mJe,spoiler:IJe,strikethrough:EJe,time:CJe,TimestampStyles:BJe,underscore:yJe,userMention:QJe}=ds(),JT=class extends null{static blockQuote=Gi(aJe,"Formatters.blockQuote() is deprecated. Import this method directly from discord.js instead.");static bold=Gi(cJe,"Formatters.bold() is deprecated. Import this method directly from discord.js instead.");static channelMention=Gi(lJe,"Formatters.channelMention() is deprecated. Import this method directly from discord.js instead.");static codeBlock=Gi(AJe,"Formatters.codeBlock() is deprecated. Import this method directly from discord.js instead.");static formatEmoji=Gi(uJe,"Formatters.formatEmoji() is deprecated. Import this method directly from discord.js instead.");static hideLinkEmbed=Gi(hJe,"Formatters.hideLinkEmbed() is deprecated. Import this method directly from discord.js instead.");static hyperlink=Gi(dJe,"Formatters.hyperlink() is deprecated. Import this method directly from discord.js instead.");static inlineCode=Gi(gJe,"Formatters.inlineCode() is deprecated. Import this method directly from discord.js instead.");static italic=Gi(fJe,"Formatters.italic() is deprecated. Import this method directly from discord.js instead.");static quote=Gi(pJe,"Formatters.quote() is deprecated. Import this method directly from discord.js instead.");static roleMention=Gi(mJe,"Formatters.roleMention() is deprecated. Import this method directly from discord.js instead.");static spoiler=Gi(IJe,"Formatters.spoiler() is deprecated. Import this method directly from discord.js instead.");static strikethrough=Gi(EJe,"Formatters.strikethrough() is deprecated. Import this method directly from discord.js instead.");static time=Gi(CJe,"Formatters.time() is deprecated. Import this method directly from discord.js instead.");static TimestampStyles=BJe;static underscore=Gi(yJe,"Formatters.underscore() is deprecated. Import this method directly from discord.js instead.");static userMention=Gi(QJe,"Formatters.userMention() is deprecated. Import this method directly from discord.js instead.")};aae.exports=JT});var Aae=A((Btt,lae)=>{"use strict";var{EmbedBuilder:wJe,embedLength:bJe}=Ki(),{isJSONEncodable:vJe}=Oe(),{toSnakeCase:xJe}=Kt(),{resolveColor:SJe}=Re(),$T=class extends wJe{constructor(e){super(xJe(e))}setColor(e){return super.setColor(e&&SJe(e))}static from(e){return new this(vJe(e)?e.toJSON():e)}get length(){return bJe(this.data)}};lae.exports=$T});var hae=A((ytt,uae)=>{"use strict";var{basename:DJe,flatten:_Je}=Re(),zT=class t{constructor(e,i={}){this.attachment=e,this.name=i.name,this.description=i.description}setDescription(e){return this.description=e,this}setFile(e){return this.attachment=e,this}setName(e){return this.name=e,this}setSpoiler(e=!0){if(e===this.spoiler)return this;if(!e){for(;this.spoiler;)this.name=this.name.slice(8);return this}return this.name=`SPOILER_${this.name}`,this}get spoiler(){return DJe(this.name).startsWith("SPOILER_")}toJSON(){return _Je(this)}static from(e){return new t(e.attachment,{name:e.name,description:e.description})}};uae.exports=zT});var fae=A((Qtt,gae)=>{"use strict";var{ModalBuilder:kJe,ComponentBuilder:MJe}=Ki(),{isJSONEncodable:RJe}=Oe(),{toSnakeCase:dae}=Kt(),KT=class extends kJe{constructor({components:e,...i}={}){super({...dae(i),components:e?.map(r=>r instanceof MJe?r:dae(r))})}static from(e){return new this(RJe(e)?e.toJSON():e)}};gae.exports=KT});var Iae=A((wtt,mae)=>{"use strict";var TJe=require("node:process"),UJe=HI(),pae=!1,ZT=class extends UJe{constructor(...e){super(...e),pae||(TJe.emitWarning("The SelectMenuBuilder class is deprecated. Use StringSelectMenuBuilder instead.","DeprecationWarning"),pae=!0)}};mae.exports=ZT});var Bae=A((btt,Cae)=>{"use strict";var FJe=require("node:process"),LJe=jI(),Eae=!1,XT=class extends LJe{constructor(...e){super(...e),Eae||(FJe.emitWarning("The SelectMenuComponent class is deprecated. Use StringSelectMenuComponent instead.","DeprecationWarning"),Eae=!0)}};Cae.exports=XT});var wae=A((vtt,Qae)=>{"use strict";var NJe=require("node:process"),qJe=NE(),yae=!1,eU=class extends qJe{constructor(...e){super(...e),yae||(NJe.emitWarning("The SelectMenuInteraction class is deprecated. Use StringSelectMenuInteraction instead.","DeprecationWarning"),yae=!0)}};Qae.exports=eU});var iU=A((xtt,vae)=>{"use strict";var{SelectMenuOptionBuilder:PJe}=Ki(),{isJSONEncodable:OJe}=Oe(),{toSnakeCase:GJe}=Kt(),{resolvePartialEmoji:bae}=Re(),tU=class extends PJe{constructor({emoji:e,...i}={}){super(GJe({...i,emoji:e&&typeof e=="string"?bae(e):e}))}setEmoji(e){return typeof e=="string"?super.setEmoji(bae(e)):super.setEmoji(e)}static from(e){return new this(OJe(e)?e.toJSON():e)}};vae.exports=tU});var Dae=A((Stt,Sae)=>{"use strict";var VJe=require("node:process"),YJe=iU(),xae=!1,rU=class extends YJe{constructor(...e){super(...e),xae||(VJe.emitWarning("The SelectMenuOptionBuilder class is deprecated. Use StringSelectMenuOptionBuilder instead.","DeprecationWarning"),xae=!0)}};Sae.exports=rU});var _ae=A(y=>{"use strict";var{polyfillDispose:HJe}=Oe(),{__exportStar:sl}=(qF(),XU(NF));HJe();y.BaseClient=Lm();y.Client=$oe();y.Shard=jT();y.ShardClientUtil=gC();y.ShardingManager=oae();y.WebhookClient=yD();y.DiscordjsError=SA().DiscordjsError;y.DiscordjsTypeError=SA().DiscordjsTypeError;y.DiscordjsRangeError=SA().DiscordjsRangeError;y.DiscordjsErrorCodes=jh();y.ActivityFlagsBitField=XR();y.ApplicationFlagsBitField=ev();y.AttachmentFlagsBitField=m0();y.BaseManager=_m();y.BitField=Ni();y.ChannelFlagsBitField=Wh();y.Collection=re().Collection;y.Constants=qn();y.Colors=g0();y.Events=W();y.Formatters=cae();y.GuildMemberFlagsBitField=tE().GuildMemberFlagsBitField;y.IntentsBitField=PT();y.InviteFlagsBitField=Ib().InviteFlagsBitField;y.LimitedCollection=rb();y.MessageFlagsBitField=td();y.Options=Fm();y.Partials=wa();y.PermissionsBitField=$i();y.RoleFlagsBitField=P0();y.ShardEvents=YT();y.SKUFlagsBitField=z0().SKUFlagsBitField;y.Status=ws();y.SnowflakeUtil=At().DiscordSnowflake;y.Sweepers=VT();y.SystemChannelFlagsBitField=kC();y.ThreadMemberFlagsBitField=a_();y.UserFlagsBitField=FD();sl(Re(),y);y.WebSocketShardEvents=AC();y.version=X0().version;y.ApplicationCommandManager=Jm();y.ApplicationEmojiManager=Yb();y.ApplicationCommandPermissionsManager=rd();y.AutoModerationRuleManager=xR();y.BaseGuildEmojiManager=dC();y.CachedManager=at();y.ChannelManager=mR();y.ClientVoiceManager=DM();y.DataManager=kA();y.DMMessageManager=i_();y.EntitlementManager=Jb().EntitlementManager;y.GuildApplicationCommandManager=DR();y.GuildBanManager=MR();y.GuildChannelManager=TR();y.GuildEmojiManager=LR();y.GuildEmojiRoleManager=AS();y.GuildForumThreadManager=s_();y.GuildInviteManager=PR();y.GuildManager=wT();y.GuildMemberManager=VR();y.GuildMemberRoleManager=vD();y.GuildMessageManager=iu();y.GuildScheduledEventManager=jR();y.GuildSoundboardSoundManager=$R().GuildSoundboardSoundManager;y.GuildStickerManager=KR();y.GuildTextThreadManager=mE();y.MessageManager=eu();y.PermissionOverwriteManager=W0();y.PollAnswerVoterManager=ND().PollAnswerVoterManager;y.PresenceManager=iT();y.ReactionManager=ES();y.ReactionUserManager=fS();y.RoleManager=aT();y.StageInstanceManager=lT();y.SubscriptionManager=Zb().SubscriptionManager;y.ThreadManager=hE();y.ThreadMemberManager=A_();y.UserManager=xT();y.VoiceStateManager=uT();y.WebSocketManager=hR();y.WebSocketShard=nR();y.ActionRow=yS();y.ActionRowBuilder=wS();y.Activity=wu().Activity;y.AnonymousGuild=Gm();y.Application=qm();y.ApplicationCommand=jm();y.ApplicationEmoji=sd();y.ApplicationRoleConnectionMetadata=kb().ApplicationRoleConnectionMetadata;y.AutocompleteInteraction=Ek();y.AutoModerationActionExecution=HD();y.AutoModerationRule=yE();y.Base=_e();y.BaseGuild=Om();y.BaseGuildEmoji=VI();y.BaseGuildTextChannel=EE();y.BaseGuildVoiceChannel=tg();y.ButtonBuilder=vS();y.ButtonComponent=SS();y.ButtonInteraction=_k();y.CategoryChannel=e_();y.BaseChannel=ia().BaseChannel;y.ChatInputCommandInteraction=Tk();y.ClientApplication=Xm();y.ClientPresence=_T();y.ClientUser=oR();y.CommandInteraction=sg();y.Collector=Kh();y.CommandInteractionOptionResolver=rg();y.Component=Xi();y.ContainerComponent=US();y.ContextMenuCommandInteraction=UE();y.DirectoryChannel=Q_();y.DMChannel=r_();y.Embed=eS();y.EmbedBuilder=Aae();y.Emoji=Pn().Emoji;y.Entitlement=jb().Entitlement;y.FileComponent=NS();y.ForumChannel=D_();y.Guild=IT().Guild;y.GuildAuditLogs=CR();y.GuildAuditLogsEntry=vE();y.GuildBan=xE();y.GuildChannel=gs();y.GuildEmoji=Hd();y.GuildMember=Qa().GuildMember;y.GuildOnboarding=yR().GuildOnboarding;y.GuildOnboardingPrompt=QE().GuildOnboardingPrompt;y.GuildOnboardingPromptOption=N_().GuildOnboardingPromptOption;y.GuildPreview=fC();y.GuildPreviewEmoji=wR();y.GuildScheduledEvent=Zh().GuildScheduledEvent;y.GuildTemplate=Xh();y.Integration=ig();y.IntegrationApplication=Pm();y.InteractionCallback=Bk();y.InteractionCallbackResource=Qk();y.InteractionCallbackResponse=bk();y.BaseInteraction=pc();y.InteractionCollector=MA();y.InteractionResponse=xk();y.InteractionWebhook=tu();y.Invite=sa();y.InviteStageInstance=pb();y.InviteGuild=bb();y.LabelComponent=PS();y.Message=Bs().Message;y.Attachment=_A();y.AttachmentBuilder=hae();y.ModalBuilder=fae();y.MediaChannel=k_();y.MediaGalleryComponent=YS();y.MediaGalleryItem=GS();y.MessageCollector=ub();y.MessageComponentInteraction=va();y.MessageContextMenuCommandInteraction=qk();y.MessageMentions=rS();y.MessagePayload=fo();y.MessageReaction=mS();y.ModalSubmitInteraction=Gk();y.ModalSubmitFields=Ok();y.NewsChannel=g_();y.OAuth2Guild=CT();y.PartialGroupDMChannel=x_();y.PermissionOverwrites=Mm();y.Poll=JI().Poll;y.PollAnswer=AE().PollAnswer;y.PrimaryEntryPointCommandInteraction=Yk();y.Presence=wu().Presence;y.ReactionCollector=sS();y.ReactionEmoji=YI();y.RichPresenceAssets=wu().RichPresenceAssets;y.Role=no().Role;y.SectionComponent=eD();y.SelectMenuBuilder=Iae();y.ChannelSelectMenuBuilder=_S();y.MentionableSelectMenuBuilder=jS();y.RoleSelectMenuBuilder=zS();y.StringSelectMenuBuilder=HI();y.UserSelectMenuBuilder=gD();y.BaseSelectMenuComponent=Fc();y.SelectMenuComponent=Bae();y.ChannelSelectMenuComponent=RS();y.MentionableSelectMenuComponent=JS();y.RoleSelectMenuComponent=ZS();y.StringSelectMenuComponent=jI();y.UserSelectMenuComponent=pD();y.SelectMenuInteraction=wae();y.ChannelSelectMenuInteraction=Mk();y.MentionableSelectMenuInteraction=TE();y.MentionableSelectMenuInteraction=TE();y.RoleSelectMenuInteraction=jk();y.StringSelectMenuInteraction=NE();y.UserSelectMenuInteraction=Kk();y.SelectMenuOptionBuilder=Dae();y.SeparatorComponent=iD();y.SKU=Rm().SKU;y.SoundboardSound=yC().SoundboardSound;y.StringSelectMenuOptionBuilder=iU();y.StageChannel=p_();y.StageInstance=wE().StageInstance;y.Subscription=zb().Subscription;y.Sticker=Ca().Sticker;y.StickerPack=MT();y.Team=Ub();y.TeamMember=Rb();y.TextChannel=I_();y.TextDisplayComponent=oD();y.TextInputBuilder=cD();y.TextInputComponent=AD();y.ThreadChannel=Xd();y.ThreadMember=gE();y.ThreadOnlyChannel=Kd();y.ThumbnailComponent=hD();y.Typing=yM();y.UnfurledMediaItem=jd();y.User=Ba();y.UserContextMenuCommandInteraction=$k();y.VoiceChannelEffect=cR();y.VoiceChannel=B_();y.VoiceRegion=TT();y.VoiceState=zd();y.Webhook=ys();y.Widget=NT();y.WidgetMember=FT();y.WelcomeChannel=yb();y.WelcomeScreen=Vm();sl(k(),y);sl(Ki(),y);sl(ds(),y);sl(bt(),y);sl(Oe(),y);sl(iR(),y)});var s$e = {};
+KU(s$e, { activate: () => r$e, deactivate: () => n$e });
+module.exports = XU(s$e);
+var vr = Xn(require("vscode"));
+var ri = Xn(_ae());
+function RC(t) {
+  return !!(
+    /^\[CDP\]/.test(t) ||
+    /^\[Stream\]/.test(t) ||
+    /^\[Discord\]/.test(t) ||
+    /^\[Extension\]/.test(t) ||
+    /^"(classes|parentTag|parentAriaLabel|tag|role|lexical|textLen|visible|parentId|parentClass|grandparentId|hasSvg|ariaLabel|disabled)"\s*:/.test(
+      t,
+    ) ||
+    /^Ctrl\+I|^Ctrl\+L/.test(t) ||
+    /^Pre-snapshot:|^Post-snapshot:|^Diff result:/.test(t) ||
+    /^Agent is processing|^Agent finished|^Agent never became/.test(t) ||
+    /^Message injected|^Focused agent panel/.test(t) ||
+    /^DOM discovery/.test(t) ||
+    /^Found chat editor|^Still waiting for agent/.test(t) ||
+    /^"svgs"\s*:\s*\[/.test(t) ||
+    /^\{$|^\}$|^\]$|^\[$/.test(t) ||
+    /^Thought for/.test(t) ||
+    /^Thinking\.{0,3}$/.test(t) ||
+    /^✅\s*Elaborazione completata/.test(t) ||
+    /^Elaborazione completata/.test(t) ||
+    /^Simple request/i.test(t) ||
+    /no task needed/i.test(t) ||
+    /^⋯ Expand \d+ more lines?$/.test(t) ||
+    t === "Always run" ||
+    t === "Planning" ||
+    t === "Review Changes" ||
+    t === "Review" ||
+    t === "Cancel" ||
+    t === "Submit" ||
+    t === "Reject" ||
+    t === "Accept" ||
+    /^\[AutoAccept\]/.test(t) ||
+    /^\[CDP\]\s*\[AutoAccept\]/.test(t) ||
+    (/^\["/.test(t) && /"?\]$/.test(t)) ||
+    /^\d+ more lines","/.test(t) ||
+    /^"\u22ef Expand \d+/.test(t) ||
+    (/","/.test(t) && (/"Always run"/.test(t) || /"Review Changes"/.test(t) || /"Planning"/.test(t))) ||
+    /^"Thought for/.test(t) ||
+    /^for \d+s"/.test(t) ||
+    /^"",""/.test(t)
+  );
+}
+function nU(t) {
+  return !!(
+    /Press desired key combination/i.test(t) ||
+    /Configuring MCP/i.test(t) ||
+    /MCP \(Model Context Protocol\)/i.test(t) ||
+    /mcpServers/i.test(t) ||
+    /@modelcontextprotocol/i.test(t) ||
+    /GITHUB_PERSONAL_ACCESS_TOKEN/i.test(t) ||
+    /An MCP server implements/i.test(t)
+  );
+}
+function jJe(t, e) {
+  let i = t.lastIndexOf(
+    `
 
-`,e);if(i>e*.5)return i+2;let r=t.lastIndexOf(`
-`,e);return r>e*.3?r+1:e}function sU(t,e=2e3){if(t.length<=e)return[t];let i=[],r=t;for(;r.length>0;){if(r.length<=e){i.push(r);break}let n=jJe(r,e);i.push(r.substring(0,n)),r=r.substring(n)}return i}var TC=class{client;channel=null;channelId;messageCallback=null;log;connected=!1;constructor(e,i){this.channelId=e,this.log=i,this.client=new ri.Client({intents:[ri.GatewayIntentBits.Guilds,ri.GatewayIntentBits.GuildMessages,ri.GatewayIntentBits.MessageContent]}),this.client.on(ri.Events.MessageCreate,r=>{this.routeMessage(r)}),this.client.on(ri.Events.Error,r=>{this.log.appendLine(`[Discord] Error: ${r.message}`)})}async connect(e){this.log.appendLine("[Discord] Connecting..."),await this.client.login(e);let i=await this.client.channels.fetch(this.channelId);if(!i||!(i instanceof ri.TextChannel))throw new Error(`Channel ${this.channelId} not found or not a text channel`);this.channel=i,this.connected=!0,this.log.appendLine(`[Discord] Connected to #${this.channel.name}`)}async reconnect(e,i){i&&(this.channelId=i),this.client.isReady()||(this.log.appendLine("[Discord] Re-logging in..."),await this.client.login(e));let r=await this.client.channels.fetch(this.channelId);if(!r||!(r instanceof ri.TextChannel))throw new Error(`Channel ${this.channelId} not found or not a text channel`);this.channel=r,this.connected=!0,this.log.appendLine(`[Discord] Reconnected to #${this.channel.name}`)}async disconnect(){this.connected=!1,this.client.destroy(),this.log.appendLine("[Discord] Disconnected")}isConnected(){return this.connected}onMessage(e){this.messageCallback=e}async sendMessage(e){if(!this.channel)throw new Error("Not connected to Discord");for(let i of sU(e))await this.channel.send(i)}async sendToThread(e,i){let r=sU(i);for(let n of r){let s=`${Date.now()}${Math.floor(Math.random()*1e5).toString().padStart(5,"0")}`;await e.send({content:n,nonce:s,enforceNonce:!0})}}async createThread(e,i){if(!this.channel)throw new Error("Not connected to Discord");return(await this.channel.messages.fetch(e)).startThread({name:i.substring(0,100),autoArchiveDuration:ri.ThreadAutoArchiveDuration.OneDay})}async createConversationThread(e){if(!this.channel)throw new Error("Not connected to Discord");return this.channel.threads.create({name:e.substring(0,100),autoArchiveDuration:ri.ThreadAutoArchiveDuration.OneDay,type:ri.ChannelType.PublicThread})}async getThread(e){try{let i=await this.client.channels.fetch(e);return i?.isThread()?i:null}catch{return null}}setPresence(e,i){this.client.user?.setPresence({status:e,activities:[{name:i,type:ri.ActivityType.Custom,state:i}]})}async setTypingInThread(e){await e.sendTyping()}routeMessage(e){if(e.author.bot)return;let i=e.channelId===this.channelId,r=e.channel.isThread()&&e.channel.parentId===this.channelId;if(!i&&!r)return;if(r&&e.id===e.channelId){this.log.appendLine(`[Discord] Skipping thread-starter echo: ${e.id}`);return}let n=r?e.channelId:void 0;this.log.appendLine(`[Discord] ${i?"\u{1F4E9} Main":"\u{1F4AC} Thread"} from ${e.author.displayName}: "${e.content.substring(0,80)}"`),this.messageCallback?.({author:e.author.displayName,content:e.content,timestamp:e.createdAt,attachments:e.attachments.map(s=>s.url),messageId:e.id,threadId:n,isMainChannel:i})}};var ol=Xn(require("vscode")),Dg=class{constructor(e){this.extensionUri=e}static viewType="antigravity-discord.chatView";view;messages=[];statusCallback;onStatusRequest(e){this.statusCallback=e}resolveWebviewView(e,i,r){this.view=e,e.webview.options={enableScripts:!0},e.webview.html=this.getHtml();for(let n of this.messages)e.webview.postMessage({type:"message",data:n});if(e.webview.onDidReceiveMessage(async n=>{switch(n.type){case"getSettings":{let s=ol.workspace.getConfiguration("antigravity-discord"),o={botToken:s.get("botToken",""),channelId:s.get("channelId",""),debugPort:s.get("debugPort",9e3),autoAccept:s.get("autoAccept",!0)};e.webview.postMessage({type:"settings",data:o});break}case"saveSetting":{let{key:s,value:o}=n.data;await ol.workspace.getConfiguration("antigravity-discord").update(s,o,ol.ConfigurationTarget.Global);break}case"getStatus":{let s=this.statusCallback?.()||{discord:!1,cdp:!1};e.webview.postMessage({type:"status",data:s});break}case"reconnect":{ol.commands.executeCommand("antigravity-discord.reconnect");break}}}),this.statusCallback){let n=this.statusCallback();e.webview.postMessage({type:"status",data:n})}}addMessage(e,i,r){let n={role:e,author:i,content:r,timestamp:new Date().toLocaleTimeString()};this.messages.push(n),this.view&&(this.view.webview.postMessage({type:"message",data:n}),this.view.show?.(!0))}setTyping(e,i){this.view&&this.view.webview.postMessage({type:"typing",data:{author:e,typing:i}})}updateStatus(e){this.view&&this.view.webview.postMessage({type:"status",data:e})}getHtml(){return`<!DOCTYPE html>
+`,
+    e,
+  );
+  if (i > e * 0.5) return i + 2;
+  let r = t.lastIndexOf(
+    `
+`,
+    e,
+  );
+  return r > e * 0.3 ? r + 1 : e;
+}
+function sU(t, e = 2e3) {
+  if (t.length <= e) return [t];
+  let i = [],
+    r = t;
+  for (; r.length > 0;) {
+    if (r.length <= e) {
+      i.push(r);
+      break;
+    }
+    let n = jJe(r, e);
+    (i.push(r.substring(0, n)), (r = r.substring(n)));
+  }
+  return i;
+}
+var TC = class {
+  client;
+  channel = null;
+  channelId;
+  messageCallback = null;
+  log;
+  connected = !1;
+  interactionCallback = null;
+  constructor(e, i) {
+    ((this.channelId = e),
+      (this.log = i),
+      (this.client = new ri.Client({
+        intents: [ri.GatewayIntentBits.Guilds, ri.GatewayIntentBits.GuildMessages, ri.GatewayIntentBits.MessageContent],
+      })),
+      this.client.on(ri.Events.MessageCreate, (r) => {
+        this.routeMessage(r);
+      }),
+      this.client.on(ri.Events.InteractionCreate, async (r) => {
+        try {
+          await this.routeInteraction(r);
+        } catch (err) {
+          this.log.appendLine(`[Discord] Interaction error: ${err}`);
+        }
+      }),
+      this.client.on(ri.Events.Error, (r) => {
+        this.log.appendLine(`[Discord] Error: ${r.message}`);
+      }));
+  }
+  async connect(e) {
+    (this.log.appendLine("[Discord] Connecting..."), await this.client.login(e));
+    let i = await this.client.channels.fetch(this.channelId);
+    if (!i || !(i instanceof ri.TextChannel))
+      throw new Error(`Channel ${this.channelId} not found or not a text channel`);
+    ((this.channel = i), (this.connected = !0), this.log.appendLine(`[Discord] Connected to #${this.channel.name}`));
+  }
+  async reconnect(e, i) {
+    (i && (this.channelId = i),
+      this.client.isReady() || (this.log.appendLine("[Discord] Re-logging in..."), await this.client.login(e)));
+    let r = await this.client.channels.fetch(this.channelId);
+    if (!r || !(r instanceof ri.TextChannel))
+      throw new Error(`Channel ${this.channelId} not found or not a text channel`);
+    ((this.channel = r), (this.connected = !0), this.log.appendLine(`[Discord] Reconnected to #${this.channel.name}`));
+  }
+  async disconnect() {
+    ((this.connected = !1), this.client.destroy(), this.log.appendLine("[Discord] Disconnected"));
+  }
+  isConnected() {
+    return this.connected;
+  }
+  onMessage(e) {
+    this.messageCallback = e;
+  }
+  onInteraction(e) {
+    this.interactionCallback = e;
+  }
+  async routeInteraction(e) {
+    if (!e.isButton() && !e.isModalSubmit()) return;
+    let i = e.channelId === this.channelId,
+      r = e.channel?.isThread?.() && e.channel.parentId === this.channelId;
+    if (!i && !r) return;
+    this.log.appendLine(
+      `[Discord] Interaction ${e.isButton() ? "Button" : "Modal"} from ${e.user?.displayName || e.user?.username}: "${e.customId}"`
+    );
+    await this.interactionCallback?.(e);
+  }
+  getOptionStyle(text) {
+    let lower = (text || "").toLowerCase().trim();
+    if (/^(yes|y|allow|proceed|approve|continue|confirm|run|accept|ok)\b/i.test(lower)) {
+      return ri.ButtonStyle.Success;
+    }
+    if (/^(no|n|cancel|deny|reject|abort|stop|disallow)\b/i.test(lower)) {
+      return ri.ButtonStyle.Danger;
+    }
+    return ri.ButtonStyle.Primary;
+  }
+  buildPromptComponents(promptData, promptKey) {
+    let rows = [];
+    let currentRow = new ri.ActionRowBuilder();
+    (promptData.options || []).forEach((opt) => {
+      if (currentRow.components.length >= 5) {
+        rows.push(currentRow);
+        currentRow = new ri.ActionRowBuilder();
+      }
+      let rawText = opt.text || opt.id || "Option";
+      let label = rawText.length > 70 ? rawText.substring(0, 67) + "..." : rawText;
+      let btnLabel = `[${opt.id}] ${label}`;
+      if (btnLabel.length > 80) btnLabel = btnLabel.substring(0, 77) + "...";
+      let btn = new ri.ButtonBuilder()
+        .setCustomId(`prompt:${promptKey}:opt:${opt.id}`)
+        .setLabel(btnLabel)
+        .setStyle(this.getOptionStyle(rawText));
+      currentRow.addComponents(btn);
+    });
+    if (promptData.hasWriteIn) {
+      if (currentRow.components.length >= 5) {
+        rows.push(currentRow);
+        currentRow = new ri.ActionRowBuilder();
+      }
+      let writeLabel = (promptData.writeInLabel || "Other").trim();
+      let label = `✏️ ${writeLabel.length > 70 ? writeLabel.substring(0, 67) + "..." : writeLabel}`;
+      if (label.length > 80) label = label.substring(0, 77) + "...";
+      let btn = new ri.ButtonBuilder()
+        .setCustomId(`prompt:${promptKey}:writein`)
+        .setLabel(label)
+        .setStyle(ri.ButtonStyle.Secondary);
+      currentRow.addComponents(btn);
+    }
+    if (promptData.hasSkip) {
+      if (currentRow.components.length >= 5) {
+        rows.push(currentRow);
+        currentRow = new ri.ActionRowBuilder();
+      }
+      let btn = new ri.ButtonBuilder()
+        .setCustomId(`prompt:${promptKey}:skip`)
+        .setLabel("⏭️ Skip")
+        .setStyle(ri.ButtonStyle.Secondary);
+      currentRow.addComponents(btn);
+    }
+    if (currentRow.components.length > 0) {
+      rows.push(currentRow);
+    }
+    return rows.slice(0, 5);
+  }
+  disableComponents(components) {
+    if (!components) return [];
+    return components.map((row) => {
+      let rowBuilder = new ri.ActionRowBuilder();
+      (row.components || []).forEach((c) => {
+        let b = ri.ButtonBuilder.from(c);
+        b.setDisabled(true);
+        rowBuilder.addComponents(b);
+      });
+      return rowBuilder;
+    });
+  }
+  async sendMessage(e, components = null) {
+    if (!this.channel) throw new Error("Not connected to Discord");
+    let chunks = sU(e);
+    let lastMsg = null;
+    for (let idx = 0; idx < chunks.length; idx++) {
+      let payload = { content: chunks[idx] };
+      if (idx === chunks.length - 1 && components && components.length > 0) {
+        payload.components = components;
+      }
+      lastMsg = await this.channel.send(payload);
+    }
+    return lastMsg;
+  }
+  async sendToThread(e, i, components = null) {
+    let r = sU(i);
+    let lastMsg = null;
+    for (let idx = 0; idx < r.length; idx++) {
+      let n = r[idx];
+      let s = `${Date.now()}${Math.floor(Math.random() * 1e5)
+        .toString()
+        .padStart(5, "0")}`;
+      let payload = { content: n, nonce: s, enforceNonce: !0 };
+      if (idx === r.length - 1 && components && components.length > 0) {
+        payload.components = components;
+      }
+      lastMsg = await e.send(payload);
+    }
+    return lastMsg;
+  }
+  async createThread(e, i) {
+    if (!this.channel) throw new Error("Not connected to Discord");
+    return (await this.channel.messages.fetch(e)).startThread({
+      name: i.substring(0, 100),
+      autoArchiveDuration: ri.ThreadAutoArchiveDuration.OneDay,
+    });
+  }
+  async createConversationThread(e) {
+    if (!this.channel) throw new Error("Not connected to Discord");
+    return this.channel.threads.create({
+      name: e.substring(0, 100),
+      autoArchiveDuration: ri.ThreadAutoArchiveDuration.OneDay,
+      type: ri.ChannelType.PublicThread,
+    });
+  }
+  async getThread(e) {
+    try {
+      let i = await this.client.channels.fetch(e);
+      return i?.isThread() ? i : null;
+    } catch {
+      return null;
+    }
+  }
+  setPresence(e, i) {
+    this.client.user?.setPresence({ status: e, activities: [{ name: i, type: ri.ActivityType.Custom, state: i }] });
+  }
+  async setTypingInThread(e) {
+    await e.sendTyping();
+  }
+  routeMessage(e) {
+    if (e.author.bot) return;
+    let i = e.channelId === this.channelId,
+      r = e.channel.isThread() && e.channel.parentId === this.channelId;
+    if (!i && !r) return;
+    if (r && e.id === e.channelId) {
+      this.log.appendLine(`[Discord] Skipping thread-starter echo: ${e.id}`);
+      return;
+    }
+    let n = r ? e.channelId : void 0;
+    (this.log.appendLine(
+      `[Discord] ${i ? "\u{1F4E9} Main" : "\u{1F4AC} Thread"} from ${e.author.displayName}: "${e.content.substring(0, 80)}"`,
+    ),
+      this.messageCallback?.({
+        author: e.author.displayName,
+        content: e.content,
+        timestamp: e.createdAt,
+        attachments: e.attachments.map((s) => s.url),
+        messageId: e.id,
+        threadId: n,
+        isMainChannel: i,
+      }));
+  }
+};
+var ol = Xn(require("vscode")),
+  Dg = class {
+    constructor(e) {
+      this.extensionUri = e;
+    }
+    static viewType = "antigravity-discord.chatView";
+    view;
+    messages = [];
+    statusCallback;
+    onStatusRequest(e) {
+      this.statusCallback = e;
+    }
+    resolveWebviewView(e, i, r) {
+      ((this.view = e), (e.webview.options = { enableScripts: !0 }), (e.webview.html = this.getHtml()));
+      for (let n of this.messages) e.webview.postMessage({ type: "message", data: n });
+      if (
+        (e.webview.onDidReceiveMessage(async (n) => {
+          switch (n.type) {
+            case "getSettings": {
+              let s = ol.workspace.getConfiguration("antigravity-discord"),
+                o = {
+                  botToken: s.get("botToken", ""),
+                  channelId: s.get("channelId", ""),
+                  debugPort: s.get("debugPort", 9e3),
+                };
+              e.webview.postMessage({ type: "settings", data: o });
+              break;
+            }
+            case "saveSetting": {
+              let { key: s, value: o } = n.data;
+              await ol.workspace.getConfiguration("antigravity-discord").update(s, o, ol.ConfigurationTarget.Global);
+              break;
+            }
+            case "getStatus": {
+              let s = this.statusCallback?.() || { discord: !1, cdp: !1 };
+              e.webview.postMessage({ type: "status", data: s });
+              break;
+            }
+            case "reconnect": {
+              ol.commands.executeCommand("antigravity-discord.reconnect");
+              break;
+            }
+          }
+        }),
+        this.statusCallback)
+      ) {
+        let n = this.statusCallback();
+        e.webview.postMessage({ type: "status", data: n });
+      }
+    }
+    addMessage(e, i, r) {
+      let n = { role: e, author: i, content: r, timestamp: new Date().toLocaleTimeString() };
+      (this.messages.push(n),
+        this.view && (this.view.webview.postMessage({ type: "message", data: n }), this.view.show?.(!0)));
+    }
+    setTyping(e, i) {
+      this.view && this.view.webview.postMessage({ type: "typing", data: { author: e, typing: i } });
+    }
+    updateStatus(e) {
+      this.view && this.view.webview.postMessage({ type: "status", data: e });
+    }
+    getHtml() {
+      return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -451,10 +815,7 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
             <span class="status-dot off" id="cdp-dot"></span>
             <span>CDP</span>
         </div>
-        <div class="status-item">
-            <span class="status-dot off" id="autoaccept-dot"></span>
-            <span>Auto-Accept</span>
-        </div>
+
     </div>
 
     <!-- Tabs -->
@@ -491,18 +852,7 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
             <input type="number" id="s-port" min="1" max="65535" />
         </div>
 
-        <div class="setting-group">
-            <div class="toggle-row">
-                <div class="toggle-info">
-                    <label>Auto-Accept</label>
-                    <div class="description">Auto-click Accept / Run / Always Allow</div>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="s-autoaccept" />
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        </div>
+
 
         <div class="btn-row">
             <button class="btn btn-primary" id="btn-reconnect">\u{1F504} Reconnect</button>
@@ -537,7 +887,6 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
         const tokenInput = document.getElementById('s-token');
         const channelInput = document.getElementById('s-channel');
         const portInput = document.getElementById('s-port');
-        const autoAcceptInput = document.getElementById('s-autoaccept');
         const savedMsg = document.getElementById('saved-msg');
 
         function flashSaved() {
@@ -560,7 +909,6 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
         tokenInput.addEventListener('input', () => debounceSave('botToken', tokenInput.value));
         channelInput.addEventListener('input', () => debounceSave('channelId', channelInput.value));
         portInput.addEventListener('input', () => debounceSave('debugPort', parseInt(portInput.value) || 9000));
-        autoAcceptInput.addEventListener('change', () => saveSetting('autoAccept', autoAcceptInput.checked));
 
         // Reconnect button
         document.getElementById('btn-reconnect').addEventListener('click', () => {
@@ -621,7 +969,6 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                 tokenInput.value = data.botToken || '';
                 channelInput.value = data.channelId || '';
                 portInput.value = data.debugPort || 9000;
-                autoAcceptInput.checked = data.autoAccept !== false;
             }
 
             if (type === 'status') {
@@ -629,8 +976,6 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                     'status-dot ' + (data.discord ? 'on' : 'off');
                 document.getElementById('cdp-dot').className =
                     'status-dot ' + (data.cdp ? 'on' : 'off');
-                document.getElementById('autoaccept-dot').className =
-                    'status-dot ' + (data.autoAccept ? 'on' : 'off');
             }
         });
 
@@ -638,10 +983,274 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
         vscode.postMessage({ type: 'getStatus' });
     </script>
 </body>
-</html>`}};var WJe=Xn(JM(),1),JJe=Xn(zE(),1),$Je=Xn(ZE(),1),kae=Xn(fg(),1),zJe=Xn(zM(),1);var UC=kae.default;var Mae=Xn(require("http"));var FC=class{ws=null;contextId=null;allContextIds=[];idCounter=1;port;log;connected=!1;autoAcceptActive=!1;constructor(e,i){this.port=e,this.log=i}isConnected(){return this.connected&&this.ws!==null&&this.ws.readyState===UC.OPEN}isAutoAcceptRunning(){return this.autoAcceptActive}async connect(){for(let r=1;r<=10;r++){let n=await this.getTargets();if(r===1){this.log.appendLine(`[CDP] Found ${n.length} targets:`);for(let o of n)this.log.appendLine(`[CDP]   "${o.title}" type=${o.type}`)}if(n.length===0)throw new Error(`No CDP targets on port ${this.port}. Start Antigravity with --remote-debugging-port=${this.port}`);let s=n.filter(o=>o.type!=="worker"&&!o.title?.toLowerCase().includes("walkthrough")).sort((o,a)=>this.targetPriority(o)-this.targetPriority(a));for(let o of s){if(!o.webSocketDebuggerUrl)continue;let a=await this.probeTarget(o,r===1);if(a){this.ws=a.ws,this.contextId=a.contextId,this.allContextIds=a.allContextIds,this.connected=!0,this.log.appendLine(`[CDP] \u2713 Connected to "${o.title}" context ${a.contextId} via ${a.method} [attempt ${r}]`),this.ws.on("close",()=>{this.connected=!1,this.log.appendLine("[CDP] Connection closed")});return}}r<10&&(this.log.appendLine(`[CDP] Editor not found (attempt ${r}/10). Retrying in ${3e3/1e3}s...`),await this.sleep(3e3))}throw new Error("Could not find Antigravity chat editor in any CDP target. Make sure a chat tab is open.")}disconnect(){this.ws&&(this.ws.terminate(),this.ws=null),this.connected=!1,this.contextId=null}async isBusy(){return await this.evaluate(`(() => {
+</html>`;
+    }
+  };
+var WJe = Xn(JM(), 1),
+  JJe = Xn(zE(), 1),
+  $Je = Xn(ZE(), 1),
+  kae = Xn(fg(), 1),
+  zJe = Xn(zM(), 1);
+var UC = kae.default;
+var Mae = Xn(require("http"));
+var FC = class {
+  ws = null;
+  contextId = null;
+  allContextIds = [];
+  idCounter = 1;
+  port;
+  log;
+  connected = !1;
+  constructor(e, i) {
+    ((this.port = e), (this.log = i));
+  }
+  isConnected() {
+    return this.connected && this.ws !== null && this.ws.readyState === UC.OPEN;
+  }
+  async connect() {
+    for (let r = 1; r <= 10; r++) {
+      let n = await this.getTargets();
+      if (r === 1) {
+        this.log.appendLine(`[CDP] Found ${n.length} targets:`);
+        for (let o of n) this.log.appendLine(`[CDP]   "${o.title}" type=${o.type}`);
+      }
+      if (n.length === 0)
+        throw new Error(
+          `No CDP targets on port ${this.port}. Start Antigravity with --remote-debugging-port=${this.port}`,
+        );
+      let s = n
+        .filter((o) => o.type !== "worker" && !o.title?.toLowerCase().includes("walkthrough"))
+        .sort((o, a) => this.targetPriority(o) - this.targetPriority(a));
+      for (let o of s) {
+        if (!o.webSocketDebuggerUrl) continue;
+        let a = await this.probeTarget(o, r === 1);
+        if (a) {
+          ((this.ws = a.ws),
+            (this.contextId = a.contextId),
+            (this.allContextIds = a.allContextIds),
+            (this.connected = !0),
+            this.log.appendLine(
+              `[CDP] \u2713 Connected to "${o.title}" context ${a.contextId} via ${a.method} [attempt ${r}]`,
+            ),
+            this.ws.on("close", () => {
+              ((this.connected = !1), this.log.appendLine("[CDP] Connection closed"));
+            }));
+          return;
+        }
+      }
+      r < 10 &&
+        (this.log.appendLine(`[CDP] Editor not found (attempt ${r}/10). Retrying in ${3e3 / 1e3}s...`),
+        await this.sleep(3e3));
+    }
+    throw new Error("Could not find Antigravity chat editor in any CDP target. Make sure a chat tab is open.");
+  }
+  disconnect() {
+    (this.ws && (this.ws.terminate(), (this.ws = null)), (this.connected = !1), (this.contextId = null));
+  }
+  async isBusy() {
+    return (
+      (await this.evaluate(
+        `(() => {
                 const el = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
                 return !!el && el.offsetParent !== null;
-            })()`,this.contextId)===!0}async sendMessage(e){let r=await this.evaluate(`(() => {
+            })()`,
+        this.contextId,
+      )) === !0
+    );
+  }
+  async getActivePrompt() {
+    if (!this.isConnected()) return null;
+    const evalScript = `(() => {
+      const continueBtn = document.querySelector('[data-testid="interaction-continue-button"]');
+      const skipBtn = document.querySelector('[data-testid="interaction-skip-button"]');
+      const radios = Array.from(document.querySelectorAll('input[name^="ask-question-"]'));
+      if (!continueBtn && !skipBtn && radios.length === 0) return null;
+
+      const questionEl = document.querySelector('.flex.min-w-0.text-sm')
+          || document.querySelector('[class*="font-medium"]');
+      const question = questionEl ? (questionEl.textContent || '').trim() : '';
+
+      const options = [];
+      radios.forEach((r) => {
+        if (r.value === '__write_in__') return;
+        const label = document.querySelector('label[for="' + r.id + '"]') || r.closest('label');
+        const idSpan = label ? label.querySelector('span.font-mono') : null;
+        const optId = idSpan ? (idSpan.textContent || '').trim() : r.value;
+        const spans = label ? Array.from(label.querySelectorAll('span')) : [];
+        const textSpan = spans.find((s) => s !== idSpan && (s.textContent || '').trim() !== optId);
+        const text = textSpan ? (textSpan.textContent || '').trim() : (label ? label.textContent || '' : '').trim();
+        options.push({ id: optId, text, value: r.value });
+      });
+
+      const writeInRadio = document.querySelector('input[value="__write_in__"]');
+      let writeInLabel = null;
+      if (writeInRadio) {
+        const label = document.querySelector('label[for="' + writeInRadio.id + '"]') || writeInRadio.closest('label');
+        writeInLabel = (label ? label.textContent || '' : '').trim().replace(/^O/i, '').trim() || 'Other';
+      }
+
+      return {
+        question,
+        options,
+        hasWriteIn: !!writeInRadio,
+        writeInLabel,
+        hasSkip: !!skipBtn,
+      };
+    })()`;
+
+    try {
+      let res = await this.evaluate(evalScript, this.contextId);
+      if (res && (res.options?.length > 0 || res.hasWriteIn || res.hasSkip)) return res;
+      for (const ctxId of this.allContextIds || []) {
+        if (ctxId !== this.contextId) {
+          res = await this.evaluate(evalScript, ctxId);
+          if (res && (res.options?.length > 0 || res.hasWriteIn || res.hasSkip)) {
+            this.contextId = ctxId;
+            return res;
+          }
+        }
+      }
+    } catch {}
+    return null;
+  }
+
+  async answerPrompt(answer) {
+    if (!this.isConnected()) return { ok: false, error: 'not_connected' };
+    const evalScript = `(() => {
+      const raw = ` + JSON.stringify(answer) + `.trim();
+      const lower = raw.toLowerCase();
+
+      // 1. Skip button check
+      if (lower === 'skip' || lower === '/skip') {
+        const skipBtn = document.querySelector('[data-testid="interaction-skip-button"]');
+        if (skipBtn) {
+          skipBtn.click();
+          return { ok: true, action: 'skip', label: 'Skipped' };
+        }
+      }
+
+      // 2. Collect options
+      const radios = Array.from(document.querySelectorAll('input[name^="ask-question-"]'));
+      const options = [];
+      radios.forEach((r) => {
+        if (r.value === '__write_in__') return;
+        const label = document.querySelector('label[for="' + r.id + '"]') || r.closest('label');
+        const idSpan = label ? label.querySelector('span.font-mono') : null;
+        const optId = idSpan ? (idSpan.textContent || '').trim() : r.value;
+        const spans = label ? Array.from(label.querySelectorAll('span')) : [];
+        const textSpan = spans.find((s) => s !== idSpan && (s.textContent || '').trim() !== optId);
+        const text = textSpan ? (textSpan.textContent || '').trim() : (label ? label.textContent || '' : '').trim();
+        options.push({ id: optId, text, label, radio: r });
+      });
+
+      // Match by ID (exact, e.g. "1", "2")
+      let match = options.find((o) => o.id.toLowerCase() === lower);
+
+      // Match by exact text (e.g. "yes", "no")
+      if (!match) match = options.find((o) => o.text.toLowerCase() === lower);
+
+      // Match by prefix or includes
+      if (!match) {
+        match = options.find((o) => o.text.toLowerCase().startsWith(lower) || lower.startsWith(o.text.toLowerCase()));
+      }
+      if (!match) {
+        match = options.find((o) => o.text.toLowerCase().includes(lower) || lower.includes(o.text.toLowerCase()));
+      }
+
+      // Check write-in for "No" or negative response (common in permission prompt)
+      const writeInRadio = document.querySelector('input[value="__write_in__"]');
+      const writeInTextarea = document.querySelector('[data-testid="ask-question-writein"]');
+      const writeInLabelEl = writeInRadio
+        ? document.querySelector('label[for="' + writeInRadio.id + '"]') || writeInRadio.closest('label')
+        : null;
+      const writeInText = (writeInLabelEl ? writeInLabelEl.textContent || '' : '').trim().toLowerCase();
+
+      if (!match && writeInRadio && (lower === 'no' || (writeInText && writeInText.includes(lower)))) {
+        if (writeInLabelEl) writeInLabelEl.click();
+        else writeInRadio.click();
+        writeInRadio.checked = true;
+        writeInRadio.dispatchEvent(new Event('change', { bubbles: true }));
+        const continueBtn = document.querySelector('[data-testid="interaction-continue-button"]');
+        if (continueBtn && !continueBtn.disabled) continueBtn.click();
+        return { ok: true, action: 'select_write_in', label: writeInLabelEl ? writeInLabelEl.textContent : 'No' };
+      }
+
+      if (match) {
+        if (match.label) match.label.click();
+        else if (match.radio) match.radio.click();
+        if (match.radio) {
+          match.radio.checked = true;
+          match.radio.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const continueBtn = document.querySelector('[data-testid="interaction-continue-button"]');
+        if (continueBtn) {
+          setTimeout(() => {
+            if (!continueBtn.disabled) continueBtn.click();
+          }, 150);
+        }
+        return { ok: true, action: 'select_option', label: match.id + '. ' + match.text };
+      }
+
+      if (writeInTextarea) {
+        if (writeInRadio) {
+          if (writeInLabelEl) writeInLabelEl.click();
+          else writeInRadio.click();
+        }
+        writeInTextarea.focus();
+        writeInTextarea.value = raw;
+        writeInTextarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: raw }));
+        writeInTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+        const continueBtn = document.querySelector('[data-testid="interaction-continue-button"]');
+        if (continueBtn) {
+          setTimeout(() => {
+            if (!continueBtn.disabled) continueBtn.click();
+          }, 150);
+        }
+        return { ok: true, action: 'custom_write_in', label: raw };
+      }
+
+      return { ok: false, error: 'no_matching_option', available: options.map((o) => o.id + '. ' + o.text) };
+    })()`;
+
+    try {
+      let res = await this.evaluate(evalScript, this.contextId);
+      if (res?.ok || (res && res.error !== 'no_matching_option')) return res;
+      for (const ctxId of this.allContextIds || []) {
+        if (ctxId !== this.contextId) {
+          res = await this.evaluate(evalScript, ctxId);
+          if (res?.ok) {
+            this.contextId = ctxId;
+            return res;
+          }
+        }
+      }
+      return res || { ok: false, error: 'prompt_eval_failed' };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  async sendMessage(e) {
+    const activePrompt = await this.getActivePrompt();
+    if (activePrompt) {
+      this.log.appendLine('[CDP] Active prompt detected: "' + (activePrompt.question || 'selection') + '"');
+      const ansRes = await this.answerPrompt(e);
+      if (ansRes && ansRes.ok) {
+        this.log.appendLine('[CDP] Prompt answered: ' + ansRes.label + ' (' + ansRes.action + ')');
+        await this.sleep(300);
+        await this.evaluate(
+          `(() => {
+            const btn = document.querySelector('[data-testid="interaction-continue-button"]');
+            if (btn && !btn.disabled) btn.click();
+          })()`,
+          this.contextId
+        );
+        return { ok: true, method: 'prompt_selection', details: ansRes };
+      }
+      return { ok: false, error: (ansRes && ansRes.error) || 'prompt_selection_failed', details: ansRes };
+    }
+    let r = await this.evaluate(
+      `(() => {
                 const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
                 if (cancel && cancel.offsetParent !== null) {
                     return { ok: false, error: "agent_busy" };
@@ -679,7 +1288,14 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                     }));
                 }
                 return { ok: true, inserted };
-            })()`,this.contextId,!1);return r?.ok?(await this.sleep(300),await this.evaluate(`(() => {
+            })()`,
+      this.contextId,
+      !1,
+    );
+    return r?.ok
+      ? (await this.sleep(300),
+        (await this.evaluate(
+          `(() => {
                 const submit = document.querySelector("svg.lucide-arrow-right")?.closest("button")
                     || document.querySelector('[data-testid="send-button"]')
                     || document.querySelector('button[aria-label*="send" i]');
@@ -704,7 +1320,16 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                 }
 
                 return { ok: false, error: "no_submit_or_editor" };
-            })()`,this.contextId,!1)||{ok:!1,error:"submit_eval_failed"}):{ok:!1,error:r?.error||"inject_failed"}}async chatSnapshot(){return await this.evaluate(`(() => {
+            })()`,
+          this.contextId,
+          !1,
+        )) || { ok: !1, error: "submit_eval_failed" })
+      : { ok: !1, error: r?.error || "inject_failed" };
+  }
+  async chatSnapshot() {
+    return (
+      (await this.evaluate(
+        `(() => {
                 const scrollable = document.querySelector('.scrollbar-hide[class*="overflow-y-auto"]')
                     || document.querySelector('[class*="overflow-y-auto"][class*="min-h-0"]')
                     || document.querySelector('[role="log"]')
@@ -712,10 +1337,62 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                 const text = scrollable?.innerText || '';
                 const lines = text.split('\\n').filter(l => l.trim().length > 0);
                 return { count: lines.length, lastText: text };
-            })()`,this.contextId)||{count:0,lastText:""}}async waitForResponse(e,i){let r=new Set(e.lastText.split(`
-`).map(u=>u.trim()).filter(u=>u.length>0)),n=!1;for(let u=0;u<60&&!n;u++)await this.sleep(500),n=await this.isBusy();n?this.log.appendLine("[CDP] Agent is processing..."):this.log.appendLine("[CDP] Agent never became busy \u2014 checking for response anyway");let s=0;for(;;){if(!await this.isBusy()&&n){await this.sleep(1500),this.log.appendLine("[CDP] Agent finished processing");break}if(!n&&s>5e3&&(await this.chatSnapshot()).lastText!==e.lastText){this.log.appendLine("[CDP] New response detected via snapshot"),await this.sleep(1e3);break}await this.sleep(1e3),s+=1e3,s%3e4===0&&this.log.appendLine(`[CDP] Still waiting (${s/1e3}s)...`)}let a=(await this.chatSnapshot()).lastText.split(`
-`).map(u=>u.trim()).filter(u=>u.length>0&&!r.has(u)),c=a.filter(u=>!(u.length<3||u===i?.trim()||RC(u))),l=c.join(`
-`).trim();return this.log.appendLine(`[CDP] Diff: ${a.length} new \u2192 ${c.length} after filter (${l.length} chars)`),l}async extractLastResponseMarkdown(){if(!this.isConnected())return"";let e=`(() => { ${this.htmlToMarkdownScript}
+            })()`,
+        this.contextId,
+      )) || { count: 0, lastText: "" }
+    );
+  }
+  async waitForResponse(e, i) {
+    let r = new Set(
+        e.lastText
+          .split(
+            `
+`,
+          )
+          .map((u) => u.trim())
+          .filter((u) => u.length > 0),
+      ),
+      n = !1;
+    for (let u = 0; u < 60 && !n; u++) (await this.sleep(500), (n = await this.isBusy()));
+    n
+      ? this.log.appendLine("[CDP] Agent is processing...")
+      : this.log.appendLine("[CDP] Agent never became busy \u2014 checking for response anyway");
+    let s = 0;
+    for (;;) {
+      if (!(await this.isBusy()) && n) {
+        (await this.sleep(1500), this.log.appendLine("[CDP] Agent finished processing"));
+        break;
+      }
+      if (await this.getActivePrompt()) {
+        this.log.appendLine("[CDP] Active prompt detected while waiting for response");
+        await this.sleep(500);
+        break;
+      }
+      if (!n && s > 5e3 && (await this.chatSnapshot()).lastText !== e.lastText) {
+        (this.log.appendLine("[CDP] New response detected via snapshot"), await this.sleep(1e3));
+        break;
+      }
+      (await this.sleep(1e3), (s += 1e3), s % 3e4 === 0 && this.log.appendLine(`[CDP] Still waiting (${s / 1e3}s)...`));
+    }
+    let a = (await this.chatSnapshot()).lastText
+        .split(
+          `
+`,
+        )
+        .map((u) => u.trim())
+        .filter((u) => u.length > 0 && !r.has(u)),
+      c = a.filter((u) => !(u.length < 3 || u === i?.trim() || RC(u))),
+      l = c
+        .join(
+          `
+`,
+        )
+        .trim();
+    return (this.log.appendLine(`[CDP] Diff: ${a.length} new \u2192 ${c.length} after filter (${l.length} chars)`), l);
+  }
+  async extractLastResponseMarkdown() {
+    if (!this.isConnected()) return "";
+    let e = `(() => { ${this.htmlToMarkdownScript}
             // Find conversation area
             const convArea = document.querySelector('.relative.flex.flex-col.gap-y-3');
 
@@ -758,16 +1435,41 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
             }
 
             return '';
-        })()`,i=await this.evaluate(e,this.contextId);return((typeof i=="string"?i:"")||"").replace(/\n{3,}/g,`
+        })()`,
+      i = await this.evaluate(e, this.contextId);
+    return ((typeof i == "string" ? i : "") || "")
+      .replace(
+        /\n{3,}/g,
+        `
 
-`).trim()}async extractThinkingContent(){if(!this.isConnected())return"";try{return await this.evaluate(`(() => {
+`,
+      )
+      .trim();
+  }
+  async extractThinkingContent() {
+    if (!this.isConnected()) return "";
+    try {
+      return (
+        (await this.evaluate(
+          `(() => {
                     const convArea = document.querySelector('.relative.flex.flex-col.gap-y-3');
                     if (!convArea || convArea.children.length === 0) return '';
                     const lastTurn = convArea.children[convArea.children.length - 1];
                     const container = lastTurn.querySelector('[class*="max-h-[200px]"]')
                         || lastTurn.querySelector('[class*="max-h-["]');
                     return container ? (container.innerText || '').trim() : '';
-                })()`,this.contextId)||""}catch{return""}}async createNewConversation(){if(!this.isConnected())throw new Error("Not connected");let i=await this.evaluate(`(() => {
+                })()`,
+          this.contextId,
+        )) || ""
+      );
+    } catch {
+      return "";
+    }
+  }
+  async createNewConversation() {
+    if (!this.isConnected()) throw new Error("Not connected");
+    let i = await this.evaluate(
+      `(() => {
                 // Strategy 1: "Start new conversation" button
                 const items = Array.from(document.querySelectorAll('div.cursor-pointer'));
                 const btn = items.find(el => (el.textContent || '').includes('Start new conversation'));
@@ -800,10 +1502,31 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                 if (iconBtn) { iconBtn.click(); return { ok: true, method: 'icon_button' }; }
 
                 return { ok: false, error: 'no_new_conv_button' };
-            })()`,this.contextId);if(!i?.ok)throw new Error(`Failed to create conversation: ${i?.error}`);if(this.log.appendLine(`[CDP] New conversation via: ${i.method}`),i.method==="editor_already_visible")return await this.getCurrentConversationName()||"New Chat";for(let r=0;r<10&&(await this.sleep(500),await this.evaluate(`(() => {
+            })()`,
+      this.contextId,
+    );
+    if (!i?.ok) throw new Error(`Failed to create conversation: ${i?.error}`);
+    if ((this.log.appendLine(`[CDP] New conversation via: ${i.method}`), i.method === "editor_already_visible"))
+      return (await this.getCurrentConversationName()) || "New Chat";
+    for (
+      let r = 0;
+      r < 10 &&
+      (await this.sleep(500),
+      (await this.evaluate(
+        `(() => {
                     const e = document.querySelector('[data-lexical-editor="true"][contenteditable="true"]');
                     return !!(e && (e.offsetParent !== null || e.getClientRects().length > 0));
-                })()`,this.contextId)!==!0);r++);return await this.getCurrentConversationName()||"New Chat"}async switchConversation(e){if(!this.isConnected())return!1;let r=await this.evaluate(`(() => {
+                })()`,
+        this.contextId,
+      )) !== !0);
+      r++
+    );
+    return (await this.getCurrentConversationName()) || "New Chat";
+  }
+  async switchConversation(e) {
+    if (!this.isConnected()) return !1;
+    let r = await this.evaluate(
+      `(() => {
                 const convButtons = Array.from(document.querySelectorAll(
                     'button.select-none.cursor-pointer.rounded-md'
                 )).filter(b => {
@@ -816,7 +1539,16 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
 
                 target.click();
                 return { ok: true, clicked: (target.textContent || '').trim().substring(0, 80) };
-            })()`,this.contextId);return r?.ok?(this.log.appendLine(`[CDP] Switched to: "${r.clicked}"`),await this.sleep(500),!0):!1}async getCurrentConversationName(){return this.isConnected()&&await this.evaluate(`(() => {
+            })()`,
+      this.contextId,
+    );
+    return r?.ok ? (this.log.appendLine(`[CDP] Switched to: "${r.clicked}"`), await this.sleep(500), !0) : !1;
+  }
+  async getCurrentConversationName() {
+    return (
+      (this.isConnected() &&
+        (await this.evaluate(
+          `(() => {
                 const convButtons = Array.from(document.querySelectorAll(
                     'button.select-none.cursor-pointer.rounded-md'
                 )).filter(b => {
@@ -838,7 +1570,76 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                 }
 
                 return '';
-            })()`,this.contextId)||""}async startAutoAccept(){if(!this.isConnected())return;this.ws?.on("message",i=>{try{let r=JSON.parse(i.toString());if(r.method==="Runtime.consoleAPICalled"&&r.params?.type==="log"){let n=(r.params.args||[]).map(s=>s.value||"").join(" ");n.startsWith("[AutoAccept]")&&this.log.appendLine(`[CDP] ${n}`)}}catch{}});let e=await this.discoverCurrentContexts();for(let i of e)try{await this.evaluate(this.autoAcceptScript,i,!1)}catch{}this.log.appendLine(`[CDP] Auto-accept injected into ${e.length} contexts`),this.autoAcceptActive=!0}async stopAutoAccept(){if(!this.isConnected())return;let e=await this.discoverCurrentContexts();for(let i of e)try{await this.evaluate(this.autoAcceptStopScript,i,!1)}catch{}this.autoAcceptActive=!1}targetPriority(e){return e.title==="Manager"?0:e.url?.includes("workbench")||e.title?.toLowerCase().includes("workbench")?1:2}async probeTarget(e,i){let r=null,n=1;try{r=new UC(e.webSocketDebuggerUrl),await new Promise((o,a)=>{let c=setTimeout(()=>a(new Error("ws timeout")),5e3);r.on("open",()=>{clearTimeout(c),o()}),r.on("error",l=>{clearTimeout(c),a(l)})});let s=[];r.on("message",o=>{try{let a=JSON.parse(o.toString());a.method==="Runtime.executionContextCreated"&&s.push(a.params.context)}catch{}}),await new Promise((o,a)=>{let c=n++,l=u=>{try{let h=JSON.parse(u.toString());h.id===c&&(r.off("message",l),h.error?a(new Error(h.error.message)):o())}catch{}};r.on("message",l),r.send(JSON.stringify({id:c,method:"Runtime.enable",params:{}}))}),await this.sleep(500),i&&this.log.appendLine(`[CDP] Target "${e.title}": ${s.length} contexts`);for(let o of s)try{let c=await new Promise((l,u)=>{let h=n++,d=p=>{try{let m=JSON.parse(p.toString());m.id===h&&(r.off("message",d),m.error?u(new Error(m.error.message)):m.result?.exceptionDetails?u(new Error(m.result.exceptionDetails.text)):l(m.result?.result?.value))}catch{}};r.on("message",d),r.send(JSON.stringify({id:h,method:"Runtime.evaluate",params:{expression:`(() => {
+            })()`,
+          this.contextId,
+        ))) ||
+      ""
+    );
+  }
+
+  targetPriority(e) {
+    return e.title === "Manager"
+      ? 0
+      : e.url?.includes("workbench") || e.title?.toLowerCase().includes("workbench")
+        ? 1
+        : 2;
+  }
+  async probeTarget(e, i) {
+    let r = null,
+      n = 1;
+    try {
+      ((r = new UC(e.webSocketDebuggerUrl)),
+        await new Promise((o, a) => {
+          let c = setTimeout(() => a(new Error("ws timeout")), 5e3);
+          (r.on("open", () => {
+            (clearTimeout(c), o());
+          }),
+            r.on("error", (l) => {
+              (clearTimeout(c), a(l));
+            }));
+        }));
+      let s = [];
+      (r.on("message", (o) => {
+        try {
+          let a = JSON.parse(o.toString());
+          a.method === "Runtime.executionContextCreated" && s.push(a.params.context);
+        } catch {}
+      }),
+        await new Promise((o, a) => {
+          let c = n++,
+            l = (u) => {
+              try {
+                let h = JSON.parse(u.toString());
+                h.id === c && (r.off("message", l), h.error ? a(new Error(h.error.message)) : o());
+              } catch {}
+            };
+          (r.on("message", l), r.send(JSON.stringify({ id: c, method: "Runtime.enable", params: {} })));
+        }),
+        await this.sleep(500),
+        i && this.log.appendLine(`[CDP] Target "${e.title}": ${s.length} contexts`));
+      for (let o of s)
+        try {
+          let c = await new Promise((l, u) => {
+            let h = n++,
+              d = (p) => {
+                try {
+                  let m = JSON.parse(p.toString());
+                  m.id === h &&
+                    (r.off("message", d),
+                    m.error
+                      ? u(new Error(m.error.message))
+                      : m.result?.exceptionDetails
+                        ? u(new Error(m.result.exceptionDetails.text))
+                        : l(m.result?.result?.value));
+                } catch {}
+              };
+            (r.on("message", d),
+              r.send(
+                JSON.stringify({
+                  id: h,
+                  method: "Runtime.evaluate",
+                  params: {
+                    expression: `(() => {
                                     const lexical = [...document.querySelectorAll('[data-lexical-editor="true"][contenteditable="true"]')]
                                         .filter(el => el.offsetParent !== null);
                                     if (lexical.length > 0) return { found: true, method: 'lexical' };
@@ -850,176 +1651,197 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                                     if (document.title === 'Manager') return { found: true, method: 'manager-no-chat' };
 
                                     return { found: false };
-                                })()`,returnByValue:!0,contextId:o.id}}))});if(c?.found){let l={ws:r,contextId:o.id,allContextIds:s.map(u=>u.id),method:c.method||"unknown"};return this.idCounter=n,r=null,l}}catch{}}catch{}finally{r&&r.readyState===UC.OPEN&&r.terminate()}return null}autoAcceptScript=`(() => {
-        if (window.__autoAcceptInterval) return 'already_running';
+                                })()`,
+                    returnByValue: !0,
+                    contextId: o.id,
+                  },
+                }),
+              ));
+          });
+          if (c?.found) {
+            let l = { ws: r, contextId: o.id, allContextIds: s.map((u) => u.id), method: c.method || "unknown" };
+            return ((this.idCounter = n), (r = null), l);
+          }
+        } catch {}
+    } catch {
+    } finally {
+      r && r.readyState === UC.OPEN && r.terminate();
+    }
+    return null;
+  }
+  htmlToMarkdownScript = [
+    "const BT = String.fromCharCode(96);",
+    "const FENCE = BT + BT + BT;",
+    "const NL = String.fromCharCode(10);",
+    "function htmlToMarkdown(el) {",
+    '  let md = "";',
+    "  for (const node of el.childNodes) {",
+    "    if (node.nodeType === Node.TEXT_NODE) { md += node.textContent; continue; }",
+    "    if (node.nodeType !== Node.ELEMENT_NODE) continue;",
+    "    const tag = node.tagName;",
+    '    if (tag==="STYLE"||tag==="SCRIPT"||tag==="LINK"||tag==="SVG"||tag==="NAV"||tag==="BUTTON"||tag==="IMG") continue;',
+    '    if (tag === "PRE") {',
+    '      const code = node.querySelector("code");',
+    "      const src = code || node;",
+    '      const lc = (code?.className || "").match(/language-(\\\\w+)/);',
+    '      const lang = lc ? lc[1] : "";',
+    '      const lines = src.querySelectorAll("[class*=code-line], .view-line");',
+    "      let text;",
+    "      if (lines.length > 0) {",
+    '        text = Array.from(lines).map(l => l.textContent || "").join(NL);',
+    "      } else {",
+    "        const clone = src.cloneNode(true);",
+    '        clone.querySelectorAll("style,script").forEach(s => s.remove());',
+    '        text = clone.textContent || "";',
+    "      }",
+    "      md += NL + FENCE + lang + NL + text.trimEnd() + NL + FENCE + NL;",
+    "      continue;",
+    "    }",
+    '    if (tag === "CODE") { md += BT + (node.textContent || "") + BT; continue; }',
+    '    if (tag === "STRONG" || tag === "B") { md += "**" + htmlToMarkdown(node) + "**"; continue; }',
+    '    if (tag === "EM" || tag === "I") { md += "*" + htmlToMarkdown(node) + "*"; continue; }',
+    '    if (/^H[1-6]$/.test(tag)) { md += NL + "#".repeat(parseInt(tag[1])) + " " + htmlToMarkdown(node) + NL; continue; }',
+    '    if (tag === "UL" || tag === "OL") {',
+    '      node.querySelectorAll(":scope > li").forEach((li, i) => {',
+    '        md += (tag === "OL" ? (i+1) + ". " : "- ") + htmlToMarkdown(li).trim() + NL;',
+    "      }); md += NL; continue;",
+    "    }",
+    '    if (tag === "LI") { md += htmlToMarkdown(node); continue; }',
+    '    if (tag === "A") { md += "[" + htmlToMarkdown(node) + "](" + (node.getAttribute("href")||"") + ")"; continue; }',
+    '    if (tag === "P" || tag === "DIV") { md += htmlToMarkdown(node) + NL; continue; }',
+    '    if (tag === "BR") { md += NL; continue; }',
+    '    if (tag === "BLOCKQUOTE") { md += htmlToMarkdown(node).split(NL).map(l => "> " + l).join(NL) + NL; continue; }',
+    '    if (tag === "HR") { md += NL + "---" + NL; continue; }',
+    "    md += htmlToMarkdown(node);",
+    "  }",
+    "  return md;",
+    "}",
+  ].join(`
+`);
+  async discoverCurrentContexts() {
+    if (!this.isConnected()) return [];
+    let e = [],
+      i = (r) => {
+        try {
+          let n = JSON.parse(r.toString());
+          n.method === "Runtime.executionContextCreated" && e.push(n.params.context.id);
+        } catch {}
+      };
+    return (
+      this.ws.on("message", i),
+      await this.call("Runtime.disable", {}).catch(() => {}),
+      await this.call("Runtime.enable", {}).catch(() => {}),
+      await this.sleep(300),
+      this.ws.off("message", i),
+      e
+    );
+  }
+  getTargets() {
+    return new Promise((e, i) => {
+      Mae.default
+        .get(`http://127.0.0.1:${this.port}/json/list`, (r) => {
+          let n = "";
+          (r.on("data", (s) => (n += s)),
+            r.on("end", () => {
+              try {
+                e(JSON.parse(n));
+              } catch (s) {
+                i(s);
+              }
+            }));
+        })
+        .on("error", i);
+    });
+  }
+  call(e, i) {
+    return new Promise((r, n) => {
+      if (!this.ws) {
+        n(new Error("Not connected"));
+        return;
+      }
+      let s = this.idCounter++,
+        o = (a) => {
+          try {
+            let c = JSON.parse(a.toString());
+            c.id === s &&
+              (this.ws?.off("message", o),
+              c.error ? n(new Error(c.error.message || JSON.stringify(c.error))) : r(c.result));
+          } catch {}
+        };
+      (this.ws.on("message", o), this.ws.send(JSON.stringify({ id: s, method: e, params: i })));
+    });
+  }
+  async evaluate(e, i, r = !1) {
+    let n = await this.call("Runtime.evaluate", { expression: e, returnByValue: !0, awaitPromise: r, contextId: i });
+    if (n?.exceptionDetails) throw new Error(`Eval error: ${n.exceptionDetails.text}`);
+    return n?.result?.value;
+  }
+  sleep(e) {
+    return new Promise((i) => setTimeout(i, e));
+  }
+  async _openModelDropdown() {
+    // Find the IDE page target
+    let targets = await this.getTargets();
+    let ideTarget = targets.find((t) => t.type === "page" && t.title?.includes("Antigravity IDE"));
+    if (!ideTarget) ideTarget = targets.find((t) => t.type === "page" && t.title?.includes("Project"));
+    if (!ideTarget) throw new Error("No Antigravity IDE window found");
 
-        function findAllButtons(root) {
-            let buttons = [];
-            try {
-                buttons = buttons.concat(Array.from(root.querySelectorAll('button')));
-                // Also find clickable divs/spans that act as buttons
-                root.querySelectorAll('[role="button"]').forEach(el => {
-                    if (!buttons.includes(el)) buttons.push(el);
-                });
-                // Iframe traversal removed to prevent clicking on Webview extensions (like implementation plans)
-                for (const el of root.querySelectorAll('*')) {
-                    if (el.shadowRoot) buttons = buttons.concat(findAllButtons(el.shadowRoot));
-                }
-            } catch {}
-            return buttons;
-        }
+    let wsUrl = ideTarget.webSocketDebuggerUrl;
+    let ws = new UC(wsUrl);
+    let id = 1;
+    let contexts = [];
 
-        function getButtonText(btn) {
-            let text = (btn.textContent || '').trim();
-            if (!text) text = btn.getAttribute('aria-label') || '';
-            if (!text) text = btn.getAttribute('title') || '';
-            return text.trim();
-        }
+    await new Promise((resolve, reject) => {
+      let timeout = setTimeout(() => reject(new Error("WebSocket connect timeout")), 5000);
+      ws.on("open", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+      ws.on("error", (e) => {
+        clearTimeout(timeout);
+        reject(e);
+      });
+    });
 
-        function isAcceptButton(text) {
-            // Exact matches (case-sensitive)
-            const exactMatches = [
-                'Accept', 'Run', 'Allow', 'Allow once',
-                'Always Allow', 'Always run', 'Always Run',
-                'Approve', 'Trust', 'Yes', 'OK', 'Ok',
-                'Continue', 'Confirm', 'Proceed',
-                'Grant', 'Enable', 'Submit',
-                'Run anyway', 'Run Anyway',
-                'Allow All', 'Trust Author',
-                'I trust the authors',
-                'Trust Workspace',
-                'Yes, I trust the authors'
-            ];
-            if (exactMatches.includes(text)) return true;
-
-            // Prefix matches (case-insensitive)
-            const lower = text.toLowerCase();
-            if (lower.startsWith('accept')) return true;
-            if (lower.startsWith('allow')) return true;
-            if (lower.startsWith('always allow')) return true;
-            if (lower.startsWith('always run')) return true;
-            if (lower.startsWith('run ') && !lower.startsWith('running')) return true;
-            if (lower.startsWith('approve')) return true;
-            if (lower.startsWith('trust')) return true;
-            if (lower.startsWith('proceed')) return true;
-            if (lower.startsWith('confirm')) return true;
-            if (lower.startsWith('grant')) return true;
-            if (lower.startsWith('submit')) return true;
-
-            // Skip known non-action buttons
-            if (lower === 'run' && text.length === 3) return true;
-
-            return false;
-        }
-
-        // Buttons that should NOT be auto-clicked
-        function isExcludedButton(text) {
-            const lower = text.toLowerCase();
-            if (lower === 'cancel') return true;
-            if (lower === 'deny') return true;
-            if (lower === 'reject') return true;
-            if (lower === 'no') return true;
-            if (lower === 'close') return true;
-            if (lower === 'dismiss') return true;
-            if (lower.startsWith('don\\'t')) return true;
-            if (lower.startsWith('do not')) return true;
-            if (lower.includes('never')) return true;
-            return false;
-        }
-
-        let scanCount = 0;
-        window.__autoAcceptInterval = setInterval(() => {
-            scanCount++;
-            const buttons = findAllButtons(document);
-
-            if (scanCount % 20 === 1) {
-                const texts = buttons.slice(0, 30).map(b => getButtonText(b).substring(0, 50));
-                console.log('[AutoAccept] Scan #' + scanCount + ': ' + buttons.length + ' buttons. Sample: ' + JSON.stringify(texts));
+    const call = (method, params) =>
+      new Promise((resolve, reject) => {
+        const msgId = id++;
+        const timeout = setTimeout(() => reject(new Error("Timeout: " + method)), 10000);
+        const handler = (data) => {
+          try {
+            const msg = JSON.parse(data.toString());
+            if (msg.id === msgId) {
+              clearTimeout(timeout);
+              ws.off("message", handler);
+              resolve(msg);
             }
+          } catch {}
+        };
+        ws.on("message", handler);
+        ws.send(JSON.stringify({ id: msgId, method, params }));
+      });
 
-            // Find ALL matching accept buttons and click them
-            for (const btn of buttons) {
-                const text = getButtonText(btn);
-                if (!text) continue;
-                if (isExcludedButton(text)) continue;
-                if (!isAcceptButton(text)) continue;
-                if (btn.disabled) continue;
-                // Skip invisible buttons
-                if (btn.offsetParent === null && btn.getClientRects().length === 0) continue;
-
-                console.log('[AutoAccept] CLICKING: "' + text + '"');
-                btn.scrollIntoView({ behavior: 'instant', block: 'center' });
-                btn.click();
-                // Only click one button per scan to avoid double-actions
-                break;
-            }
-        }, 800);
-
-        return 'started';
-    })()`;autoAcceptStopScript=`(() => {
-        if (window.__autoAcceptInterval) {
-            clearInterval(window.__autoAcceptInterval);
-            window.__autoAcceptInterval = null;
-            return 'stopped';
+    // Collect execution contexts
+    ws.on("message", (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.method === "Runtime.executionContextCreated") {
+          contexts.push(msg.params.context);
         }
-        return 'not_running';
-    })()`;htmlToMarkdownScript=["const BT = String.fromCharCode(96);","const FENCE = BT + BT + BT;","const NL = String.fromCharCode(10);","function htmlToMarkdown(el) {",'  let md = "";',"  for (const node of el.childNodes) {","    if (node.nodeType === Node.TEXT_NODE) { md += node.textContent; continue; }","    if (node.nodeType !== Node.ELEMENT_NODE) continue;","    const tag = node.tagName;",'    if (tag==="STYLE"||tag==="SCRIPT"||tag==="LINK"||tag==="SVG"||tag==="NAV"||tag==="BUTTON"||tag==="IMG") continue;','    if (tag === "PRE") {','      const code = node.querySelector("code");',"      const src = code || node;",'      const lc = (code?.className || "").match(/language-(\\\\w+)/);','      const lang = lc ? lc[1] : "";','      const lines = src.querySelectorAll("[class*=code-line], .view-line");',"      let text;","      if (lines.length > 0) {",'        text = Array.from(lines).map(l => l.textContent || "").join(NL);',"      } else {","        const clone = src.cloneNode(true);",'        clone.querySelectorAll("style,script").forEach(s => s.remove());','        text = clone.textContent || "";',"      }","      md += NL + FENCE + lang + NL + text.trimEnd() + NL + FENCE + NL;","      continue;","    }",'    if (tag === "CODE") { md += BT + (node.textContent || "") + BT; continue; }','    if (tag === "STRONG" || tag === "B") { md += "**" + htmlToMarkdown(node) + "**"; continue; }','    if (tag === "EM" || tag === "I") { md += "*" + htmlToMarkdown(node) + "*"; continue; }','    if (/^H[1-6]$/.test(tag)) { md += NL + "#".repeat(parseInt(tag[1])) + " " + htmlToMarkdown(node) + NL; continue; }','    if (tag === "UL" || tag === "OL") {','      node.querySelectorAll(":scope > li").forEach((li, i) => {','        md += (tag === "OL" ? (i+1) + ". " : "- ") + htmlToMarkdown(li).trim() + NL;',"      }); md += NL; continue;","    }",'    if (tag === "LI") { md += htmlToMarkdown(node); continue; }','    if (tag === "A") { md += "[" + htmlToMarkdown(node) + "](" + (node.getAttribute("href")||"") + ")"; continue; }','    if (tag === "P" || tag === "DIV") { md += htmlToMarkdown(node) + NL; continue; }','    if (tag === "BR") { md += NL; continue; }','    if (tag === "BLOCKQUOTE") { md += htmlToMarkdown(node).split(NL).map(l => "> " + l).join(NL) + NL; continue; }','    if (tag === "HR") { md += NL + "---" + NL; continue; }',"    md += htmlToMarkdown(node);","  }","  return md;","}"].join(`
-`);async discoverCurrentContexts(){if(!this.isConnected())return[];let e=[],i=r=>{try{let n=JSON.parse(r.toString());n.method==="Runtime.executionContextCreated"&&e.push(n.params.context.id)}catch{}};return this.ws.on("message",i),await this.call("Runtime.disable",{}).catch(()=>{}),await this.call("Runtime.enable",{}).catch(()=>{}),await this.sleep(300),this.ws.off("message",i),e}getTargets(){return new Promise((e,i)=>{Mae.default.get(`http://127.0.0.1:${this.port}/json/list`,r=>{let n="";r.on("data",s=>n+=s),r.on("end",()=>{try{e(JSON.parse(n))}catch(s){i(s)}})}).on("error",i)})}call(e,i){return new Promise((r,n)=>{if(!this.ws){n(new Error("Not connected"));return}let s=this.idCounter++,o=a=>{try{let c=JSON.parse(a.toString());c.id===s&&(this.ws?.off("message",o),c.error?n(new Error(c.error.message||JSON.stringify(c.error))):r(c.result))}catch{}};this.ws.on("message",o),this.ws.send(JSON.stringify({id:s,method:e,params:i}))})}async evaluate(e,i,r=!1){let n=await this.call("Runtime.evaluate",{expression:e,returnByValue:!0,awaitPromise:r,contextId:i});if(n?.exceptionDetails)throw new Error(`Eval error: ${n.exceptionDetails.text}`);return n?.result?.value}sleep(e){return new Promise(i=>setTimeout(i,e))} async _openModelDropdown() {
-        // Find the IDE page target
-        let targets = await this.getTargets();
-        let ideTarget = targets.find(t => t.type === "page" && t.title?.includes("Antigravity IDE"));
-        if (!ideTarget) ideTarget = targets.find(t => t.type === "page" && t.title?.includes("Project"));
-        if (!ideTarget) throw new Error("No Antigravity IDE window found");
-        
-        let wsUrl = ideTarget.webSocketDebuggerUrl;
-        let ws = new UC(wsUrl);
-        let id = 1;
-        let contexts = [];
-        
-        await new Promise((resolve, reject) => {
-            let timeout = setTimeout(() => reject(new Error("WebSocket connect timeout")), 5000);
-            ws.on("open", () => { clearTimeout(timeout); resolve(); });
-            ws.on("error", (e) => { clearTimeout(timeout); reject(e); });
-        });
-        
-        const call = (method, params) => new Promise((resolve, reject) => {
-            const msgId = id++;
-            const timeout = setTimeout(() => reject(new Error("Timeout: " + method)), 10000);
-            const handler = (data) => {
-                try {
-                    const msg = JSON.parse(data.toString());
-                    if (msg.id === msgId) {
-                        clearTimeout(timeout);
-                        ws.off("message", handler);
-                        resolve(msg);
-                    }
-                } catch {}
-            };
-            ws.on("message", handler);
-            ws.send(JSON.stringify({ id: msgId, method, params }));
-        });
-        
-        // Collect execution contexts
-        ws.on("message", (data) => {
-            try {
-                const msg = JSON.parse(data.toString());
-                if (msg.method === "Runtime.executionContextCreated") {
-                    contexts.push(msg.params.context);
-                }
-            } catch {}
-        });
-        
-        await call("Runtime.enable", {});
-        await this.sleep(500);
-        
-        // Find model selector via aria-haspopup and model keywords
-        let selectorCoords = null;
-        let modelCtxId = null;
-        
-        for (const ctx of contexts) {
-            try {
-                const result = await call("Runtime.evaluate", {
-                    expression: `(() => {
+      } catch {}
+    });
+
+    await call("Runtime.enable", {});
+    await this.sleep(500);
+
+    // Find model selector via aria-haspopup and model keywords
+    let selectorCoords = null;
+    let modelCtxId = null;
+
+    for (const ctx of contexts) {
+      try {
+        const result = await call("Runtime.evaluate", {
+          expression: `(() => {
                         for (const el of document.querySelectorAll('[aria-haspopup]')) {
                             const t = (el.textContent || '').trim();
                             if ((t.includes('Claude') || t.includes('Gemini') || t.includes('GPT')) && t.length < 80 && t.length > 5) {
@@ -1029,53 +1851,72 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                         }
                         return null;
                     })()`,
-                    returnByValue: true,
-                    contextId: ctx.id
-                });
-                const val = result.result?.result?.value;
-                if (val) {
-                    selectorCoords = val;
-                    modelCtxId = ctx.id;
-                    break;
-                }
-            } catch {}
+          returnByValue: true,
+          contextId: ctx.id,
+        });
+        const val = result.result?.result?.value;
+        if (val) {
+          selectorCoords = val;
+          modelCtxId = ctx.id;
+          break;
         }
-        
-        if (!selectorCoords) {
-            ws.close();
-            throw new Error("Could not find model selector in the IDE UI");
-        }
-        
-        this.log.appendLine("[CDP] Model selector found: " + selectorCoords.text);
-        
-        // Click using CDP mouse events (React needs native events)
-        await call("Input.dispatchMouseEvent", { type: "mousePressed", x: selectorCoords.x, y: selectorCoords.y, button: "left", clickCount: 1 });
-        await this.sleep(50);
-        await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: selectorCoords.x, y: selectorCoords.y, button: "left", clickCount: 1 });
-        
-        // Wait for the dialog to render
-        await this.sleep(1500);
-        
-        return { ws, call, modelCtxId, currentModel: selectorCoords.text };
+      } catch {}
     }
-    
-    async _closeModelDropdown(ws, call) {
-        try {
-            await call("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-            await call("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-        } catch {}
-        await this.sleep(200);
-        try { ws.close(); } catch {}
+
+    if (!selectorCoords) {
+      ws.close();
+      throw new Error("Could not find model selector in the IDE UI");
     }
-    
-    async listModels() {
-        this.log.appendLine("[CDP] Listing available models...");
-        const { ws, call, modelCtxId, currentModel } = await this._openModelDropdown();
-        
-        try {
-            // Read models from the dialog
-            const result = await call("Runtime.evaluate", {
-                expression: `(() => {
+
+    this.log.appendLine("[CDP] Model selector found: " + selectorCoords.text);
+
+    // Click using CDP mouse events (React needs native events)
+    await call("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: selectorCoords.x,
+      y: selectorCoords.y,
+      button: "left",
+      clickCount: 1,
+    });
+    await this.sleep(50);
+    await call("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: selectorCoords.x,
+      y: selectorCoords.y,
+      button: "left",
+      clickCount: 1,
+    });
+
+    // Wait for the dialog to render
+    await this.sleep(1500);
+
+    return { ws, call, modelCtxId, currentModel: selectorCoords.text };
+  }
+
+  async _closeModelDropdown(ws, call) {
+    try {
+      await call("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Escape",
+        code: "Escape",
+        windowsVirtualKeyCode: 27,
+      });
+      await call("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    } catch {}
+    await this.sleep(200);
+    try {
+      ws.close();
+    } catch {}
+  }
+
+  async listModels() {
+    this.log.appendLine("[CDP] Listing available models...");
+    const { ws, call, modelCtxId, currentModel } = await this._openModelDropdown();
+
+    try {
+      // Read models from the dialog
+      const result = await call("Runtime.evaluate", {
+        expression: `(() => {
                     const dialog = document.querySelector('[role="dialog"]');
                     if (!dialog || dialog.offsetHeight === 0) return { found: false };
                     
@@ -1102,33 +1943,33 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                     
                     return { found: true, models, statusBar };
                 })()`,
-                returnByValue: true,
-                contextId: modelCtxId
-            });
-            
-            await this._closeModelDropdown(ws, call);
-            
-            const val = result.result?.result?.value;
-            if (!val?.found) throw new Error("Model dialog did not open");
-            
-            this.log.appendLine("[CDP] Found " + val.models.length + " models");
-            return { models: val.models, statusBar: val.statusBar, currentModel };
-        } catch (e) {
-            await this._closeModelDropdown(ws, call);
-            throw e;
-        }
+        returnByValue: true,
+        contextId: modelCtxId,
+      });
+
+      await this._closeModelDropdown(ws, call);
+
+      const val = result.result?.result?.value;
+      if (!val?.found) throw new Error("Model dialog did not open");
+
+      this.log.appendLine("[CDP] Found " + val.models.length + " models");
+      return { models: val.models, statusBar: val.statusBar, currentModel };
+    } catch (e) {
+      await this._closeModelDropdown(ws, call);
+      throw e;
     }
-    
-    async switchModel(modelName) {
-        this.log.appendLine("[CDP] Switching model to: " + modelName);
-        const { ws, call, modelCtxId, currentModel } = await this._openModelDropdown();
-        
-        try {
-            // Find and click the matching model in the dialog
-            const modelNameLower = modelName.toLowerCase().replace(/['"`]/g, "");
-            
-            const result = await call("Runtime.evaluate", {
-                expression: `(() => {
+  }
+
+  async switchModel(modelName) {
+    this.log.appendLine("[CDP] Switching model to: " + modelName);
+    const { ws, call, modelCtxId, currentModel } = await this._openModelDropdown();
+
+    try {
+      // Find and click the matching model in the dialog
+      const modelNameLower = modelName.toLowerCase().replace(/['"`]/g, "");
+
+      const result = await call("Runtime.evaluate", {
+        expression: `(() => {
                     const dialog = document.querySelector('[role="dialog"]');
                     if (!dialog || dialog.offsetHeight === 0) return { found: false, error: 'dialog not open' };
                     
@@ -1200,103 +2041,633 @@ ${c}`}};x(h9,"UnknownEnumValueError");var d9=h9,g9=class extends Vt{constructor(
                     
                     return { found: false, ambiguous: false, available };
                 })()`,
-                returnByValue: true,
-                contextId: modelCtxId
-            });
-            
-            const val = result.result?.result?.value;
-            
-            if (!val) {
-                await this._closeModelDropdown(ws, call);
-                throw new Error("Failed to evaluate model selection script");
-            }
-            
-            if (!val.found) {
-                await this._closeModelDropdown(ws, call);
-                if (val.ambiguous) {
-                    const err = new Error("AMBIGUOUS");
-                    err.matches = val.matches;
-                    err.available = val.available;
-                    throw err;
-                }
-                const err = new Error("NOT_FOUND");
-                err.available = val.available || [];
-                throw err;
-            }
-            
-            // Click the matched model button using CDP mouse events
-            this.log.appendLine("[CDP] Clicking model: " + val.name + " at (" + val.x + ", " + val.y + ")");
-            await call("Input.dispatchMouseEvent", { type: "mousePressed", x: val.x, y: val.y, button: "left", clickCount: 1 });
-            await this.sleep(50);
-            await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: val.x, y: val.y, button: "left", clickCount: 1 });
-            
-            await this.sleep(500);
-            ws.close();
-            
-            this.log.appendLine("[CDP] Model switched to: " + val.name);
-            return val.name;
-        } catch (e) {
-            try { ws.close(); } catch {}
-            throw e;
-        }
-    }};var _g="antigravity-discord.leaderId",Du="antigravity-discord.leaderHeartbeat",KJe=5e3,ZJe=15e3;function XJe(t){try{return process.kill(t,0),!0}catch{return!1}}function e$e(t){let e=`${process.pid}-${Date.now()}`,i=t.globalState.get(_g),r=t.globalState.get(Du)||0,n=Date.now();if(!i||n-r>ZJe)return t.globalState.update(_g,e),t.globalState.update(Du,n),!0;if(i.startsWith(`${process.pid}-`))return t.globalState.update(Du,n),!0;let s=parseInt(i.split("-")[0],10);return!isNaN(s)&&!XJe(s)?(t.globalState.update(_g,e),t.globalState.update(Du,n),!0):!1}function t$e(t){t.globalState.update(Du,Date.now())}async function i$e(t){t.globalState.get(_g)?.startsWith(`${process.pid}-`)&&(await t.globalState.update(_g,void 0),await t.globalState.update(Du,void 0))}var oU=class{state="idle";discord=null;cdp=null;panel;log;ctx;queue=[];MAX_QUEUE=5;processedIds=new Set;DEDUP_TTL=6e4;conversationMap=new Map;busyPollInterval=null;heartbeatInterval=null;lastBusyState=!1;constructor(e){this.ctx=e,this.log=vr.window.createOutputChannel("Antigravity Discord"),this.panel=new Dg(e.extensionUri),e.subscriptions.push(vr.window.registerWebviewViewProvider(Dg.viewType,this.panel)),this.panel.onStatusRequest(()=>({discord:this.discord?.isConnected()??!1,cdp:this.cdp?.isConnected()??!1,autoAccept:this.cdp?.isAutoAcceptRunning()??!1})),this.heartbeatInterval=setInterval(()=>t$e(e),KJe),e.subscriptions.push(vr.workspace.onDidChangeConfiguration(i=>{(i.affectsConfiguration("antigravity-discord.botToken")||i.affectsConfiguration("antigravity-discord.channelId"))&&this.connectDiscord().catch(r=>this.log.appendLine(`[Extension] Reconnect failed: ${r}`)),i.affectsConfiguration("antigravity-discord.debugPort")&&this.connectCdp().catch(r=>this.log.appendLine(`[Extension] CDP reconnect failed: ${r}`))})),e.subscriptions.push(vr.commands.registerCommand("antigravity-discord.reconnect",()=>{this.connectDiscord().catch(i=>this.log.appendLine(`[Extension] Manual reconnect failed: ${i}`)),this.connectCdp().catch(i=>this.log.appendLine(`[Extension] Manual CDP reconnect failed: ${i}`))}))}async start(){this.log.appendLine(`[Extension] [PID=${process.pid}] Antigravity Discord Bridge activated`),this.log.show(!0),await Promise.allSettled([this.connectDiscord(),this.connectCdp()])}async stop(){this.busyPollInterval&&clearInterval(this.busyPollInterval),this.heartbeatInterval&&clearInterval(this.heartbeatInterval),this.discord&&(await this.discord.disconnect().catch(()=>{}),this.discord=null),this.cdp&&(this.cdp.disconnect(),this.cdp=null),i$e(this.ctx)}async connectDiscord(){let e=vr.workspace.getConfiguration("antigravity-discord"),i=e.get("botToken",""),r=e.get("channelId","");if(!i||!r){this.log.appendLine("[Extension] Missing botToken or channelId \u2014 skipping Discord");return}try{this.discord?await this.discord.reconnect(i,r):(this.discord=new TC(r,this.log),this.discord.onMessage(n=>this.handleMessage(n)),await this.discord.connect(i)),this.cdp?.isConnected()?this.discord.setPresence("online","Waiting for commands"):this.discord.setPresence("idle","\u26A0\uFE0F CDP not connected"),vr.window.showInformationMessage("Antigravity Discord Bridge: Connected!")}catch(n){let s=n instanceof Error?n.message:String(n);this.log.appendLine(`[Extension] Discord failed: ${s}`),vr.window.showErrorMessage(`Discord connection failed: ${s}`),this.discord?.isConnected()||(this.discord=null)}this.pushStatus()}async connectCdp(){let e=vr.workspace.getConfiguration("antigravity-discord"),i=e.get("debugPort",9e3);this.log.appendLine(`[Extension] Connecting to CDP on port ${i}...`),this.cdp&&this.cdp.disconnect(),this.cdp=new FC(i,this.log);try{if(await this.cdp.connect(),this.log.appendLine("[Extension] CDP bridge ready"),e.get("autoAccept",!0))try{await this.cdp.startAutoAccept(),this.log.appendLine("[Extension] Auto-accept started")}catch(r){this.log.appendLine(`[Extension] Auto-accept failed: ${r}`)}this.startBusyPoller()}catch(r){let n=r instanceof Error?r.message:String(r);this.log.appendLine(`[Extension] CDP failed: ${n}`),this.cdp=null,this.discord?.isConnected()&&this.discord.setPresence("idle","\u26A0\uFE0F CDP not connected")}this.pushStatus()}startBusyPoller(){this.busyPollInterval||(this.busyPollInterval=setInterval(async()=>{if(!(!this.cdp?.isConnected()||!this.discord?.isConnected())&&this.state==="idle")try{let e=await this.cdp.isBusy();if(this.state!=="idle")return;e!==this.lastBusyState&&(this.lastBusyState=e,this.discord.setPresence(e?"dnd":"online",e?"Writing code":"Waiting for commands"))}catch{}},2e3))} async handleMessage(e){
-        let msgContent = e.content || "";
-        if (msgContent === '!models' || msgContent === '/models') {
-            if(this.processedIds.has(e.messageId)) return;
-            this.processedIds.add(e.messageId);
-            setTimeout(()=>this.processedIds.delete(e.messageId),this.DEDUP_TTL);
-            this.log.appendLine("[Extension] Discord command: !models");
-            try {
-                const result = await this.cdp.listModels();
-                let msg = "\u{1F4CB} **Available Models**\n\n";
-                result.models.forEach((m, i) => {
-                    const selected = m.isSelected ? " \u2705" : "";
-                    const speed = m.speed ? " \u26A1" + m.speed : "";
-                    msg += `${i + 1}. **${m.name}**${speed}${selected}\n`;
-                });
-                msg += "\n\u{1F4CA} **Usage:** " + (result.statusBar || "N/A");
-                msg += "\n\n\u{1F4A1} Switch with: `!model <name>`";
-                msg += "\n\u{1F50D} Examples: `!model opus`, `!model flash high`, `!model gemini pro`";
-                if (this.discord?.isConnected()) await this.discord.sendMessage(msg);
-            } catch(err) {
-                this.log.appendLine("[Extension] Error listing models: " + err);
-                if (this.discord?.isConnected()) await this.discord.sendMessage("\u26A0\uFE0F Failed to list models: " + err.message);
-            }
-            return;
-        }
-        if (msgContent.startsWith('!model ') || msgContent.startsWith('/model ')) {
-            let modelName = msgContent.substring(7).trim();
-            if (!modelName) return;
-            if(this.processedIds.has(e.messageId)) return;
-            this.processedIds.add(e.messageId);
-            setTimeout(()=>this.processedIds.delete(e.messageId),this.DEDUP_TTL);
-            this.log.appendLine("[Extension] Discord command to switch model: " + modelName);
-            if (this.discord?.isConnected()) await this.discord.sendMessage("\u23F3 Switching model to: " + modelName + "...");
-            try {
-                const switchedTo = await this.cdp.switchModel(modelName);
-                if (this.discord?.isConnected()) await this.discord.sendMessage("\u2705 Model switched to **" + switchedTo + "**");
-            } catch(err) {
-                if (err.message === "AMBIGUOUS") {
-                    let msg = "\u{1F914} Multiple models match \"" + modelName + "\":\n\n";
-                    err.matches.forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
-                    msg += "\nPlease be more specific, e.g. `!model " + err.matches[0] + "`";
-                    if (this.discord?.isConnected()) await this.discord.sendMessage(msg);
-                } else if (err.message === "NOT_FOUND") {
-                    let msg = "\u274C Model \"" + modelName + "\" not found.\n\n\u{1F4CB} Available models:\n";
-                    (err.available || []).forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
-                    msg += "\n\u{1F4A1} Try: `!model opus`, `!model flash`, `!model gemini pro`";
-                    if (this.discord?.isConnected()) await this.discord.sendMessage(msg);
-                } else {
-                    if (this.discord?.isConnected()) await this.discord.sendMessage("\u26A0\uFE0F Failed to switch model: " + err.message);
-                }
-            }
-            return;
-        }
-    if(this.processedIds.has(e.messageId)){this.log.appendLine(`[Extension] Skipping duplicate ${e.messageId}`);return}if(this.processedIds.add(e.messageId),setTimeout(()=>this.processedIds.delete(e.messageId),this.DEDUP_TTL),this.state!=="idle"){if(this.queue.length>=this.MAX_QUEUE){this.log.appendLine(`[Extension] Queue full, dropping from ${e.author}`),this.discord?.isConnected()&&await this.discord.sendMessage(`\u26A0\uFE0F Coda piena (${this.MAX_QUEUE}). Riprova pi\xF9 tardi.`);return}this.queue.push({msg:e,enqueueTime:Date.now()});let i=this.queue.length;this.log.appendLine(`[Extension] Queued from ${e.author} (pos ${i})`),this.discord?.isConnected()&&await this.discord.sendMessage(`\u23F3 In coda (pos ${i}).`);return}await this.processMessage(e)}async processMessage(e){if(!this.cdp?.isConnected()){this.log.appendLine("[Extension] CDP not connected \u2014 reconnecting...");try{await this.connectCdp()}catch{}if(!this.cdp?.isConnected()){this.discord?.isConnected()&&(await this.discord.sendMessage("\u26A0\uFE0F Bridge non connesso. Avvia Antigravity con --remote-debugging-port=9000"),this.discord.setPresence("idle","\u26A0\uFE0F CDP not connected"));return}}this.state="processing",this.lastBusyState=!0,this.discord?.setPresence("dnd","Writing code"),this.log.appendLine(`[Extension] Processing from ${e.author}${e.threadId?` (thread: ${e.threadId})`:" (new conversation)"}: "${e.content.substring(0,80)}"`),this.panel.addMessage("user",e.author,e.content),this.panel.setTyping("assistant",!0);let i=null,r=null,n=null,s=null,o=0;try{if(e.isMainChannel){let d=await this.cdp.createNewConversation();if(this.log.appendLine(`[Extension] New conversation: "${d}"`),this.discord?.isConnected()){try{i=await this.discord.createThread(e.messageId,`\u{1F4AC} ${e.content.substring(0,90)}`)}catch(p){let m=p instanceof Error?p.message:String(p);if(m.includes("already been created")||m.includes("already has a thread")){this.log.appendLine("[Extension] \u26A0\uFE0F Another instance handling \u2014 skipping");return}try{i=await this.discord.createConversationThread(`\u{1F4AC} ${e.content.substring(0,90)}`)}catch{}}i&&this.conversationMap.set(i.id,d)}}else if(e.threadId){let d=this.conversationMap.get(e.threadId);d&&await this.cdp.switchConversation(d),this.discord?.isConnected()&&(i=await this.discord.getThread(e.threadId))}r=setInterval(()=>{i&&this.discord?.isConnected()&&this.discord.setTypingInThread(i).catch(()=>{})},5e3),vr.window.setStatusBarMessage(`\u{1F4AC} Discord: ${e.author} \u2192 "${e.content.substring(0,50)}..."`,1e4);let a=await this.cdp.chatSnapshot(),c=await this.cdp.sendMessage(e.content);if(!c.ok)throw new Error(`Inject failed: ${c.error}`);this.log.appendLine(`[CDP] Message injected (${c.method})`);let l=!1;for(let d=0;d<6&&!l;d++)await new Promise(p=>setTimeout(p,500)),l=await this.cdp.isBusy();if(l||(this.log.appendLine("[CDP] Agent didn't start \u2014 retrying send"),await this.cdp.sendMessage(e.content)),i&&this.discord?.isConnected())try{let d=`${Date.now()}${Math.floor(Math.random()*1e5).toString().padStart(5,"0")}`;n=await i.send({content:"\u23F3 Elaborazione in corso...",nonce:d,enforceNonce:!0})}catch{}s=setInterval(async()=>{if(o+=2,n)try{await n.edit(`\u23F3 Elaborazione in corso... (${o}s)`)}catch{}},2e3);let u=await this.cdp.waitForResponse(a,e.content);if(r&&clearInterval(r),s&&clearInterval(s),this.log.appendLine(`[CDP] Response extracted (${u.length} chars)`),n)try{await n.edit(`\u2705 Completato (${o}s)`)}catch{}let h=u;try{let d=await this.cdp.extractLastResponseMarkdown();d.length>0&&(h=d,this.log.appendLine(`[Extension] Using markdown (${d.length} chars)`))}catch{}if(h=this.cleanResponse(h,e.content),this.log.appendLine(`[Extension] Cleaned: ${h.length} chars`),i&&this.discord?.isConnected()){try{let d=await this.cdp.extractThinkingContent();if(d.length>0)for(let m=0;m<d.length;m+=1990)await this.discord.sendToThread(i,`\u{1F4AD} ||${d.substring(m,m+1990)}||`)}catch{}h.length>0&&!nU(h)?(await this.discord.sendToThread(i,h),this.log.appendLine(`[Extension] \u2705 Sent to thread (${h.length} chars)`)):h.length===0&&await this.discord.sendToThread(i,"\u26A0\uFE0F Nessuna risposta rilevata")}else this.discord?.isConnected()&&h.length>0&&!nU(h)&&await this.discord.sendMessage(h);if(this.panel.setTyping("assistant",!1),this.panel.addMessage("assistant","Antigravity",h),i&&e.isMainChannel)try{let d=await this.cdp.getCurrentConversationName(),p=this.conversationMap.get(i.id);d&&d!==p&&(this.conversationMap.set(i.id,d),this.log.appendLine(`[Extension] Conversation renamed: "${p}" \u2192 "${d}"`))}catch{}vr.window.setStatusBarMessage(`\u2705 Discord: risposta inviata a ${e.author}`,5e3)}catch(a){let c=a instanceof Error?a.message:String(a);this.log.appendLine(`[Extension] Error: ${c}`),this.panel.setTyping("assistant",!1),r&&clearInterval(r),s&&clearInterval(s),i&&this.discord?.isConnected()?await this.discord.sendToThread(i,`\u26A0\uFE0F Errore: ${c}`).catch(()=>{}):this.discord?.isConnected()&&await this.discord.sendMessage(`\u26A0\uFE0F Errore: ${c}`).catch(()=>{})}finally{if(this.state="idle",this.lastBusyState=!1,this.discord?.setPresence("online","Waiting for commands"),this.pushStatus(),this.queue.length>0){let a=this.queue.shift();this.log.appendLine(`[Extension] Dequeuing from ${a.msg.author} (${this.queue.length} left)`),this.processMessage(a.msg).catch(c=>{this.log.appendLine(`[Extension] Queue error: ${c}`)})}}}cleanResponse(e,i){return e.split(`
-`).filter(r=>{let n=r.trim();return n.length===0?!0:!(RC(n)||n===i.trim()||/^Simple request/i.test(n))}).join(`
-`).replace(/\n{3,}/g,`
+        returnByValue: true,
+        contextId: modelCtxId,
+      });
 
-`).trim()}pushStatus(){this.panel.updateStatus({discord:this.discord?.isConnected()??!1,cdp:this.cdp?.isConnected()??!1,autoAccept:this.cdp?.isAutoAcceptRunning()??!1})}},LC=null;function r$e(t){let e=vr.window.createOutputChannel("Antigravity Discord");if(!e$e(t)){e.appendLine(`[Extension] [PID=${process.pid}] Another instance is the leader \u2014 skipping Discord connection`),e.show(!0);return}e.appendLine(`[Extension] [PID=${process.pid}] Elected as leader`),LC=new oU(t),LC.start().catch(i=>{e.appendLine(`[Extension] Start failed: ${i}`),e.show(!0)})}function n$e(){let t=LC?.stop();return LC=null,t}0&&(module.exports={activate,deactivate});
+      const val = result.result?.result?.value;
+
+      if (!val) {
+        await this._closeModelDropdown(ws, call);
+        throw new Error("Failed to evaluate model selection script");
+      }
+
+      if (!val.found) {
+        await this._closeModelDropdown(ws, call);
+        if (val.ambiguous) {
+          const err = new Error("AMBIGUOUS");
+          err.matches = val.matches;
+          err.available = val.available;
+          throw err;
+        }
+        const err = new Error("NOT_FOUND");
+        err.available = val.available || [];
+        throw err;
+      }
+
+      // Click the matched model button using CDP mouse events
+      this.log.appendLine("[CDP] Clicking model: " + val.name + " at (" + val.x + ", " + val.y + ")");
+      await call("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        x: val.x,
+        y: val.y,
+        button: "left",
+        clickCount: 1,
+      });
+      await this.sleep(50);
+      await call("Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        x: val.x,
+        y: val.y,
+        button: "left",
+        clickCount: 1,
+      });
+
+      await this.sleep(500);
+      ws.close();
+
+      this.log.appendLine("[CDP] Model switched to: " + val.name);
+      return val.name;
+    } catch (e) {
+      try {
+        ws.close();
+      } catch {}
+      throw e;
+    }
+  }
+};
+var _g = "antigravity-discord.leaderId",
+  Du = "antigravity-discord.leaderHeartbeat",
+  KJe = 5e3,
+  ZJe = 15e3;
+function XJe(t) {
+  try {
+    return (process.kill(t, 0), !0);
+  } catch {
+    return !1;
+  }
+}
+function e$e(t) {
+  let e = `${process.pid}-${Date.now()}`,
+    i = t.globalState.get(_g),
+    r = t.globalState.get(Du) || 0,
+    n = Date.now();
+  if (!i || n - r > ZJe) return (t.globalState.update(_g, e), t.globalState.update(Du, n), !0);
+  if (i.startsWith(`${process.pid}-`)) return (t.globalState.update(Du, n), !0);
+  let s = parseInt(i.split("-")[0], 10);
+  return !isNaN(s) && !XJe(s) ? (t.globalState.update(_g, e), t.globalState.update(Du, n), !0) : !1;
+}
+function t$e(t) {
+  t.globalState.update(Du, Date.now());
+}
+async function i$e(t) {
+  t.globalState.get(_g)?.startsWith(`${process.pid}-`) &&
+    (await t.globalState.update(_g, void 0), await t.globalState.update(Du, void 0));
+}
+var oU = class {
+    state = "idle";
+    discord = null;
+    cdp = null;
+    panel;
+    log;
+    ctx;
+    queue = [];
+    MAX_QUEUE = 5;
+    processedIds = new Set();
+    DEDUP_TTL = 6e4;
+    conversationMap = new Map();
+    busyPollInterval = null;
+    heartbeatInterval = null;
+    lastBusyState = !1;
+    activePromptMessage = null;
+    activePromptData = null;
+    activePromptKey = null;
+    constructor(e) {
+      ((this.ctx = e),
+        (this.log = vr.window.createOutputChannel("Antigravity Discord")),
+        (this.panel = new Dg(e.extensionUri)),
+        e.subscriptions.push(vr.window.registerWebviewViewProvider(Dg.viewType, this.panel)),
+        this.panel.onStatusRequest(() => ({
+          discord: this.discord?.isConnected() ?? !1,
+          cdp: this.cdp?.isConnected() ?? !1,
+        })),
+        (this.heartbeatInterval = setInterval(() => t$e(e), KJe)),
+        e.subscriptions.push(
+          vr.workspace.onDidChangeConfiguration((i) => {
+            ((i.affectsConfiguration("antigravity-discord.botToken") ||
+              i.affectsConfiguration("antigravity-discord.channelId")) &&
+              this.connectDiscord().catch((r) => this.log.appendLine(`[Extension] Reconnect failed: ${r}`)),
+              i.affectsConfiguration("antigravity-discord.debugPort") &&
+                this.connectCdp().catch((r) => this.log.appendLine(`[Extension] CDP reconnect failed: ${r}`)));
+          }),
+        ),
+        e.subscriptions.push(
+          vr.commands.registerCommand("antigravity-discord.reconnect", () => {
+            (this.connectDiscord().catch((i) => this.log.appendLine(`[Extension] Manual reconnect failed: ${i}`)),
+              this.connectCdp().catch((i) => this.log.appendLine(`[Extension] Manual CDP reconnect failed: ${i}`)));
+          }),
+        ));
+    }
+    async start() {
+      (this.log.appendLine(`[Extension] [PID=${process.pid}] Antigravity Discord Bridge activated`),
+        this.log.show(!0),
+        await Promise.allSettled([this.connectDiscord(), this.connectCdp()]));
+    }
+    async stop() {
+      (this.busyPollInterval && clearInterval(this.busyPollInterval),
+        this.heartbeatInterval && clearInterval(this.heartbeatInterval),
+        this.discord && (await this.discord.disconnect().catch(() => {}), (this.discord = null)),
+        this.cdp && (this.cdp.disconnect(), (this.cdp = null)),
+        i$e(this.ctx));
+    }
+    async connectDiscord() {
+      let e = vr.workspace.getConfiguration("antigravity-discord"),
+        i = e.get("botToken", ""),
+        r = e.get("channelId", "");
+      if (!i || !r) {
+        this.log.appendLine("[Extension] Missing botToken or channelId \u2014 skipping Discord");
+        return;
+      }
+      try {
+        (this.discord
+          ? (this.discord.onInteraction((n) => this.handleInteraction(n)),
+            await this.discord.reconnect(i, r))
+          : ((this.discord = new TC(r, this.log)),
+            this.discord.onMessage((n) => this.handleMessage(n)),
+            this.discord.onInteraction((n) => this.handleInteraction(n)),
+            await this.discord.connect(i)),
+          this.cdp?.isConnected()
+            ? this.discord.setPresence("online", "Waiting for commands")
+            : this.discord.setPresence("idle", "\u26A0\uFE0F CDP not connected"),
+          vr.window.showInformationMessage("Antigravity Discord Bridge: Connected!"));
+      } catch (n) {
+        let s = n instanceof Error ? n.message : String(n);
+        (this.log.appendLine(`[Extension] Discord failed: ${s}`),
+          vr.window.showErrorMessage(`Discord connection failed: ${s}`),
+          this.discord?.isConnected() || (this.discord = null));
+      }
+      this.pushStatus();
+    }
+    async connectCdp() {
+      let e = vr.workspace.getConfiguration("antigravity-discord"),
+        i = e.get("debugPort", 9e3);
+      (this.log.appendLine(`[Extension] Connecting to CDP on port ${i}...`),
+        this.cdp && this.cdp.disconnect(),
+        (this.cdp = new FC(i, this.log)));
+      try {
+        await this.cdp.connect();
+        this.log.appendLine("[Extension] CDP bridge ready");
+        this.startBusyPoller();
+      } catch (r) {
+        let n = r instanceof Error ? r.message : String(r);
+        (this.log.appendLine(`[Extension] CDP failed: ${n}`),
+          (this.cdp = null),
+          this.discord?.isConnected() && this.discord.setPresence("idle", "\u26A0\uFE0F CDP not connected"));
+      }
+      this.pushStatus();
+    }
+    startBusyPoller() {
+      this.busyPollInterval ||
+        (this.busyPollInterval = setInterval(async () => {
+          if (!(!this.cdp?.isConnected() || !this.discord?.isConnected()) && this.state === "idle")
+            try {
+              let e = await this.cdp.isBusy();
+              if (this.state !== "idle") return;
+              e !== this.lastBusyState &&
+                ((this.lastBusyState = e),
+                this.discord.setPresence(e ? "dnd" : "online", e ? "Writing code" : "Waiting for commands"));
+            } catch {}
+        }, 2e3));
+    }
+    async handleInteraction(interaction) {
+      try {
+        let customId = interaction.customId || "";
+        let parts = customId.split(":");
+        if (parts[0] !== "prompt") return;
+        let promptKey = parts[1];
+        let action = parts[2];
+        let optId = parts[3];
+
+        if (interaction.isButton()) {
+          if (action === "writein") {
+            let writeLabel = this.activePromptData?.writeInLabel || "Custom Feedback";
+            let title = writeLabel.length > 45 ? writeLabel.substring(0, 42) + "..." : writeLabel;
+            let modal = new ri.ModalBuilder()
+              .setCustomId(`prompt:${promptKey}:modal`)
+              .setTitle(title);
+            let input = new ri.TextInputBuilder()
+              .setCustomId("writein_text")
+              .setLabel("Your Response")
+              .setStyle(ri.TextInputStyle.Paragraph)
+              .setRequired(true)
+              .setPlaceholder("Enter instructions or response here...");
+            modal.addComponents(new ri.ActionRowBuilder().addComponents(input));
+            await interaction.showModal(modal);
+            return;
+          }
+
+          if (this.state !== "idle") {
+            await interaction.reply({
+              content: "\u23F3 The agent is currently processing another request. Please wait.",
+              ephemeral: true,
+            }).catch(() => {});
+            return;
+          }
+
+          let activePrompt = await this.cdp?.getActivePrompt();
+          if (!activePrompt) {
+            let disabled = this.discord?.disableComponents(interaction.message?.components) || [];
+            if (disabled.length > 0) {
+              await interaction.update({ components: disabled }).catch(() => {});
+            }
+            await interaction.reply({
+              content: "\u26A0\uFE0F This prompt is no longer active in the IDE.",
+              ephemeral: true,
+            }).catch(() => {});
+            return;
+          }
+
+          let choiceValue = action === "skip" ? "skip" : optId;
+          let disabled = this.discord?.disableComponents(interaction.message?.components) || [];
+          await interaction.update({ components: disabled }).catch(() => {});
+
+          await this.processMessage({
+            author: interaction.user?.displayName || interaction.user?.username || "Discord User",
+            content: choiceValue,
+            timestamp: new Date(),
+            attachments: [],
+            messageId: interaction.id,
+            threadId: interaction.channel?.isThread() ? interaction.channelId : void 0,
+            isMainChannel: interaction.channelId === this.discord.channelId,
+          });
+          return;
+        }
+
+        if (interaction.isModalSubmit() && action === "modal") {
+          let userInput = interaction.fields.getTextInputValue("writein_text");
+          await interaction.reply({ content: `\u2705 Submitted: **${userInput}**` }).catch(() => {});
+
+          if (this.activePromptMessage) {
+            try {
+              let disabled = this.discord?.disableComponents(this.activePromptMessage.components) || [];
+              if (disabled.length > 0) {
+                await this.activePromptMessage.edit({ components: disabled });
+              }
+            } catch {}
+          }
+
+          if (this.state !== "idle") {
+            this.log.appendLine("[Extension] Agent busy when modal submitted, queueing text");
+          }
+
+          await this.processMessage({
+            author: interaction.user?.displayName || interaction.user?.username || "Discord User",
+            content: userInput,
+            timestamp: new Date(),
+            attachments: [],
+            messageId: interaction.id,
+            threadId: interaction.channel?.isThread() ? interaction.channelId : void 0,
+            isMainChannel: interaction.channelId === this.discord.channelId,
+          });
+        }
+      } catch (err) {
+        this.log.appendLine(`[Extension] Error handling interaction: ${err}`);
+      }
+    }
+    async handleMessage(e) {
+      let msgContent = e.content || "";
+      if (msgContent === "!models" || msgContent === "/models") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        this.log.appendLine("[Extension] Discord command: !models");
+        try {
+          const result = await this.cdp.listModels();
+          let msg = "\u{1F4CB} **Available Models**\n\n";
+          result.models.forEach((m, i) => {
+            const selected = m.isSelected ? " \u2705" : "";
+            const speed = m.speed ? " \u26A1" + m.speed : "";
+            msg += `${i + 1}. **${m.name}**${speed}${selected}\n`;
+          });
+          msg += "\n\u{1F4CA} **Usage:** " + (result.statusBar || "N/A");
+          msg += "\n\n\u{1F4A1} Switch with: `!model <name>`";
+          msg += "\n\u{1F50D} Examples: `!model opus`, `!model flash high`, `!model gemini pro`";
+          if (this.discord?.isConnected()) await this.discord.sendMessage(msg);
+        } catch (err) {
+          this.log.appendLine("[Extension] Error listing models: " + err);
+          if (this.discord?.isConnected())
+            await this.discord.sendMessage("\u26A0\uFE0F Failed to list models: " + err.message);
+        }
+        return;
+      }
+      if (msgContent.startsWith("!model ") || msgContent.startsWith("/model ")) {
+        let modelName = msgContent.substring(7).trim();
+        if (!modelName) return;
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        this.log.appendLine("[Extension] Discord command to switch model: " + modelName);
+        if (this.discord?.isConnected())
+          await this.discord.sendMessage("\u23F3 Switching model to: " + modelName + "...");
+        try {
+          const switchedTo = await this.cdp.switchModel(modelName);
+          if (this.discord?.isConnected())
+            await this.discord.sendMessage("\u2705 Model switched to **" + switchedTo + "**");
+        } catch (err) {
+          if (err.message === "AMBIGUOUS") {
+            let msg = '\u{1F914} Multiple models match "' + modelName + '":\n\n';
+            err.matches.forEach((m, i) => {
+              msg += `${i + 1}. ${m}\n`;
+            });
+            msg += "\nPlease be more specific, e.g. `!model " + err.matches[0] + "`";
+            if (this.discord?.isConnected()) await this.discord.sendMessage(msg);
+          } else if (err.message === "NOT_FOUND") {
+            let msg = '\u274C Model "' + modelName + '" not found.\n\n\u{1F4CB} Available models:\n';
+            (err.available || []).forEach((m, i) => {
+              msg += `${i + 1}. ${m}\n`;
+            });
+            msg += "\n\u{1F4A1} Try: `!model opus`, `!model flash`, `!model gemini pro`";
+            if (this.discord?.isConnected()) await this.discord.sendMessage(msg);
+          } else {
+            if (this.discord?.isConnected())
+              await this.discord.sendMessage("\u26A0\uFE0F Failed to switch model: " + err.message);
+          }
+        }
+        return;
+      }
+      if (this.processedIds.has(e.messageId)) {
+        this.log.appendLine(`[Extension] Skipping duplicate ${e.messageId}`);
+        return;
+      }
+      if (
+        (this.processedIds.add(e.messageId),
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL),
+        this.state !== "idle")
+      ) {
+        if (this.queue.length >= this.MAX_QUEUE) {
+          (this.log.appendLine(`[Extension] Queue full, dropping from ${e.author}`),
+            this.discord?.isConnected() &&
+              (await this.discord.sendMessage(`\u26A0\uFE0F Coda piena (${this.MAX_QUEUE}). Riprova pi\xF9 tardi.`)));
+          return;
+        }
+        this.queue.push({ msg: e, enqueueTime: Date.now() });
+        let i = this.queue.length;
+        (this.log.appendLine(`[Extension] Queued from ${e.author} (pos ${i})`),
+          this.discord?.isConnected() && (await this.discord.sendMessage(`\u23F3 In coda (pos ${i}).`)));
+        return;
+      }
+      await this.processMessage(e);
+    }
+    async processMessage(e) {
+      if (!this.cdp?.isConnected()) {
+        this.log.appendLine("[Extension] CDP not connected \u2014 reconnecting...");
+        try {
+          await this.connectCdp();
+        } catch {}
+        if (!this.cdp?.isConnected()) {
+          this.discord?.isConnected() &&
+            (await this.discord.sendMessage(
+              "\u26A0\uFE0F Bridge non connesso. Avvia Antigravity con --remote-debugging-port=9000",
+            ),
+            this.discord.setPresence("idle", "\u26A0\uFE0F CDP not connected"));
+          return;
+        }
+      }
+      ((this.state = "processing"),
+        (this.lastBusyState = !0),
+        this.discord?.setPresence("dnd", "Writing code"),
+        this.log.appendLine(
+          `[Extension] Processing from ${e.author}${e.threadId ? ` (thread: ${e.threadId})` : " (new conversation)"}: "${e.content.substring(0, 80)}"`,
+        ),
+        this.panel.addMessage("user", e.author, e.content),
+        this.panel.setTyping("assistant", !0));
+      let i = null,
+        r = null,
+        n = null,
+        s = null,
+        o = 0;
+      try {
+        if (e.isMainChannel) {
+          let d = await this.cdp.createNewConversation();
+          if ((this.log.appendLine(`[Extension] New conversation: "${d}"`), this.discord?.isConnected())) {
+            try {
+              i = await this.discord.createThread(e.messageId, `\u{1F4AC} ${e.content.substring(0, 90)}`);
+            } catch (p) {
+              let m = p instanceof Error ? p.message : String(p);
+              if (m.includes("already been created") || m.includes("already has a thread")) {
+                this.log.appendLine("[Extension] \u26A0\uFE0F Another instance handling \u2014 skipping");
+                return;
+              }
+              try {
+                i = await this.discord.createConversationThread(`\u{1F4AC} ${e.content.substring(0, 90)}`);
+              } catch {}
+            }
+            i && this.conversationMap.set(i.id, d);
+          }
+        } else if (e.threadId) {
+          let d = this.conversationMap.get(e.threadId);
+          (d && (await this.cdp.switchConversation(d)),
+            this.discord?.isConnected() && (i = await this.discord.getThread(e.threadId)));
+        }
+        ((r = setInterval(() => {
+          i && this.discord?.isConnected() && this.discord.setTypingInThread(i).catch(() => {});
+        }, 5e3)),
+          vr.window.setStatusBarMessage(
+            `\u{1F4AC} Discord: ${e.author} \u2192 "${e.content.substring(0, 50)}..."`,
+            1e4,
+          ));
+        let a = await this.cdp.chatSnapshot(),
+          c = await this.cdp.sendMessage(e.content);
+        if (!c.ok) throw new Error(`Inject failed: ${c.error}`);
+        this.log.appendLine(`[CDP] Message injected (${c.method})`);
+        if (c.method === 'prompt_selection') {
+          if (i && this.discord?.isConnected()) {
+            await this.discord.sendToThread(i, `\u2705 Selected: **${c.details?.label || e.content}**`).catch(() => {});
+          }
+        }
+        let l = !1;
+        for (let d = 0; d < 6 && !l; d++) (await new Promise((p) => setTimeout(p, 500)), (l = await this.cdp.isBusy()));
+        if (
+          (l || c.method === 'prompt_selection' ||
+            (this.log.appendLine("[CDP] Agent didn't start \u2014 retrying send"),
+            await this.cdp.sendMessage(e.content)),
+          i && this.discord?.isConnected())
+        )
+          try {
+            let d = `${Date.now()}${Math.floor(Math.random() * 1e5)
+              .toString()
+              .padStart(5, "0")}`;
+            n = await i.send({ content: "\u23F3 Elaborazione in corso...", nonce: d, enforceNonce: !0 });
+          } catch {}
+        s = setInterval(async () => {
+          if (((o += 2), n))
+            try {
+              await n.edit(`\u23F3 Elaborazione in corso... (${o}s)`);
+            } catch {}
+        }, 2e3);
+        let u = await this.cdp.waitForResponse(a, e.content);
+        if (
+          (r && clearInterval(r),
+          s && clearInterval(s),
+          this.log.appendLine(`[CDP] Response extracted (${u.length} chars)`),
+          n)
+        )
+          try {
+            await n.edit(`\u2705 Completato (${o}s)`);
+          } catch {}
+        let h = u;
+        try {
+          let d = await this.cdp.extractLastResponseMarkdown();
+          d.length > 0 && ((h = d), this.log.appendLine(`[Extension] Using markdown (${d.length} chars)`));
+        } catch {}
+        h = this.cleanResponse(h, e.content);
+        let promptComponents = null;
+        try {
+          let pendingPrompt = await this.cdp.getActivePrompt();
+          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
+            let promptKey = Date.now().toString(36);
+            this.activePromptKey = promptKey;
+            this.activePromptData = pendingPrompt;
+            if (this.discord) {
+              promptComponents = this.discord.buildPromptComponents(pendingPrompt, promptKey);
+            }
+            let promptMsg = "\n\n\u{1F4CB} **Selection Required:**\n";
+            if (pendingPrompt.question) {
+              promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+            }
+            pendingPrompt.options.forEach((opt) => {
+              promptMsg += "• **[" + opt.id + "]** " + opt.text + "\n";
+            });
+            if (pendingPrompt.hasWriteIn && pendingPrompt.writeInLabel) {
+              promptMsg += "• **[Other]** " + pendingPrompt.writeInLabel + "\n";
+            }
+            if (pendingPrompt.hasSkip) {
+              promptMsg += "• _Reply `skip` or tap Skip to skip_\n";
+            }
+            promptMsg += "\n\u{1F4AC} *Tap an option below, or reply in chat.*";
+            h = (h ? h + "\n" : "") + promptMsg;
+            this.log.appendLine("[Extension] Appended prompt to response (" + pendingPrompt.options.length + " options, " + (promptComponents?.length || 0) + " action rows)");
+          } else {
+            this.activePromptData = null;
+            this.activePromptKey = null;
+            this.activePromptMessage = null;
+          }
+        } catch (promptErr) {
+          this.log.appendLine("[Extension] Error checking pending prompt: " + promptErr);
+        }
+        if (
+          (this.log.appendLine(`[Extension] Cleaned: ${h.length} chars`),
+          i && this.discord?.isConnected())
+        ) {
+          try {
+            let d = await this.cdp.extractThinkingContent();
+            if (d.length > 0)
+              for (let m = 0; m < d.length; m += 1990)
+                await this.discord.sendToThread(i, `\u{1F4AD} ||${d.substring(m, m + 1990)}||`);
+          } catch {}
+          if (h.length > 0 && !nU(h)) {
+            let sentMsg = await this.discord.sendToThread(i, h, promptComponents);
+            if (promptComponents && sentMsg) {
+              this.activePromptMessage = sentMsg;
+            }
+            this.log.appendLine(`[Extension] \u2705 Sent to thread (${h.length} chars)`);
+          } else if (h.length === 0) {
+            await this.discord.sendToThread(i, "\u26A0\uFE0F Nessuna risposta rilevata");
+          }
+        } else if (this.discord?.isConnected() && h.length > 0 && !nU(h)) {
+          let sentMsg = await this.discord.sendMessage(h, promptComponents);
+          if (promptComponents && sentMsg) {
+            this.activePromptMessage = sentMsg;
+          }
+        }
+        if (
+          (this.panel.setTyping("assistant", !1),
+          this.panel.addMessage("assistant", "Antigravity", h),
+          i && e.isMainChannel)
+        )
+          try {
+            let d = await this.cdp.getCurrentConversationName(),
+              p = this.conversationMap.get(i.id);
+            d &&
+              d !== p &&
+              (this.conversationMap.set(i.id, d),
+              this.log.appendLine(`[Extension] Conversation renamed: "${p}" \u2192 "${d}"`));
+          } catch {}
+        vr.window.setStatusBarMessage(`\u2705 Discord: risposta inviata a ${e.author}`, 5e3);
+      } catch (a) {
+        let c = a instanceof Error ? a.message : String(a);
+        (this.log.appendLine(`[Extension] Error: ${c}`),
+          this.panel.setTyping("assistant", !1),
+          r && clearInterval(r),
+          s && clearInterval(s),
+          i && this.discord?.isConnected()
+            ? await this.discord.sendToThread(i, `\u26A0\uFE0F Errore: ${c}`).catch(() => {})
+            : this.discord?.isConnected() &&
+              (await this.discord.sendMessage(`\u26A0\uFE0F Errore: ${c}`).catch(() => {})));
+      } finally {
+        if (
+          ((this.state = "idle"),
+          (this.lastBusyState = !1),
+          this.discord?.setPresence("online", "Waiting for commands"),
+          this.pushStatus(),
+          this.queue.length > 0)
+        ) {
+          let a = this.queue.shift();
+          (this.log.appendLine(`[Extension] Dequeuing from ${a.msg.author} (${this.queue.length} left)`),
+            this.processMessage(a.msg).catch((c) => {
+              this.log.appendLine(`[Extension] Queue error: ${c}`);
+            }));
+        }
+      }
+    }
+    cleanResponse(e, i) {
+      return e
+        .split(
+          `
+`,
+        )
+        .filter((r) => {
+          let n = r.trim();
+          return n.length === 0 ? !0 : !(RC(n) || n === i.trim() || /^Simple request/i.test(n));
+        })
+        .join(
+          `
+`,
+        )
+        .replace(
+          /\n{3,}/g,
+          `
+
+`,
+        )
+        .trim();
+    }
+    pushStatus() {
+      this.panel.updateStatus({
+        discord: this.discord?.isConnected() ?? !1,
+        cdp: this.cdp?.isConnected() ?? !1,
+      });
+    }
+  },
+  LC = null;
+function r$e(t) {
+  let e = vr.window.createOutputChannel("Antigravity Discord");
+  if (!e$e(t)) {
+    (e.appendLine(`[Extension] [PID=${process.pid}] Another instance is the leader \u2014 skipping Discord connection`),
+      e.show(!0));
+    return;
+  }
+  (e.appendLine(`[Extension] [PID=${process.pid}] Elected as leader`),
+    (LC = new oU(t)),
+    LC.start().catch((i) => {
+      (e.appendLine(`[Extension] Start failed: ${i}`), e.show(!0));
+    }));
+}
+function n$e() {
+  let t = LC?.stop();
+  return ((LC = null), t);
+}
+0 && (module.exports = { activate, deactivate });
 /*! Bundled license information:
 
 undici/lib/web/fetch/body.js:
