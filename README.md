@@ -11,12 +11,12 @@
 - 🤖 **Auto-processing** — Discord messages are automatically sent to the IDE Language Model (Gemini, Copilot, etc.) and responses are posted back
 - 💬 **Multi-conversation** — Each Discord message creates a thread; replies in threads continue the same Antigravity conversation
 - 🔧 **CDP Bridge** — Uses Chrome DevTools Protocol to interact with the Antigravity chat editor, preferring the Manager window for stability
-- ✅ **Auto-Accept** — Automatically clicks Accept / Run / Always Allow buttons, always-on when CDP is connected
+- 📋 **Interactive Prompts** — Selection and confirmation prompts in the IDE are forwarded to Discord, allowing choices to be made directly from chat
 - 📋 **Message Queue** — Concurrent Discord messages are queued (up to 5) instead of rejected, with position feedback
 - 🔒 **Single-instance** — Leader election via VS Code `globalState` ensures only one extension host connects to Discord, even with multiple windows open
 - 🎨 **Rich Markdown** — Code blocks, bold, italic, inline code, lists, and blockquotes are preserved on Discord
-- ⚙️ **Settings GUI** — Tabbed sidebar panel with built-in settings form (Bot Token, Channel ID, Debug Port, Auto-Accept toggle)
-- 📡 **Live Status** — Green/red connection indicators for Discord, CDP, and Auto-Accept right in the sidebar
+- ⚙️ **Settings GUI** — Tabbed sidebar panel with built-in settings form (Bot Token, Channel ID, Debug Port)
+- 📡 **Live Status** — Green/red connection indicators for Discord and CDP right in the sidebar
 - ✂️ **Smart message splitting** — Automatically splits long responses to respect Discord's 2000-character limit
 - 🔇 **Noise filtering** — Strips Antigravity UI chrome and diagnostic logs from responses automatically
 - 💭 **Thinking spoilers** — AI reasoning/thinking content is sent as Discord spoiler text

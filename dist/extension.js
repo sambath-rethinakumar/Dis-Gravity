@@ -375,7 +375,6 @@ var ol = Xn(require("vscode")),
                   botToken: s.get("botToken", ""),
                   channelId: s.get("channelId", ""),
                   debugPort: s.get("debugPort", 9e3),
-                  autoAccept: s.get("autoAccept", !0),
                 };
               e.webview.postMessage({ type: "settings", data: o });
               break;
@@ -709,10 +708,7 @@ var ol = Xn(require("vscode")),
             <span class="status-dot off" id="cdp-dot"></span>
             <span>CDP</span>
         </div>
-        <div class="status-item">
-            <span class="status-dot off" id="autoaccept-dot"></span>
-            <span>Auto-Accept</span>
-        </div>
+
     </div>
 
     <!-- Tabs -->
@@ -749,18 +745,7 @@ var ol = Xn(require("vscode")),
             <input type="number" id="s-port" min="1" max="65535" />
         </div>
 
-        <div class="setting-group">
-            <div class="toggle-row">
-                <div class="toggle-info">
-                    <label>Auto-Accept</label>
-                    <div class="description">Auto-click Accept / Run / Always Allow</div>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="s-autoaccept" />
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        </div>
+
 
         <div class="btn-row">
             <button class="btn btn-primary" id="btn-reconnect">\u{1F504} Reconnect</button>
@@ -795,7 +780,6 @@ var ol = Xn(require("vscode")),
         const tokenInput = document.getElementById('s-token');
         const channelInput = document.getElementById('s-channel');
         const portInput = document.getElementById('s-port');
-        const autoAcceptInput = document.getElementById('s-autoaccept');
         const savedMsg = document.getElementById('saved-msg');
 
         function flashSaved() {
@@ -818,7 +802,6 @@ var ol = Xn(require("vscode")),
         tokenInput.addEventListener('input', () => debounceSave('botToken', tokenInput.value));
         channelInput.addEventListener('input', () => debounceSave('channelId', channelInput.value));
         portInput.addEventListener('input', () => debounceSave('debugPort', parseInt(portInput.value) || 9000));
-        autoAcceptInput.addEventListener('change', () => saveSetting('autoAccept', autoAcceptInput.checked));
 
         // Reconnect button
         document.getElementById('btn-reconnect').addEventListener('click', () => {
@@ -879,7 +862,6 @@ var ol = Xn(require("vscode")),
                 tokenInput.value = data.botToken || '';
                 channelInput.value = data.channelId || '';
                 portInput.value = data.debugPort || 9000;
-                autoAcceptInput.checked = data.autoAccept !== false;
             }
 
             if (type === 'status') {
@@ -887,8 +869,6 @@ var ol = Xn(require("vscode")),
                     'status-dot ' + (data.discord ? 'on' : 'off');
                 document.getElementById('cdp-dot').className =
                     'status-dot ' + (data.cdp ? 'on' : 'off');
-                document.getElementById('autoaccept-dot').className =
-                    'status-dot ' + (data.autoAccept ? 'on' : 'off');
             }
         });
 
@@ -914,15 +894,11 @@ var FC = class {
   port;
   log;
   connected = !1;
-  autoAcceptActive = !1;
   constructor(e, i) {
     ((this.port = e), (this.log = i));
   }
   isConnected() {
     return this.connected && this.ws !== null && this.ws.readyState === UC.OPEN;
-  }
-  isAutoAcceptRunning() {
-    return this.autoAcceptActive;
   }
   async connect() {
     for (let r = 1; r <= 10; r++) {
@@ -1493,33 +1469,7 @@ var FC = class {
       ""
     );
   }
-  async startAutoAccept() {
-    if (!this.isConnected()) return;
-    this.ws?.on("message", (i) => {
-      try {
-        let r = JSON.parse(i.toString());
-        if (r.method === "Runtime.consoleAPICalled" && r.params?.type === "log") {
-          let n = (r.params.args || []).map((s) => s.value || "").join(" ");
-          n.startsWith("[AutoAccept]") && this.log.appendLine(`[CDP] ${n}`);
-        }
-      } catch {}
-    });
-    let e = await this.discoverCurrentContexts();
-    for (let i of e)
-      try {
-        await this.evaluate(this.autoAcceptScript, i, !1);
-      } catch {}
-    (this.log.appendLine(`[CDP] Auto-accept injected into ${e.length} contexts`), (this.autoAcceptActive = !0));
-  }
-  async stopAutoAccept() {
-    if (!this.isConnected()) return;
-    let e = await this.discoverCurrentContexts();
-    for (let i of e)
-      try {
-        await this.evaluate(this.autoAcceptStopScript, i, !1);
-      } catch {}
-    this.autoAcceptActive = !1;
-  }
+
   targetPriority(e) {
     return e.title === "Manager"
       ? 0
@@ -1612,121 +1562,6 @@ var FC = class {
     }
     return null;
   }
-  autoAcceptScript = `(() => {
-        if (window.__autoAcceptInterval) return 'already_running';
-
-        function findAllButtons(root) {
-            let buttons = [];
-            try {
-                buttons = buttons.concat(Array.from(root.querySelectorAll('button')));
-                // Also find clickable divs/spans that act as buttons
-                root.querySelectorAll('[role="button"]').forEach(el => {
-                    if (!buttons.includes(el)) buttons.push(el);
-                });
-                // Iframe traversal removed to prevent clicking on Webview extensions (like implementation plans)
-                for (const el of root.querySelectorAll('*')) {
-                    if (el.shadowRoot) buttons = buttons.concat(findAllButtons(el.shadowRoot));
-                }
-            } catch {}
-            return buttons;
-        }
-
-        function getButtonText(btn) {
-            let text = (btn.textContent || '').trim();
-            if (!text) text = btn.getAttribute('aria-label') || '';
-            if (!text) text = btn.getAttribute('title') || '';
-            return text.trim();
-        }
-
-        function isAcceptButton(text) {
-            // Exact matches (case-sensitive)
-            const exactMatches = [
-                'Accept', 'Run', 'Allow', 'Allow once',
-                'Always Allow', 'Always run', 'Always Run',
-                'Approve', 'Trust', 'Yes', 'OK', 'Ok',
-                'Continue', 'Confirm', 'Proceed',
-                'Grant', 'Enable', 'Submit',
-                'Run anyway', 'Run Anyway',
-                'Allow All', 'Trust Author',
-                'I trust the authors',
-                'Trust Workspace',
-                'Yes, I trust the authors'
-            ];
-            if (exactMatches.includes(text)) return true;
-
-            // Prefix matches (case-insensitive)
-            const lower = text.toLowerCase();
-            if (lower.startsWith('accept')) return true;
-            if (lower.startsWith('allow')) return true;
-            if (lower.startsWith('always allow')) return true;
-            if (lower.startsWith('always run')) return true;
-            if (lower.startsWith('run ') && !lower.startsWith('running')) return true;
-            if (lower.startsWith('approve')) return true;
-            if (lower.startsWith('trust')) return true;
-            if (lower.startsWith('proceed')) return true;
-            if (lower.startsWith('confirm')) return true;
-            if (lower.startsWith('grant')) return true;
-            if (lower.startsWith('submit')) return true;
-
-            // Skip known non-action buttons
-            if (lower === 'run' && text.length === 3) return true;
-
-            return false;
-        }
-
-        // Buttons that should NOT be auto-clicked
-        function isExcludedButton(text) {
-            const lower = text.toLowerCase();
-            if (lower === 'cancel') return true;
-            if (lower === 'deny') return true;
-            if (lower === 'reject') return true;
-            if (lower === 'no') return true;
-            if (lower === 'close') return true;
-            if (lower === 'dismiss') return true;
-            if (lower.startsWith('don\\'t')) return true;
-            if (lower.startsWith('do not')) return true;
-            if (lower.includes('never')) return true;
-            return false;
-        }
-
-        let scanCount = 0;
-        window.__autoAcceptInterval = setInterval(() => {
-            scanCount++;
-            const buttons = findAllButtons(document);
-
-            if (scanCount % 20 === 1) {
-                const texts = buttons.slice(0, 30).map(b => getButtonText(b).substring(0, 50));
-                console.log('[AutoAccept] Scan #' + scanCount + ': ' + buttons.length + ' buttons. Sample: ' + JSON.stringify(texts));
-            }
-
-            // Find ALL matching accept buttons and click them
-            for (const btn of buttons) {
-                const text = getButtonText(btn);
-                if (!text) continue;
-                if (isExcludedButton(text)) continue;
-                if (!isAcceptButton(text)) continue;
-                if (btn.disabled) continue;
-                // Skip invisible buttons
-                if (btn.offsetParent === null && btn.getClientRects().length === 0) continue;
-
-                console.log('[AutoAccept] CLICKING: "' + text + '"');
-                btn.scrollIntoView({ behavior: 'instant', block: 'center' });
-                btn.click();
-                // Only click one button per scan to avoid double-actions
-                break;
-            }
-        }, 800);
-
-        return 'started';
-    })()`;
-  autoAcceptStopScript = `(() => {
-        if (window.__autoAcceptInterval) {
-            clearInterval(window.__autoAcceptInterval);
-            window.__autoAcceptInterval = null;
-            return 'stopped';
-        }
-        return 'not_running';
-    })()`;
   htmlToMarkdownScript = [
     "const BT = String.fromCharCode(96);",
     "const FENCE = BT + BT + BT;",
@@ -2205,7 +2040,6 @@ var oU = class {
         this.panel.onStatusRequest(() => ({
           discord: this.discord?.isConnected() ?? !1,
           cdp: this.cdp?.isConnected() ?? !1,
-          autoAccept: this.cdp?.isAutoAcceptRunning() ?? !1,
         })),
         (this.heartbeatInterval = setInterval(() => t$e(e), KJe)),
         e.subscriptions.push(
@@ -2269,12 +2103,8 @@ var oU = class {
         this.cdp && this.cdp.disconnect(),
         (this.cdp = new FC(i, this.log)));
       try {
-        if ((await this.cdp.connect(), this.log.appendLine("[Extension] CDP bridge ready"), e.get("autoAccept", !0)))
-          try {
-            (await this.cdp.startAutoAccept(), this.log.appendLine("[Extension] Auto-accept started"));
-          } catch (r) {
-            this.log.appendLine(`[Extension] Auto-accept failed: ${r}`);
-          }
+        await this.cdp.connect();
+        this.log.appendLine("[Extension] CDP bridge ready");
         this.startBusyPoller();
       } catch (r) {
         let n = r instanceof Error ? r.message : String(r);
@@ -2588,7 +2418,6 @@ var oU = class {
       this.panel.updateStatus({
         discord: this.discord?.isConnected() ?? !1,
         cdp: this.cdp?.isConnected() ?? !1,
-        autoAccept: this.cdp?.isAutoAcceptRunning() ?? !1,
       });
     }
   },
