@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0] — 2026-10-20
+
+### Added
+- 📋 Interactive prompt support: forward selection and confirmation prompts to Discord and submit choices back to IDE
+
+### Removed
+- ❌ Removed auto-click / auto-accept background clicking mechanism
+
 ## [0.1.0] — 2026-02-26
 
 ### Added
