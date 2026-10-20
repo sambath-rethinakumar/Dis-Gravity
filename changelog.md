@@ -3,6 +3,7 @@
 ## [1.0.0] — 2026-10-20
 
 ### Added
+- 📋 Native Discord interactive components for IDE prompts: tap options directly via Discord Buttons (color-coded for Yes/No/Options), native Modal popup for custom write-in responses, and Skip button with instant double-click protection.
 - 📋 Interactive prompt support: forward selection and confirmation prompts to Discord and submit choices back to IDE
 
 ### Removed

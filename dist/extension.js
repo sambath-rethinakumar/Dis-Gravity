@@ -248,6 +248,7 @@ var TC = class {
   messageCallback = null;
   log;
   connected = !1;
+  interactionCallback = null;
   constructor(e, i) {
     ((this.channelId = e),
       (this.log = i),
@@ -256,6 +257,13 @@ var TC = class {
       })),
       this.client.on(ri.Events.MessageCreate, (r) => {
         this.routeMessage(r);
+      }),
+      this.client.on(ri.Events.InteractionCreate, async (r) => {
+        try {
+          await this.routeInteraction(r);
+        } catch (err) {
+          this.log.appendLine(`[Discord] Interaction error: ${err}`);
+        }
       }),
       this.client.on(ri.Events.Error, (r) => {
         this.log.appendLine(`[Discord] Error: ${r.message}`);
@@ -285,18 +293,117 @@ var TC = class {
   onMessage(e) {
     this.messageCallback = e;
   }
-  async sendMessage(e) {
-    if (!this.channel) throw new Error("Not connected to Discord");
-    for (let i of sU(e)) await this.channel.send(i);
+  onInteraction(e) {
+    this.interactionCallback = e;
   }
-  async sendToThread(e, i) {
+  async routeInteraction(e) {
+    if (!e.isButton() && !e.isModalSubmit()) return;
+    let i = e.channelId === this.channelId,
+      r = e.channel?.isThread?.() && e.channel.parentId === this.channelId;
+    if (!i && !r) return;
+    this.log.appendLine(
+      `[Discord] Interaction ${e.isButton() ? "Button" : "Modal"} from ${e.user?.displayName || e.user?.username}: "${e.customId}"`
+    );
+    await this.interactionCallback?.(e);
+  }
+  getOptionStyle(text) {
+    let lower = (text || "").toLowerCase().trim();
+    if (/^(yes|y|allow|proceed|approve|continue|confirm|run|accept|ok)\b/i.test(lower)) {
+      return ri.ButtonStyle.Success;
+    }
+    if (/^(no|n|cancel|deny|reject|abort|stop|disallow)\b/i.test(lower)) {
+      return ri.ButtonStyle.Danger;
+    }
+    return ri.ButtonStyle.Primary;
+  }
+  buildPromptComponents(promptData, promptKey) {
+    let rows = [];
+    let currentRow = new ri.ActionRowBuilder();
+    (promptData.options || []).forEach((opt) => {
+      if (currentRow.components.length >= 5) {
+        rows.push(currentRow);
+        currentRow = new ri.ActionRowBuilder();
+      }
+      let rawText = opt.text || opt.id || "Option";
+      let label = rawText.length > 70 ? rawText.substring(0, 67) + "..." : rawText;
+      let btnLabel = `[${opt.id}] ${label}`;
+      if (btnLabel.length > 80) btnLabel = btnLabel.substring(0, 77) + "...";
+      let btn = new ri.ButtonBuilder()
+        .setCustomId(`prompt:${promptKey}:opt:${opt.id}`)
+        .setLabel(btnLabel)
+        .setStyle(this.getOptionStyle(rawText));
+      currentRow.addComponents(btn);
+    });
+    if (promptData.hasWriteIn) {
+      if (currentRow.components.length >= 5) {
+        rows.push(currentRow);
+        currentRow = new ri.ActionRowBuilder();
+      }
+      let writeLabel = (promptData.writeInLabel || "Other").trim();
+      let label = `✏️ ${writeLabel.length > 70 ? writeLabel.substring(0, 67) + "..." : writeLabel}`;
+      if (label.length > 80) label = label.substring(0, 77) + "...";
+      let btn = new ri.ButtonBuilder()
+        .setCustomId(`prompt:${promptKey}:writein`)
+        .setLabel(label)
+        .setStyle(ri.ButtonStyle.Secondary);
+      currentRow.addComponents(btn);
+    }
+    if (promptData.hasSkip) {
+      if (currentRow.components.length >= 5) {
+        rows.push(currentRow);
+        currentRow = new ri.ActionRowBuilder();
+      }
+      let btn = new ri.ButtonBuilder()
+        .setCustomId(`prompt:${promptKey}:skip`)
+        .setLabel("⏭️ Skip")
+        .setStyle(ri.ButtonStyle.Secondary);
+      currentRow.addComponents(btn);
+    }
+    if (currentRow.components.length > 0) {
+      rows.push(currentRow);
+    }
+    return rows.slice(0, 5);
+  }
+  disableComponents(components) {
+    if (!components) return [];
+    return components.map((row) => {
+      let rowBuilder = new ri.ActionRowBuilder();
+      (row.components || []).forEach((c) => {
+        let b = ri.ButtonBuilder.from(c);
+        b.setDisabled(true);
+        rowBuilder.addComponents(b);
+      });
+      return rowBuilder;
+    });
+  }
+  async sendMessage(e, components = null) {
+    if (!this.channel) throw new Error("Not connected to Discord");
+    let chunks = sU(e);
+    let lastMsg = null;
+    for (let idx = 0; idx < chunks.length; idx++) {
+      let payload = { content: chunks[idx] };
+      if (idx === chunks.length - 1 && components && components.length > 0) {
+        payload.components = components;
+      }
+      lastMsg = await this.channel.send(payload);
+    }
+    return lastMsg;
+  }
+  async sendToThread(e, i, components = null) {
     let r = sU(i);
-    for (let n of r) {
+    let lastMsg = null;
+    for (let idx = 0; idx < r.length; idx++) {
+      let n = r[idx];
       let s = `${Date.now()}${Math.floor(Math.random() * 1e5)
         .toString()
         .padStart(5, "0")}`;
-      await e.send({ content: n, nonce: s, enforceNonce: !0 });
+      let payload = { content: n, nonce: s, enforceNonce: !0 };
+      if (idx === r.length - 1 && components && components.length > 0) {
+        payload.components = components;
+      }
+      lastMsg = await e.send(payload);
     }
+    return lastMsg;
   }
   async createThread(e, i) {
     if (!this.channel) throw new Error("Not connected to Discord");
@@ -2032,6 +2139,9 @@ var oU = class {
     busyPollInterval = null;
     heartbeatInterval = null;
     lastBusyState = !1;
+    activePromptMessage = null;
+    activePromptData = null;
+    activePromptKey = null;
     constructor(e) {
       ((this.ctx = e),
         (this.log = vr.window.createOutputChannel("Antigravity Discord")),
@@ -2080,9 +2190,11 @@ var oU = class {
       }
       try {
         (this.discord
-          ? await this.discord.reconnect(i, r)
+          ? (this.discord.onInteraction((n) => this.handleInteraction(n)),
+            await this.discord.reconnect(i, r))
           : ((this.discord = new TC(r, this.log)),
             this.discord.onMessage((n) => this.handleMessage(n)),
+            this.discord.onInteraction((n) => this.handleInteraction(n)),
             await this.discord.connect(i)),
           this.cdp?.isConnected()
             ? this.discord.setPresence("online", "Waiting for commands")
@@ -2126,6 +2238,101 @@ var oU = class {
                 this.discord.setPresence(e ? "dnd" : "online", e ? "Writing code" : "Waiting for commands"));
             } catch {}
         }, 2e3));
+    }
+    async handleInteraction(interaction) {
+      try {
+        let customId = interaction.customId || "";
+        let parts = customId.split(":");
+        if (parts[0] !== "prompt") return;
+        let promptKey = parts[1];
+        let action = parts[2];
+        let optId = parts[3];
+
+        if (interaction.isButton()) {
+          if (action === "writein") {
+            let writeLabel = this.activePromptData?.writeInLabel || "Custom Feedback";
+            let title = writeLabel.length > 45 ? writeLabel.substring(0, 42) + "..." : writeLabel;
+            let modal = new ri.ModalBuilder()
+              .setCustomId(`prompt:${promptKey}:modal`)
+              .setTitle(title);
+            let input = new ri.TextInputBuilder()
+              .setCustomId("writein_text")
+              .setLabel("Your Response")
+              .setStyle(ri.TextInputStyle.Paragraph)
+              .setRequired(true)
+              .setPlaceholder("Enter instructions or response here...");
+            modal.addComponents(new ri.ActionRowBuilder().addComponents(input));
+            await interaction.showModal(modal);
+            return;
+          }
+
+          if (this.state !== "idle") {
+            await interaction.reply({
+              content: "\u23F3 The agent is currently processing another request. Please wait.",
+              ephemeral: true,
+            }).catch(() => {});
+            return;
+          }
+
+          let activePrompt = await this.cdp?.getActivePrompt();
+          if (!activePrompt) {
+            let disabled = this.discord?.disableComponents(interaction.message?.components) || [];
+            if (disabled.length > 0) {
+              await interaction.update({ components: disabled }).catch(() => {});
+            }
+            await interaction.reply({
+              content: "\u26A0\uFE0F This prompt is no longer active in the IDE.",
+              ephemeral: true,
+            }).catch(() => {});
+            return;
+          }
+
+          let choiceValue = action === "skip" ? "skip" : optId;
+          let disabled = this.discord?.disableComponents(interaction.message?.components) || [];
+          await interaction.update({ components: disabled }).catch(() => {});
+
+          await this.processMessage({
+            author: interaction.user?.displayName || interaction.user?.username || "Discord User",
+            content: choiceValue,
+            timestamp: new Date(),
+            attachments: [],
+            messageId: interaction.id,
+            threadId: interaction.channel?.isThread() ? interaction.channelId : void 0,
+            isMainChannel: interaction.channelId === this.discord.channelId,
+          });
+          return;
+        }
+
+        if (interaction.isModalSubmit() && action === "modal") {
+          let userInput = interaction.fields.getTextInputValue("writein_text");
+          await interaction.reply({ content: `\u2705 Submitted: **${userInput}**` }).catch(() => {});
+
+          if (this.activePromptMessage) {
+            try {
+              let disabled = this.discord?.disableComponents(this.activePromptMessage.components) || [];
+              if (disabled.length > 0) {
+                await this.activePromptMessage.edit({ components: disabled });
+              }
+            } catch {}
+          }
+
+          if (this.state !== "idle") {
+            this.log.appendLine("[Extension] Agent busy when modal submitted, queueing text");
+          }
+
+          await this.processMessage({
+            author: interaction.user?.displayName || interaction.user?.username || "Discord User",
+            content: userInput,
+            timestamp: new Date(),
+            attachments: [],
+            messageId: interaction.id,
+            threadId: interaction.channel?.isThread() ? interaction.channelId : void 0,
+            isMainChannel: interaction.channelId === this.discord.channelId,
+          });
+        }
+      } catch (err) {
+        this.log.appendLine(`[Extension] Error handling interaction: ${err}`);
+      }
     }
     async handleMessage(e) {
       let msgContent = e.content || "";
@@ -2314,9 +2521,16 @@ var oU = class {
           d.length > 0 && ((h = d), this.log.appendLine(`[Extension] Using markdown (${d.length} chars)`));
         } catch {}
         h = this.cleanResponse(h, e.content);
+        let promptComponents = null;
         try {
           let pendingPrompt = await this.cdp.getActivePrompt();
-          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn)) {
+          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
+            let promptKey = Date.now().toString(36);
+            this.activePromptKey = promptKey;
+            this.activePromptData = pendingPrompt;
+            if (this.discord) {
+              promptComponents = this.discord.buildPromptComponents(pendingPrompt, promptKey);
+            }
             let promptMsg = "\n\n\u{1F4CB} **Selection Required:**\n";
             if (pendingPrompt.question) {
               promptMsg += "> **" + pendingPrompt.question + "**\n\n";
@@ -2328,11 +2542,15 @@ var oU = class {
               promptMsg += "• **[Other]** " + pendingPrompt.writeInLabel + "\n";
             }
             if (pendingPrompt.hasSkip) {
-              promptMsg += "• _Reply `skip` to skip_\n";
+              promptMsg += "• _Reply `skip` or tap Skip to skip_\n";
             }
-            promptMsg += "\n\u{1F4AC} *Reply with the number or option name in Discord.*";
+            promptMsg += "\n\u{1F4AC} *Tap an option below, or reply in chat.*";
             h = (h ? h + "\n" : "") + promptMsg;
-            this.log.appendLine("[Extension] Appended prompt to response (" + pendingPrompt.options.length + " options)");
+            this.log.appendLine("[Extension] Appended prompt to response (" + pendingPrompt.options.length + " options, " + (promptComponents?.length || 0) + " action rows)");
+          } else {
+            this.activePromptData = null;
+            this.activePromptKey = null;
+            this.activePromptMessage = null;
           }
         } catch (promptErr) {
           this.log.appendLine("[Extension] Error checking pending prompt: " + promptErr);
@@ -2347,11 +2565,21 @@ var oU = class {
               for (let m = 0; m < d.length; m += 1990)
                 await this.discord.sendToThread(i, `\u{1F4AD} ||${d.substring(m, m + 1990)}||`);
           } catch {}
-          h.length > 0 && !nU(h)
-            ? (await this.discord.sendToThread(i, h),
-              this.log.appendLine(`[Extension] \u2705 Sent to thread (${h.length} chars)`))
-            : h.length === 0 && (await this.discord.sendToThread(i, "\u26A0\uFE0F Nessuna risposta rilevata"));
-        } else this.discord?.isConnected() && h.length > 0 && !nU(h) && (await this.discord.sendMessage(h));
+          if (h.length > 0 && !nU(h)) {
+            let sentMsg = await this.discord.sendToThread(i, h, promptComponents);
+            if (promptComponents && sentMsg) {
+              this.activePromptMessage = sentMsg;
+            }
+            this.log.appendLine(`[Extension] \u2705 Sent to thread (${h.length} chars)`);
+          } else if (h.length === 0) {
+            await this.discord.sendToThread(i, "\u26A0\uFE0F Nessuna risposta rilevata");
+          }
+        } else if (this.discord?.isConnected() && h.length > 0 && !nU(h)) {
+          let sentMsg = await this.discord.sendMessage(h, promptComponents);
+          if (promptComponents && sentMsg) {
+            this.activePromptMessage = sentMsg;
+          }
+        }
         if (
           (this.panel.setTyping("assistant", !1),
           this.panel.addMessage("assistant", "Antigravity", h),

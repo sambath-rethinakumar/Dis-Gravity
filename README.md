@@ -11,7 +11,7 @@
 - 🤖 **Auto-processing** — Discord messages are automatically sent to the IDE Language Model (Gemini, Copilot, etc.) and responses are posted back
 - 💬 **Multi-conversation** — Each Discord message creates a thread; replies in threads continue the same Antigravity conversation
 - 🔧 **CDP Bridge** — Uses Chrome DevTools Protocol to interact with the Antigravity chat editor, preferring the Manager window for stability
-- 📋 **Interactive Prompts** — Selection and confirmation prompts in the IDE are forwarded to Discord, allowing choices to be made directly from chat
+- 📋 **Interactive Buttons & Prompts** — Selection and confirmation prompts in the IDE are forwarded as native Discord buttons and modal dialogs, allowing choices to be made with a single tap
 - 📋 **Message Queue** — Concurrent Discord messages are queued (up to 5) instead of rejected, with position feedback
 - 🔒 **Single-instance** — Leader election via VS Code `globalState` ensures only one extension host connects to Discord, even with multiple windows open
 - 🎨 **Rich Markdown** — Code blocks, bold, italic, inline code, lists, and blockquotes are preserved on Discord
