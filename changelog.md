@@ -6,6 +6,12 @@
 - 📋 Native Discord interactive components for IDE prompts: tap options directly via Discord Buttons (color-coded for Yes/No/Options), native Modal popup for custom write-in responses, and Skip button with instant double-click protection.
 - 📋 Interactive prompt support: forward selection and confirmation prompts to Discord and submit choices back to IDE
 
+### Fixed
+- 🐛 Fixed prompt question text missing in Discord by properly stripping style, script, and SVG noise and correctly targeting rich-text question containers.
+- 🐛 Fixed missing file paths, directory chips, and symbol links in Discord responses caused by dropping `<button>` elements during HTML-to-Markdown conversion.
+- 🎨 Added table markdown parsing and preserved code block syntax highlighting language.
+- 🛡️ Resolved duplicate extension conflict with legacy `anonk.antigravity-discord-custom` and protected `registerWebviewViewProvider` against collision crashes.
+
 ### Removed
 - ❌ Removed auto-click / auto-accept background clicking mechanism
 

@@ -190,6 +190,11 @@ function RC(t) {
     t === "Submit" ||
     t === "Reject" ||
     t === "Accept" ||
+    t === "No more older messages" ||
+    /^(Ran|Explored|Edited|Asking)\b/i.test(t) ||
+    /^Waiting for user input\.?$/i.test(t) ||
+    /^\d+ (commands?|files?|folder|search|questions?)\b/i.test(t) ||
+    /^\d+:\d+\s*(AM|PM)$/i.test(t) ||
     /^\[AutoAccept\]/.test(t) ||
     /^\[CDP\]\s*\[AutoAccept\]/.test(t) ||
     (/^\["/.test(t) && /"?\]$/.test(t)) ||
@@ -1066,9 +1071,65 @@ var FC = class {
       const radios = Array.from(document.querySelectorAll('input[name^="ask-question-"]'));
       if (!continueBtn && !skipBtn && radios.length === 0) return null;
 
-      const questionEl = document.querySelector('.flex.min-w-0.text-sm')
-          || document.querySelector('[class*="font-medium"]');
-      const question = questionEl ? (questionEl.textContent || '').trim() : '';
+      const anchor = radios[0] || continueBtn || skipBtn;
+      let card = anchor ? (anchor.closest('[class*="border"], [class*="rounded"], [role="dialog"]') || anchor.parentElement) : document;
+      while (card && card !== document.body && card !== document) {
+        if (card.querySelector('[data-testid="interaction-continue-button"]') || card.querySelector('[data-testid="interaction-skip-button"]')) {
+          break;
+        }
+        card = card.parentElement;
+      }
+      if (!card || card === document.body) card = document;
+
+      function cleanQuestionText(el) {
+        if (!el) return '';
+        try {
+          const clone = el.cloneNode(true);
+          const toRemove = clone.querySelectorAll('style, script, svg, button, input, textarea, label, [role="button"]');
+          for (let i = 0; i < toRemove.length; i++) toRemove[i].remove();
+          let txt = (clone.textContent || '');
+          txt = txt.split('\\n').map((l) => l.trim()).filter((l) => {
+            return l.length > 0 && !l.startsWith('@') && !l.startsWith('/*') && !l.includes('Selection Required');
+          }).join(' ');
+          txt = txt.replace(/\\s+/g, ' ').trim();
+          return txt;
+        } catch {
+          return '';
+        }
+      }
+
+      let question = '';
+      if (card && card !== document) {
+        // 1. Look for explicit question/title element inside card
+        const explicitHeading = card.querySelector('[data-testid*="question"], [data-testid*="title"], legend, [role="heading"], h2, h3, h4');
+        if (explicitHeading && !explicitHeading.closest('button') && !explicitHeading.closest('label')) {
+          question = cleanQuestionText(explicitHeading);
+        }
+
+        // 2. Look for .flex.min-w-0.text-sm or leading-relaxed inside card
+        if (!question) {
+          const qContainer = card.querySelector('.flex.min-w-0.text-sm, div.leading-relaxed, [class*="leading-relaxed"], .select-text, p');
+          if (qContainer && !qContainer.closest('button') && !qContainer.closest('label')) {
+            question = cleanQuestionText(qContainer);
+          }
+        }
+
+        // 3. Fallback to card itself
+        if (!question) {
+          question = cleanQuestionText(card);
+        }
+      }
+
+      // 4. Global fallback
+      if (!question) {
+        const fallbackEl = Array.from(document.querySelectorAll('.flex.min-w-0.text-sm, .leading-relaxed.font-medium, div.leading-relaxed.select-text, .text-sm.font-medium, [class*="font-medium"]'))
+          .filter((el) => !el.closest('button') && !el.closest('label') && !el.closest('[role="log"]'))
+          .pop();
+        if (fallbackEl) {
+          question = cleanQuestionText(fallbackEl);
+        }
+      }
+      question = question.replace(/\\s+/g, ' ').trim();
 
       const options = [];
       radios.forEach((r) => {
@@ -1086,7 +1147,13 @@ var FC = class {
       let writeInLabel = null;
       if (writeInRadio) {
         const label = document.querySelector('label[for="' + writeInRadio.id + '"]') || writeInRadio.closest('label');
-        writeInLabel = (label ? label.textContent || '' : '').trim().replace(/^O/i, '').trim() || 'Other';
+        if (label) {
+          const spans = Array.from(label.querySelectorAll('span'));
+          const monoSpan = label.querySelector('span.font-mono');
+          const textSpan = spans.find((s) => s !== monoSpan && s.textContent?.trim());
+          writeInLabel = textSpan ? textSpan.textContent.trim() : (label.textContent || '').trim().replace(/^[A-Z0-9]\\s*/i, '');
+        }
+        writeInLabel = writeInLabel || 'Other';
       }
 
       return {
@@ -1101,16 +1168,22 @@ var FC = class {
     try {
       let res = await this.evaluate(evalScript, this.contextId);
       if (res && (res.options?.length > 0 || res.hasWriteIn || res.hasSkip)) return res;
-      for (const ctxId of this.allContextIds || []) {
-        if (ctxId !== this.contextId) {
-          res = await this.evaluate(evalScript, ctxId);
+    } catch (err) {
+      this.log?.appendLine('[CDP] getActivePrompt error on ctx ' + this.contextId + ': ' + (err?.message || err));
+    }
+    for (const ctxId of this.allContextIds || []) {
+      if (ctxId !== this.contextId) {
+        try {
+          let res = await this.evaluate(evalScript, ctxId);
           if (res && (res.options?.length > 0 || res.hasWriteIn || res.hasSkip)) {
             this.contextId = ctxId;
             return res;
           }
+        } catch (err) {
+          this.log?.appendLine('[CDP] getActivePrompt error on ctx ' + ctxId + ': ' + (err?.message || err));
         }
       }
-    } catch {}
+    }
     return null;
   }
 
@@ -1421,7 +1494,7 @@ var FC = class {
                     .filter(el => el.offsetParent !== null && !isInsideThinking(el) && !isInsideTaskBlock(el));
 
                 if (aiDivs.length > 0) {
-                    return htmlToMarkdown(aiDivs[aiDivs.length - 1]).trim();
+                    return aiDivs.map(el => htmlToMarkdown(el).trim()).filter(Boolean).join('\n\n');
                 }
             }
 
@@ -1679,19 +1752,40 @@ var FC = class {
     "    if (node.nodeType === Node.TEXT_NODE) { md += node.textContent; continue; }",
     "    if (node.nodeType !== Node.ELEMENT_NODE) continue;",
     "    const tag = node.tagName;",
-    '    if (tag==="STYLE"||tag==="SCRIPT"||tag==="LINK"||tag==="SVG"||tag==="NAV"||tag==="BUTTON"||tag==="IMG") continue;',
+    '    if (tag==="STYLE"||tag==="SCRIPT"||tag==="LINK"||tag==="SVG"||tag==="NAV"||tag==="IMG") continue;',
+    '    if (tag === "BUTTON") {',
+    '      const isCopy = (node.getAttribute("aria-label") || "").toLowerCase().includes("copy")',
+    '        || (node.getAttribute("title") || "").toLowerCase().includes("copy")',
+    '        || (node.className || "").includes("copy");',
+    '      if (isCopy) continue;',
+    '      const btnText = (node.textContent || node.getAttribute("title") || node.getAttribute("aria-label") || "").trim();',
+    '      if (!btnText) continue;',
+    '      if (/^(copy|good response|bad response|undo changes|thought for|ran |explored )/i.test(btnText)) continue;',
+    '      let clean = btnText.replace(/\\s+/g, " ");',
+    '      while (clean.startsWith(BT)) clean = clean.slice(1);',
+    '      while (clean.endsWith(BT)) clean = clean.slice(0, -1);',
+    '      clean = clean.trim();',
+    '      if (!clean) continue;',
+    '      if (node.closest("code") || node.closest("a")) {',
+    '        md += clean;',
+    '      } else {',
+    '        md += BT + clean + BT;',
+    '      }',
+    '      continue;',
+    '    }',
     '    if (tag === "PRE") {',
     '      const code = node.querySelector("code");',
     "      const src = code || node;",
     '      const lc = (code?.className || "").match(/language-(\\\\w+)/);',
-    '      const lang = lc ? lc[1] : "";',
+    '      const langDiv = node.querySelector(\'.font-sans.text-sm, [class*="text-muted-foreground"], [data-language]\');',
+    '      const lang = lc ? lc[1] : (langDiv?.textContent?.trim() || "");',
     '      const lines = src.querySelectorAll("[class*=code-line], .view-line");',
     "      let text;",
     "      if (lines.length > 0) {",
     '        text = Array.from(lines).map(l => l.textContent || "").join(NL);',
     "      } else {",
     "        const clone = src.cloneNode(true);",
-    '        clone.querySelectorAll("style,script").forEach(s => s.remove());',
+    '        clone.querySelectorAll("style,script,button").forEach(s => s.remove());',
     '        text = clone.textContent || "";',
     "      }",
     "      md += NL + FENCE + lang + NL + text.trimEnd() + NL + FENCE + NL;",
@@ -1707,7 +1801,39 @@ var FC = class {
     "      }); md += NL; continue;",
     "    }",
     '    if (tag === "LI") { md += htmlToMarkdown(node); continue; }',
-    '    if (tag === "A") { md += "[" + htmlToMarkdown(node) + "](" + (node.getAttribute("href")||"") + ")"; continue; }',
+    '    if (tag === "TABLE") {',
+    '      const rows = Array.from(node.querySelectorAll("tr"));',
+    '      if (rows.length > 0) {',
+    '        let tableMd = NL;',
+    '        rows.forEach((tr, rIdx) => {',
+    '          const cells = Array.from(tr.querySelectorAll("th, td"));',
+    '          tableMd += "| " + cells.map(c => htmlToMarkdown(c).trim()).join(" | ") + " |" + NL;',
+    '          if (rIdx === 0 && tr.querySelector("th")) {',
+    '            tableMd += "| " + cells.map(() => "---").join(" | ") + " |" + NL;',
+    '          }',
+    '        });',
+    '        md += tableMd + NL;',
+    '      }',
+    '      continue;',
+    '    }',
+    '    if (tag === "A") {',
+    '      const href = node.getAttribute("href") || "";',
+    '      const text = htmlToMarkdown(node).trim();',
+    '      if (!text && !href) continue;',
+    '      if (href.startsWith("http://") || href.startsWith("https://")) {',
+    '        md += "[" + (text || href) + "](" + href + ")";',
+    '      } else if (href.startsWith("file://")) {',
+    '        const filePath = decodeURIComponent(href.replace(/^file:\\/\\/\\/?/, ""));',
+    '        if (text && text !== filePath) {',
+    '          md += text + " (" + BT + filePath + BT + ")";',
+    '        } else {',
+    '          md += BT + (text || filePath) + BT;',
+    '        }',
+    '      } else {',
+    '        md += text || href;',
+    '      }',
+    '      continue;',
+    '    }',
     '    if (tag === "P" || tag === "DIV") { md += htmlToMarkdown(node) + NL; continue; }',
     '    if (tag === "BR") { md += NL; continue; }',
     '    if (tag === "BLOCKQUOTE") { md += htmlToMarkdown(node).split(NL).map(l => "> " + l).join(NL) + NL; continue; }',
@@ -2145,9 +2271,13 @@ var oU = class {
     constructor(e) {
       ((this.ctx = e),
         (this.log = vr.window.createOutputChannel("Antigravity Discord")),
-        (this.panel = new Dg(e.extensionUri)),
-        e.subscriptions.push(vr.window.registerWebviewViewProvider(Dg.viewType, this.panel)),
-        this.panel.onStatusRequest(() => ({
+        (this.panel = new Dg(e.extensionUri)));
+        try {
+          e.subscriptions.push(vr.window.registerWebviewViewProvider(Dg.viewType, this.panel));
+        } catch (t) {
+          this.log.appendLine(`[Extension] Warning: could not register webview view provider: ${t}`);
+        }
+        (this.panel.onStatusRequest(() => ({
           discord: this.discord?.isConnected() ?? !1,
           cdp: this.cdp?.isConnected() ?? !1,
         })),
@@ -2160,13 +2290,17 @@ var oU = class {
               i.affectsConfiguration("antigravity-discord.debugPort") &&
                 this.connectCdp().catch((r) => this.log.appendLine(`[Extension] CDP reconnect failed: ${r}`)));
           }),
-        ),
-        e.subscriptions.push(
-          vr.commands.registerCommand("antigravity-discord.reconnect", () => {
-            (this.connectDiscord().catch((i) => this.log.appendLine(`[Extension] Manual reconnect failed: ${i}`)),
-              this.connectCdp().catch((i) => this.log.appendLine(`[Extension] Manual CDP reconnect failed: ${i}`)));
-          }),
         ));
+        try {
+          e.subscriptions.push(
+            vr.commands.registerCommand("antigravity-discord.reconnect", () => {
+              (this.connectDiscord().catch((i) => this.log.appendLine(`[Extension] Manual reconnect failed: ${i}`)),
+                this.connectCdp().catch((i) => this.log.appendLine(`[Extension] Manual CDP reconnect failed: ${i}`)));
+            }),
+          );
+        } catch (t) {
+          this.log.appendLine(`[Extension] Warning: could not register command antigravity-discord.reconnect: ${t}`);
+        }
     }
     async start() {
       (this.log.appendLine(`[Extension] [PID=${process.pid}] Antigravity Discord Bridge activated`),
