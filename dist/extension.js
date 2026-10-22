@@ -254,6 +254,55 @@ function sU(t, e = 2e3) {
   }
   return i;
 }
+var COMMAND_PALETTE_CATALOG = [
+  // Developer & Window
+  { id: "workbench.action.reloadWindow", label: "🔄 Reload Window", title: "Developer: Reload Window", category: "developer", style: 4 },
+  { id: "workbench.action.restartExtensionHost", label: "🛠️ Restart Host", title: "Developer: Restart Extension Host", category: "developer", style: 2 },
+  { id: "workbench.action.toggleDevTools", label: "🐞 DevTools", title: "Developer: Toggle Developer Tools", category: "developer", style: 2 },
+  { id: "workbench.action.openSettings", label: "⚙️ Settings", title: "Preferences: Open Settings (UI)", category: "developer", style: 2 },
+  { id: "antigravity-discord.reconnect", label: "🔌 Reconnect", title: "Dis-Gravity: Reconnect Bridge", category: "developer", style: 1 },
+  { id: "workbench.action.openSettingsJson", label: "📝 Settings (JSON)", title: "Preferences: Open User Settings (JSON)", category: "developer", style: 2 },
+  { id: "workbench.action.openGlobalKeybindings", label: "⌨️ Shortcuts", title: "Preferences: Open Keyboard Shortcuts", category: "developer", style: 2 },
+  { id: "workbench.action.openProcessExplorer", label: "📈 Process Explorer", title: "Developer: Open Process Explorer", category: "developer", style: 2 },
+  { id: "workbench.view.extensions", label: "📦 Extensions", title: "View: Show Extensions", category: "developer", style: 2 },
+  { id: "workbench.action.showCommands", label: "📋 Show Palette", title: "View: Show Command Palette", category: "developer", style: 2 },
+
+  // Terminal & Shell
+  { id: "workbench.action.terminal.new", label: "➕ New Terminal", title: "Terminal: Create New Terminal", category: "terminal", style: 3 },
+  { id: "workbench.action.terminal.toggleTerminal", label: "👁️ Toggle Term", title: "View: Toggle Terminal", category: "terminal", style: 1 },
+  { id: "workbench.action.terminal.clear", label: "🧹 Clear Term", title: "Terminal: Clear", category: "terminal", style: 2 },
+  { id: "workbench.action.terminal.kill", label: "🗑️ Kill Term", title: "Terminal: Kill Active Terminal", category: "terminal", style: 4 },
+  { id: "workbench.action.terminal.split", label: "📜 Split Term", title: "Terminal: Split Terminal", category: "terminal", style: 2 },
+  { id: "workbench.action.terminal.focus", label: "🎯 Focus Term", title: "Terminal: Focus Terminal", category: "terminal", style: 2 },
+  { id: "workbench.action.terminal.scrollUp", label: "⬆️ Scroll Up", title: "Terminal: Scroll Up", category: "terminal", style: 2 },
+  { id: "workbench.action.terminal.scrollDown", label: "⬇️ Scroll Down", title: "Terminal: Scroll Down", category: "terminal", style: 2 },
+
+  // Files & Editors
+  { id: "workbench.action.files.saveAll", label: "💾 Save All", title: "File: Save All", category: "files", style: 3 },
+  { id: "workbench.action.closeAllEditors", label: "📂 Close All", title: "View: Close All Editors", category: "files", style: 4 },
+  { id: "workbench.action.reopenClosedEditor", label: "📑 Reopen Closed", title: "View: Reopen Closed Editor", category: "files", style: 2 },
+  { id: "workbench.action.files.newUntitledFile", label: "📄 New File", title: "File: New Untitled Text File", category: "files", style: 2 },
+  { id: "workbench.action.files.save", label: "📁 Save File", title: "File: Save", category: "files", style: 2 },
+  { id: "workbench.action.closeActiveEditor", label: "❌ Close Active", title: "View: Close Active Editor", category: "files", style: 2 },
+  { id: "workbench.action.nextEditor", label: "➡️ Next Editor", title: "View: Next Editor", category: "files", style: 2 },
+  { id: "workbench.action.splitEditor", label: "↕️ Split Right", title: "View: Split Editor Right", category: "files", style: 2 },
+
+  // Git & Version Control
+  { id: "git.sync", label: "🔄 Git Sync", title: "Git: Sync", category: "git", style: 1 },
+  { id: "git.pull", label: "⬇️ Git Pull", title: "Git: Pull", category: "git", style: 2 },
+  { id: "git.push", label: "⬆️ Git Push", title: "Git: Push", category: "git", style: 2 },
+  { id: "git.stageAll", label: "➕ Stage All", title: "Git: Stage All Changes", category: "git", style: 2 },
+  { id: "git.unstageAll", label: "↩️ Unstage All", title: "Git: Unstage All Changes", category: "git", style: 2 },
+  { id: "git.commit", label: "📦 Git Commit", title: "Git: Commit", category: "git", style: 2 },
+  { id: "git.stash", label: "🗃️ Git Stash", title: "Git: Stash", category: "git", style: 2 },
+  { id: "git.checkout", label: "🔀 Git Checkout", title: "Git: Checkout to...", category: "git", style: 2 },
+
+  // View & Layout
+  { id: "workbench.action.toggleSidebarVisibility", label: "🗂️ Toggle Sidebar", title: "View: Toggle Primary Side Bar", category: "view", style: 2 },
+  { id: "workbench.action.togglePanel", label: "🔲 Toggle Panel", title: "View: Toggle Panel", category: "view", style: 2 },
+  { id: "workbench.action.toggleFullScreen", label: "🖥️ Full Screen", title: "View: Toggle Full Screen", category: "view", style: 2 },
+  { id: "workbench.action.toggleZenMode", label: "🧘 Zen Mode", title: "View: Toggle Zen Mode", category: "view", style: 2 }
+];
 var TC = class {
   client;
   channel = null;
@@ -312,13 +361,15 @@ var TC = class {
     this.interactionCallback = e;
   }
   async routeInteraction(e) {
-    if (!e.isButton() && !e.isModalSubmit() && !e.isChatInputCommand() && !e.isStringSelectMenu()) return;
+    if (!e.isButton() && !e.isModalSubmit() && !e.isChatInputCommand() && !e.isStringSelectMenu() && !e.isAutocomplete()) return;
     let i = e.channelId === this.channelId,
       r = e.channel?.isThread?.() && e.channel.parentId === this.channelId;
     if (!i && !r) return;
-    this.log.appendLine(
-      `[Discord] Interaction ${e.isChatInputCommand() ? "SlashCommand: /" + e.commandName : e.isButton() ? "Button: " + e.customId : e.isStringSelectMenu() ? "Select: " + e.customId : "Modal: " + e.customId} from ${e.user?.displayName || e.user?.username}`
-    );
+    if (!e.isAutocomplete()) {
+      this.log.appendLine(
+        `[Discord] Interaction ${e.isChatInputCommand() ? "SlashCommand: /" + e.commandName : e.isButton() ? "Button: " + e.customId : e.isStringSelectMenu() ? "Select: " + e.customId : "Modal: " + e.customId} from ${e.user?.displayName || e.user?.username}`
+      );
+    }
     await this.interactionCallback?.(e);
   }
   async registerSlashCommands() {
@@ -410,6 +461,39 @@ var TC = class {
           description: "Start a fresh conversation thread in the IDE"
         },
         {
+          name: "palette",
+          description: "1-Click IDE Command Palette (reload window, terminal, git, save, etc.)",
+          options: [
+            {
+              name: "category",
+              description: "Filter 1-click command buttons by category",
+              type: 3,
+              required: false,
+              choices: [
+                { name: "Featured (Most Common)", value: "featured" },
+                { name: "Developer & Window", value: "developer" },
+                { name: "Terminal & Shell", value: "terminal" },
+                { name: "Files & Editors", value: "files" },
+                { name: "Git & Version Control", value: "git" },
+                { name: "View & Layout", value: "view" }
+              ]
+            }
+          ]
+        },
+        {
+          name: "action",
+          description: "Trigger any VS Code Command Palette action with live autocomplete",
+          options: [
+            {
+              name: "command",
+              description: "Command to execute (type to search)",
+              type: 3,
+              required: true,
+              autocomplete: true
+            }
+          ]
+        },
+        {
           name: "help",
           description: "Show quick reference guide for Dis-Gravity commands"
         }
@@ -495,9 +579,178 @@ var TC = class {
       new ri.ButtonBuilder()
         .setCustomId("action:show_models")
         .setLabel("⚡ Models")
+        .setStyle(ri.ButtonStyle.Secondary),
+      new ri.ButtonBuilder()
+        .setCustomId("palette:cat:featured")
+        .setLabel("🎮 Palette")
         .setStyle(ri.ButtonStyle.Secondary)
     );
     return row;
+  }
+  buildPaletteView(category = "featured") {
+    const cat = (category || "featured").toLowerCase();
+    const rows = [];
+    let title = "";
+    let description = "";
+
+    if (cat === "featured") {
+      title = "🎮 **Antigravity IDE Command Palette — Featured (1-Click)**";
+      description = "*Tap any button below to trigger the command instantly in the IDE:*";
+
+      // Row 1: Developer & Window (5 buttons)
+      const r1 = new ri.ActionRowBuilder();
+      const devCmds = [
+        { id: "workbench.action.reloadWindow", label: "🔄 Reload Window", style: ri.ButtonStyle.Danger },
+        { id: "workbench.action.restartExtensionHost", label: "🛠️ Restart Host", style: ri.ButtonStyle.Secondary },
+        { id: "workbench.action.toggleDevTools", label: "🐞 DevTools", style: ri.ButtonStyle.Secondary },
+        { id: "workbench.action.openSettings", label: "⚙️ Settings", style: ri.ButtonStyle.Secondary },
+        { id: "antigravity-discord.reconnect", label: "🔌 Reconnect", style: ri.ButtonStyle.Primary }
+      ];
+      devCmds.forEach(c => r1.addComponents(new ri.ButtonBuilder().setCustomId(`palette:exec:${c.id}`).setLabel(c.label).setStyle(c.style)));
+      rows.push(r1);
+
+      // Row 2: Terminal & Shell (5 buttons)
+      const r2 = new ri.ActionRowBuilder();
+      const termCmds = [
+        { id: "workbench.action.terminal.new", label: "➕ New Terminal", style: ri.ButtonStyle.Success },
+        { id: "workbench.action.terminal.toggleTerminal", label: "👁️ Toggle Term", style: ri.ButtonStyle.Primary },
+        { id: "workbench.action.terminal.clear", label: "🧹 Clear Term", style: ri.ButtonStyle.Secondary },
+        { id: "workbench.action.terminal.kill", label: "🗑️ Kill Term", style: ri.ButtonStyle.Danger },
+        { id: "workbench.action.terminal.split", label: "📜 Split Term", style: ri.ButtonStyle.Secondary }
+      ];
+      termCmds.forEach(c => r2.addComponents(new ri.ButtonBuilder().setCustomId(`palette:exec:${c.id}`).setLabel(c.label).setStyle(c.style)));
+      rows.push(r2);
+
+      // Row 3: Files & Workspace (5 buttons)
+      const r3 = new ri.ActionRowBuilder();
+      const fileCmds = [
+        { id: "workbench.action.files.saveAll", label: "💾 Save All", style: ri.ButtonStyle.Success },
+        { id: "workbench.action.closeAllEditors", label: "📂 Close All", style: ri.ButtonStyle.Danger },
+        { id: "workbench.action.reopenClosedEditor", label: "📑 Reopen Closed", style: ri.ButtonStyle.Secondary },
+        { id: "workbench.action.files.newUntitledFile", label: "📄 New File", style: ri.ButtonStyle.Secondary },
+        { id: "workbench.action.files.save", label: "📁 Save File", style: ri.ButtonStyle.Secondary }
+      ];
+      fileCmds.forEach(c => r3.addComponents(new ri.ButtonBuilder().setCustomId(`palette:exec:${c.id}`).setLabel(c.label).setStyle(c.style)));
+      rows.push(r3);
+
+      // Row 4: Git & Source Control (5 buttons)
+      const r4 = new ri.ActionRowBuilder();
+      const gitCmds = [
+        { id: "git.sync", label: "🔄 Git Sync", style: ri.ButtonStyle.Primary },
+        { id: "git.pull", label: "⬇️ Git Pull", style: ri.ButtonStyle.Secondary },
+        { id: "git.push", label: "⬆️ Git Push", style: ri.ButtonStyle.Secondary },
+        { id: "git.stageAll", label: "➕ Stage All", style: ri.ButtonStyle.Secondary },
+        { id: "git.unstageAll", label: "↩️ Unstage All", style: ri.ButtonStyle.Secondary }
+      ];
+      gitCmds.forEach(c => r4.addComponents(new ri.ButtonBuilder().setCustomId(`palette:exec:${c.id}`).setLabel(c.label).setStyle(c.style)));
+      rows.push(r4);
+
+      // Row 5: Switch Categories & Search (5 buttons)
+      const r5 = new ri.ActionRowBuilder();
+      r5.addComponents(
+        new ri.ButtonBuilder().setCustomId("palette:cat:developer").setLabel("🛠️ Developer").setStyle(ri.ButtonStyle.Secondary),
+        new ri.ButtonBuilder().setCustomId("palette:cat:terminal").setLabel("💻 Terminal").setStyle(ri.ButtonStyle.Secondary),
+        new ri.ButtonBuilder().setCustomId("palette:cat:files").setLabel("📁 Files").setStyle(ri.ButtonStyle.Secondary),
+        new ri.ButtonBuilder().setCustomId("palette:cat:git").setLabel("🐙 Git").setStyle(ri.ButtonStyle.Secondary),
+        new ri.ButtonBuilder().setCustomId("palette:modal_search").setLabel("🔍 Search Any...").setStyle(ri.ButtonStyle.Primary)
+      );
+      rows.push(r5);
+    } else {
+      const categoryNames = {
+        developer: "🛠️ Developer & Window Actions",
+        terminal: "💻 Terminal & Shell Actions",
+        files: "📁 Files & Editor Actions",
+        git: "🐙 Git & Version Control Actions",
+        view: "🗂️ View & Layout Actions"
+      };
+      title = `🎮 **Command Palette — ${categoryNames[cat] || cat.toUpperCase()}**`;
+      description = "*Tap any button below to trigger the command instantly in the IDE:*";
+
+      const catItems = COMMAND_PALETTE_CATALOG.filter(c => c.category === cat);
+      let currentRow = new ri.ActionRowBuilder();
+      for (const item of catItems) {
+        if (currentRow.components.length >= 5) {
+          rows.push(currentRow);
+          if (rows.length >= 4) break;
+          currentRow = new ri.ActionRowBuilder();
+        }
+        let label = item.label;
+        if (label.length > 80) label = label.substring(0, 77) + "...";
+        currentRow.addComponents(
+          new ri.ButtonBuilder()
+            .setCustomId(`palette:exec:${item.id}`)
+            .setLabel(label)
+            .setStyle(item.style || ri.ButtonStyle.Secondary)
+        );
+      }
+      if (currentRow.components.length > 0 && rows.length < 4) {
+        rows.push(currentRow);
+      }
+
+      // Nav row
+      const navRow = new ri.ActionRowBuilder();
+      navRow.addComponents(
+        new ri.ButtonBuilder().setCustomId("palette:cat:featured").setLabel("🌟 Featured").setStyle(ri.ButtonStyle.Success)
+      );
+      const otherCats = ["developer", "terminal", "files", "git", "view"].filter(c => c !== cat);
+      otherCats.slice(0, 3).forEach(c => {
+        const labels = { developer: "🛠️ Dev", terminal: "💻 Term", files: "📁 Files", git: "🐙 Git", view: "🗂️ View" };
+        navRow.addComponents(
+          new ri.ButtonBuilder().setCustomId(`palette:cat:${c}`).setLabel(labels[c] || c).setStyle(ri.ButtonStyle.Secondary)
+        );
+      });
+      navRow.addComponents(
+        new ri.ButtonBuilder().setCustomId("palette:modal_search").setLabel("🔍 Search").setStyle(ri.ButtonStyle.Primary)
+      );
+      rows.push(navRow);
+    }
+
+    return {
+      content: `${title}\n${description}`,
+      components: rows
+    };
+  }
+  buildSearchResultsPalette(matches, query) {
+    const rows = [];
+    const title = `🔍 **Command Palette Search Results for "${query}"**`;
+    const description = matches.length === 0
+      ? "❌ No matching commands found. Try another search term."
+      : `*Found ${matches.length} matching commands. Tap any button below to execute:*`;
+
+    if (matches.length > 0) {
+      let currentRow = new ri.ActionRowBuilder();
+      for (let i = 0; i < Math.min(matches.length, 16); i++) {
+        if (currentRow.components.length >= 4) {
+          rows.push(currentRow);
+          if (rows.length >= 4) break;
+          currentRow = new ri.ActionRowBuilder();
+        }
+        const m = matches[i];
+        let label = m.label || m.title || m.id;
+        if (label.length > 70) label = label.substring(0, 67) + "...";
+        currentRow.addComponents(
+          new ri.ButtonBuilder()
+            .setCustomId(`palette:exec:${m.id}`)
+            .setLabel(label)
+            .setStyle(ri.ButtonStyle.Secondary)
+        );
+      }
+      if (currentRow.components.length > 0 && rows.length < 4) {
+        rows.push(currentRow);
+      }
+    }
+
+    const navRow = new ri.ActionRowBuilder();
+    navRow.addComponents(
+      new ri.ButtonBuilder().setCustomId("palette:cat:featured").setLabel("🌟 Back to Featured").setStyle(ri.ButtonStyle.Success),
+      new ri.ButtonBuilder().setCustomId("palette:modal_search").setLabel("🔍 Search Again").setStyle(ri.ButtonStyle.Primary)
+    );
+    rows.push(navRow);
+
+    return {
+      content: `${title}\n${description}`,
+      components: rows
+    };
   }
   getOptionStyle(text) {
     let lower = (text || "").toLowerCase().trim();
@@ -3004,10 +3257,39 @@ var oU = class {
     }
     async handleInteraction(interaction) {
       try {
+        if (interaction.isAutocomplete()) {
+          const focused = interaction.options.getFocused(true);
+          if (focused.name === "command") {
+            const query = (focused.value || "").toLowerCase().trim();
+            const choices = await this.getPaletteAutocompleteChoices(query);
+            await interaction.respond(choices).catch(() => {});
+          }
+          return;
+        }
+
         if (interaction.isChatInputCommand()) {
           const cmd = interaction.commandName;
           this.log.appendLine(`[Extension] Chat input command: /${cmd} from ${interaction.user?.displayName || interaction.user?.username}`);
           
+          if (cmd === "palette") {
+            const cat = interaction.options.getString("category") || "featured";
+            const view = this.discord?.buildPaletteView(cat);
+            if (view) {
+              await interaction.reply({ content: view.content, components: view.components }).catch(() => {});
+            }
+            return;
+          }
+
+          if (cmd === "action") {
+            const chosenCmd = interaction.options.getString("command") || "";
+            if (!chosenCmd) {
+              await interaction.reply({ content: "⚠️ Please specify a command to execute.", ephemeral: true }).catch(() => {});
+              return;
+            }
+            await this.executePaletteCommand(interaction, chosenCmd);
+            return;
+          }
+
           if (cmd === "plan" || cmd === "goal" || cmd === "grill") {
             const prompt = interaction.options.getString("prompt") || "";
             const prefix = cmd === "plan" ? "/plan " : cmd === "goal" ? "/goal " : "/grill-me ";
@@ -3181,8 +3463,10 @@ var oU = class {
             helpMsg += "• `/models` — Interactive dropdown to switch AI models & effort levels\n";
             helpMsg += "• `/effort <level>` — Switch reasoning effort (Low, Medium, High)\n";
             helpMsg += "• `/model <name>` — Switch active model and effort (e.g. `/model flash high`)\n";
+            helpMsg += "• `/palette [category]` — 1-click Command Palette dashboard (reload window, terminal, git, save, etc.)\n";
+            helpMsg += "• `/action <command>` — Trigger any Command Palette action with live autocomplete\n";
             helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
-            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!effort high`, `!low`, `!models`, etc.)*";
+            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!save`, `!terminal`, etc.)*";
             await interaction.reply({ content: helpMsg, ephemeral: true }).catch(() => {});
             return;
           }
@@ -3204,6 +3488,38 @@ var oU = class {
 
         let customId = interaction.customId || "";
         let parts = customId.split(":");
+
+        if (interaction.isButton() && parts[0] === "palette") {
+          const sub = parts[1];
+          if (sub === "exec") {
+            const cmdId = parts.slice(2).join(":");
+            await this.executePaletteCommand(interaction, cmdId);
+            return;
+          }
+          if (sub === "cat") {
+            const targetCat = parts[2] || "featured";
+            const view = this.discord?.buildPaletteView(targetCat);
+            if (view) {
+              await interaction.update({ content: view.content, components: view.components }).catch(() => {});
+            }
+            return;
+          }
+          if (sub === "modal_search") {
+            const modal = new ri.ModalBuilder()
+              .setCustomId("palette:modal_submit:search")
+              .setTitle("Search Command Palette");
+            const input = new ri.TextInputBuilder()
+              .setCustomId("palette_query")
+              .setLabel("Command name or keyword:")
+              .setStyle(ri.TextInputStyle.Short)
+              .setRequired(true)
+              .setPlaceholder("e.g. reload, terminal, git, save, format");
+            modal.addComponents(new ri.ActionRowBuilder().addComponents(input));
+            await interaction.showModal(modal);
+            return;
+          }
+          return;
+        }
 
         if (interaction.isButton() && parts[0] === "action") {
           const actionType = parts[1];
@@ -3322,6 +3638,17 @@ var oU = class {
           return;
         }
 
+        if (interaction.isModalSubmit() && parts[0] === "palette" && parts[1] === "modal_submit" && parts[2] === "search") {
+          const query = interaction.fields.getTextInputValue("palette_query") || "";
+          await interaction.deferReply({ ephemeral: true }).catch(() => {});
+          const matches = await this.searchCommands(query);
+          const view = this.discord?.buildSearchResultsPalette(matches, query);
+          if (view) {
+            await interaction.editReply({ content: view.content, components: view.components }).catch(() => {});
+          }
+          return;
+        }
+
         if (interaction.isModalSubmit() && action === "modal") {
           let userInput = interaction.fields.getTextInputValue("writein_text");
           await interaction.reply({ content: `\u2705 Submitted: **${userInput}**` }).catch(() => {});
@@ -3369,8 +3696,13 @@ var oU = class {
         helpMsg += "• `/status` — View bridge health, active model, and quick control buttons\n";
         helpMsg += "• `/models` — Interactive dropdown to switch AI models with 1 tap\n";
         helpMsg += "• `/model <name>` — Switch active model by name\n";
+        helpMsg += "• `/palette [category]` — 1-click Command Palette dashboard (reload window, terminal, git, save, etc.)\n";
+        helpMsg += "• `/action <command>` — Trigger any Command Palette action with live autocomplete\n";
         helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
-        helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!plan`, `!models`, etc.)*";
+        helpMsg += "• `!reload` / `!restart` — Instant Reload Window shortcut\n";
+        helpMsg += "• `!save` — Instant Save All shortcut\n";
+        helpMsg += "• `!terminal` — Instant New Terminal shortcut\n";
+        helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!save`, `!terminal`, etc.)*";
         if (this.discord?.isConnected()) {
           if (e.threadId) {
             let thread = await this.discord.getThread(e.threadId);
@@ -3378,6 +3710,133 @@ var oU = class {
             else await this.discord.sendMessage(helpMsg);
           } else {
             await this.discord.sendMessage(helpMsg);
+          }
+        }
+        return;
+      }
+
+      // Command Palette (1-click buttons)
+      if (msgContent === "!palette" || msgContent === "/palette" || msgContent.startsWith("!palette ") || msgContent.startsWith("/palette ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const pParts = msgContent.split(/\s+/);
+        const cat = pParts[1] ? pParts[1].toLowerCase() : "featured";
+        const view = this.discord?.buildPaletteView(cat);
+        if (view && this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, view.content, view.components);
+            else await this.discord.sendMessage(view.content, view.components);
+          } else {
+            await this.discord.sendMessage(view.content, view.components);
+          }
+        }
+        return;
+      }
+
+      // Direct Reload Window
+      if (msgContent === "!reload" || msgContent === "!restart") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const reloadNotice = "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, reloadNotice);
+            else await this.discord.sendMessage(reloadNotice);
+          } else {
+            await this.discord.sendMessage(reloadNotice);
+          }
+        }
+        setTimeout(() => {
+          vr.commands.executeCommand("workbench.action.reloadWindow").then(null, (err) => {
+            this.log.appendLine(`[Palette] Reload error: ${err}`);
+          });
+        }, 500);
+        return;
+      }
+
+      // Direct Save All
+      if (msgContent === "!save") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        await vr.commands.executeCommand("workbench.action.files.saveAll");
+        const reply = "💾 **Saved all files in Antigravity IDE.**";
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, reply);
+            else await this.discord.sendMessage(reply);
+          } else {
+            await this.discord.sendMessage(reply);
+          }
+        }
+        return;
+      }
+
+      // Direct New Terminal
+      if (msgContent === "!terminal") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        await vr.commands.executeCommand("workbench.action.terminal.new");
+        const reply = "➕ **Created new terminal in Antigravity IDE.**";
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, reply);
+            else await this.discord.sendMessage(reply);
+          } else {
+            await this.discord.sendMessage(reply);
+          }
+        }
+        return;
+      }
+
+      // Direct Arbitrary Command (!run <cmdId> or !cmd <cmdId>)
+      if (msgContent.startsWith("!run ") || msgContent.startsWith("!cmd ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const cmdId = msgContent.substring(5).trim();
+        let reply = "";
+        try {
+          if (cmdId === "workbench.action.reloadWindow") {
+            const reloadNotice = "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
+            if (this.discord?.isConnected()) {
+              if (e.threadId) {
+                let thread = await this.discord.getThread(e.threadId);
+                if (thread) await this.discord.sendToThread(thread, reloadNotice);
+                else await this.discord.sendMessage(reloadNotice);
+              } else {
+                await this.discord.sendMessage(reloadNotice);
+              }
+            }
+            setTimeout(() => {
+              vr.commands.executeCommand("workbench.action.reloadWindow").then(null, (err) => {
+                this.log.appendLine(`[Palette] Reload error: ${err}`);
+              });
+            }, 500);
+            return;
+          }
+          const res = await vr.commands.executeCommand(cmdId);
+          reply = `✅ **Executed Command:** \`${cmdId}\``;
+          if (res !== undefined && typeof res !== "object" && typeof res !== "function") {
+            reply += `\n> Result: \`${res}\``;
+          }
+        } catch (err) {
+          reply = `⚠️ **Failed to execute \`${cmdId}\`:** ${err.message || String(err)}`;
+        }
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, reply);
+            else await this.discord.sendMessage(reply);
+          } else {
+            await this.discord.sendMessage(reply);
           }
         }
         return;
@@ -3879,6 +4338,129 @@ var oU = class {
         discord: this.discord?.isConnected() ?? !1,
         cdp: this.cdp?.isConnected() ?? !1,
       });
+    }
+    async getPaletteAutocompleteChoices(query) {
+      const q = (query || "").toLowerCase().trim();
+      let registered = [];
+      try {
+        registered = await vr.commands.getCommands(true);
+      } catch {}
+
+      const results = [];
+      const seen = new Set();
+
+      for (const item of COMMAND_PALETTE_CATALOG) {
+        if (!q || item.id.toLowerCase().includes(q) || item.title.toLowerCase().includes(q) || item.label.toLowerCase().includes(q)) {
+          seen.add(item.id);
+          let name = `${item.title} (${item.id})`;
+          if (name.length > 100) name = name.substring(0, 97) + "...";
+          results.push({ name, value: item.id.substring(0, 100) });
+        }
+        if (results.length >= 25) break;
+      }
+
+      if (results.length < 25 && q) {
+        for (const cmdId of registered) {
+          if (seen.has(cmdId)) continue;
+          if (cmdId.toLowerCase().includes(q)) {
+            seen.add(cmdId);
+            let name = cmdId;
+            if (name.length > 100) name = name.substring(0, 97) + "...";
+            results.push({ name, value: cmdId.substring(0, 100) });
+          }
+          if (results.length >= 25) break;
+        }
+      }
+
+      if (results.length === 0) {
+        for (const item of COMMAND_PALETTE_CATALOG.slice(0, 25)) {
+          let name = `${item.title} (${item.id})`;
+          if (name.length > 100) name = name.substring(0, 97) + "...";
+          results.push({ name, value: item.id.substring(0, 100) });
+        }
+      }
+
+      return results.slice(0, 25);
+    }
+    async searchCommands(query) {
+      const q = (query || "").toLowerCase().trim();
+      let registered = [];
+      try {
+        registered = await vr.commands.getCommands(true);
+      } catch {}
+
+      const matches = [];
+      const seen = new Set();
+
+      for (const item of COMMAND_PALETTE_CATALOG) {
+        if (!q || item.id.toLowerCase().includes(q) || item.title.toLowerCase().includes(q) || item.label.toLowerCase().includes(q)) {
+          seen.add(item.id);
+          matches.push(item);
+        }
+        if (matches.length >= 20) break;
+      }
+
+      if (matches.length < 20 && q) {
+        for (const cmdId of registered) {
+          if (seen.has(cmdId)) continue;
+          if (cmdId.toLowerCase().includes(q)) {
+            seen.add(cmdId);
+            matches.push({
+              id: cmdId,
+              label: cmdId.length > 30 ? "…" + cmdId.slice(-28) : cmdId,
+              title: cmdId,
+              category: "custom",
+              style: ri.ButtonStyle.Secondary
+            });
+          }
+          if (matches.length >= 20) break;
+        }
+      }
+
+      return matches;
+    }
+    async executePaletteCommand(interaction, cmdId) {
+      const catalogItem = COMMAND_PALETTE_CATALOG.find(c => c.id === cmdId);
+      const displayName = catalogItem ? catalogItem.title || catalogItem.label : cmdId;
+      const isReload = cmdId === "workbench.action.reloadWindow";
+
+      this.log.appendLine(`[Palette] Executing: ${cmdId} (${displayName}) from ${interaction.user?.displayName || interaction.user?.username}`);
+
+      if (isReload) {
+        const reloadNotice = "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
+        if (interaction.isButton() || interaction.isStringSelectMenu()) {
+          await interaction.reply({ content: reloadNotice, ephemeral: false }).catch(() => {});
+        } else {
+          await interaction.reply({ content: reloadNotice }).catch(() => {});
+        }
+        setTimeout(() => {
+          vr.commands.executeCommand(cmdId).then(null, (err) => {
+            this.log.appendLine(`[Palette] Reload command error: ${err}`);
+          });
+        }, 500);
+        return;
+      }
+
+      const isButton = interaction.isButton();
+      try {
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply({ ephemeral: isButton }).catch(() => {});
+        }
+        const result = await vr.commands.executeCommand(cmdId);
+        let replyMsg = `✅ **Executed Command:** \`${displayName}\`\n> ID: \`${cmdId}\``;
+        if (result !== undefined && typeof result !== "object" && typeof result !== "function") {
+          replyMsg += `\n> Result: \`${result}\``;
+        }
+        await interaction.editReply({ content: replyMsg }).catch(() => {});
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.log.appendLine(`[Palette] Execution error for ${cmdId}: ${errMsg}`);
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.reply({ content: `⚠️ **Failed to execute:** \`${displayName}\`\n> Error: ${errMsg}`, ephemeral: true }).catch(() => {});
+        } else {
+          await interaction.editReply({ content: `⚠️ **Failed to execute:** \`${displayName}\`\n> Error: ${errMsg}` }).catch(() => {});
+        }
+      }
     }
   },
   LC = null;
