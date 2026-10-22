@@ -266,6 +266,919 @@ function sU(t, e = 1850) {
   }
   return i;
 }
+function getStringDisplayWidth(str) {
+  if (!str) return 0;
+  let clean = str.replace(/[\u200B-\u200D\uFEFF\uFE00-\uFE0F]/g, '');
+  let width = 0;
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+    for (const { segment } of segmenter.segment(clean)) {
+      const cp = segment.codePointAt(0);
+      if (
+        (cp >= 0x1100 && cp <= 0x115F) ||
+        (cp >= 0x2E80 && cp <= 0xA4CF && cp !== 0x303F) ||
+        (cp >= 0xAC00 && cp <= 0xD7A3) ||
+        (cp >= 0xF900 && cp <= 0xFAFF) ||
+        (cp >= 0xFE10 && cp <= 0xFE19) ||
+        (cp >= 0xFE30 && cp <= 0xFE6F) ||
+        (cp >= 0xFF00 && cp <= 0xFF60) ||
+        (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+        (cp >= 0x2100 && cp <= 0x214F) ||
+        (cp >= 0x2300 && cp <= 0x23FF) ||
+        (cp >= 0x25A0 && cp <= 0x25FF) ||
+        (cp >= 0x2600 && cp <= 0x27BF) ||
+        (cp >= 0x2B00 && cp <= 0x2BFF) ||
+        (cp >= 0x1F000 && cp <= 0x1FAFF)
+      ) {
+        width += 2;
+      } else {
+        width += 1;
+      }
+    }
+  } else {
+    for (let i = 0; i < clean.length; i++) {
+      const code = clean.charCodeAt(i);
+      width += code > 255 ? 2 : 1;
+    }
+  }
+  return width;
+}
+function padCellText(text, width, align = 'left') {
+  const currentWidth = getStringDisplayWidth(text);
+  const diff = Math.max(0, width - currentWidth);
+  if (align === 'right') {
+    return ' '.repeat(diff) + text;
+  } else if (align === 'center') {
+    const left = Math.floor(diff / 2);
+    const right = diff - left;
+    return ' '.repeat(left) + text + ' '.repeat(right);
+  } else {
+    return text + ' '.repeat(diff);
+  }
+}
+function cleanCellMarkdown(cell) {
+  let c = (cell || '').trim();
+  if (c.startsWith('`') && c.endsWith('`') && c.length >= 2 && !c.slice(1, -1).includes('`')) {
+    c = c.slice(1, -1);
+  }
+  c = c.replace(/\*\*([^*]+)\*\*/g, '$1');
+  c = c.replace(/\*([^*]+)\*/g, '$1');
+  c = c.replace(/__([^_]+)__/g, '$1');
+  c = c.replace(/_([^_]+)_/g, '$1');
+  c = c.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  c = c.replace(/\\\|/g, '|');
+  return c.trim();
+}
+function splitTableRow(rowStr) {
+  let s = (rowStr || '').trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|')) s = s.slice(0, -1);
+  const cells = [];
+  let current = '';
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '\\' && !escaped) {
+      escaped = true;
+      current += ch;
+    } else if (ch === '|' && !escaped) {
+      cells.push(current);
+      current = '';
+    } else {
+      current += ch;
+      escaped = false;
+    }
+  }
+  cells.push(current);
+  return cells.map(cleanCellMarkdown);
+}
+function parseColumnAlignment(cellStr) {
+  const s = (cellStr || '').trim();
+  const left = s.startsWith(':');
+  const right = s.endsWith(':');
+  if (left && right) return 'center';
+  if (right) return 'right';
+  return 'left';
+}
+function wrapCellText(text, maxWidth) {
+  if (!text) return [''];
+  const words = text.split(/\s+/);
+  const lines = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const wordWidth = getStringDisplayWidth(word);
+    if (!currentLine) {
+      if (wordWidth > maxWidth) {
+        let cur = '';
+        for (const char of word) {
+          if (getStringDisplayWidth(cur + char) > maxWidth) {
+            lines.push(cur);
+            cur = char;
+          } else {
+            cur += char;
+          }
+        }
+        if (cur) currentLine = cur;
+      } else {
+        currentLine = word;
+      }
+    } else {
+      if (getStringDisplayWidth(currentLine + ' ' + word) <= maxWidth) {
+        currentLine += ' ' + word;
+      } else {
+        lines.push(currentLine);
+        if (wordWidth > maxWidth) {
+          let cur = '';
+          for (const char of word) {
+            if (getStringDisplayWidth(cur + char) > maxWidth) {
+              lines.push(cur);
+              cur = char;
+            } else {
+              cur += char;
+            }
+          }
+          currentLine = cur;
+        } else {
+          currentLine = word;
+        }
+      }
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines.length > 0 ? lines : [''];
+}
+var TABLE_BORDER_STYLES = {
+  rounded: {
+    tl: '╭', tm: '┬', tr: '╮',
+    ml: '├', mm: '┼', mr: '┤',
+    bl: '╰', bm: '┴', br: '╯',
+    v: '│', h: '─'
+  },
+  boxed: {
+    tl: '┌', tm: '┬', tr: '┐',
+    ml: '├', mm: '┼', mr: '┤',
+    bl: '└', bm: '┴', br: '┘',
+    v: '│', h: '─'
+  },
+  ascii: {
+    tl: '+', tm: '+', tr: '+',
+    ml: '+', mm: '+', mr: '+',
+    bl: '+', bm: '+', br: '+',
+    v: '|', h: '-'
+  }
+};
+function renderCleanBoxTable(headers, rows, alignments, styleName = 'rounded', maxTableWidth = 74) {
+  if (styleName === 'raw') return null;
+  const colCount = Math.max(headers.length, ...rows.map(r => r.length));
+  if (colCount === 0) return '';
+
+  const naturalWidths = new Array(colCount).fill(1);
+  for (let c = 0; c < colCount; c++) {
+    const hText = headers[c] || '';
+    naturalWidths[c] = Math.max(naturalWidths[c], getStringDisplayWidth(hText));
+    for (const r of rows) {
+      const cText = r[c] || '';
+      naturalWidths[c] = Math.max(naturalWidths[c], getStringDisplayWidth(cText));
+    }
+  }
+
+  const overhead = 1 + colCount * 3;
+  const availableWidth = Math.max(colCount * 6, maxTableWidth - overhead);
+  const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
+
+  const colWidths = naturalWidths.slice();
+  if (totalNatural > availableWidth) {
+    let remainingBudget = availableWidth;
+    let remainingCols = colCount;
+    const sortedIndices = colWidths.map((w, i) => ({ w, i })).sort((a, b) => a.w - b.w);
+
+    for (const { w, i } of sortedIndices) {
+      const fairShare = Math.floor(remainingBudget / remainingCols);
+      if (w <= fairShare) {
+        colWidths[i] = w;
+        remainingBudget -= w;
+        remainingCols--;
+      } else {
+        colWidths[i] = Math.max(6, fairShare);
+        remainingBudget -= colWidths[i];
+        remainingCols--;
+      }
+    }
+  }
+
+  const wrappedHeaders = headers.map((h, i) => wrapCellText(h, colWidths[i] || 10));
+  const wrappedRows = rows.map(row => {
+    const newRow = [];
+    for (let c = 0; c < colCount; c++) {
+      newRow.push(wrapCellText(row[c] || '', colWidths[c] || 10));
+    }
+    return newRow;
+  });
+
+  for (let c = 0; c < colCount; c++) {
+    let actualMax = 1;
+    const hLines = wrappedHeaders[c] || [''];
+    for (const line of hLines) actualMax = Math.max(actualMax, getStringDisplayWidth(line));
+    for (const r of wrappedRows) {
+      const cellLines = r[c] || [''];
+      for (const line of cellLines) actualMax = Math.max(actualMax, getStringDisplayWidth(line));
+    }
+    colWidths[c] = actualMax;
+  }
+
+  if (styleName === 'minimal') {
+    const outputLines = [];
+    if (headers.length > 0) {
+      const maxHLines = Math.max(...wrappedHeaders.map(h => h.length), 1);
+      for (let lineIdx = 0; lineIdx < maxHLines; lineIdx++) {
+        const hCells = [];
+        for (let c = 0; c < colCount; c++) {
+          const txt = (wrappedHeaders[c] && wrappedHeaders[c][lineIdx]) || '';
+          const align = alignments[c] || 'left';
+          hCells.push(padCellText(txt, colWidths[c], align));
+        }
+        outputLines.push(' ' + hCells.join('   ') + ' ');
+      }
+      outputLines.push(' ' + colWidths.map(w => '─'.repeat(w)).join('   ') + ' ');
+    }
+    wrappedRows.forEach((row, rIdx) => {
+      const maxRowLines = Math.max(...row.map(cell => cell.length), 1);
+      for (let lineIdx = 0; lineIdx < maxRowLines; lineIdx++) {
+        const rCells = [];
+        for (let c = 0; c < colCount; c++) {
+          const txt = (row[c] && row[c][lineIdx]) || '';
+          const align = alignments[c] || 'left';
+          rCells.push(padCellText(txt, colWidths[c], align));
+        }
+        outputLines.push(' ' + rCells.join('   ') + ' ');
+      }
+      if (rIdx < wrappedRows.length - 1 && maxRowLines > 1) {
+        outputLines.push(' ' + colWidths.map(w => '·'.repeat(w)).join('   ') + ' ');
+      }
+    });
+    return '```text\n' + outputLines.join('\n') + '\n```';
+  }
+
+  const s = TABLE_BORDER_STYLES[styleName] || TABLE_BORDER_STYLES.rounded;
+  const outputLines = [];
+  outputLines.push(s.tl + colWidths.map(w => s.h.repeat(w + 2)).join(s.tm) + s.tr);
+
+  if (headers.length > 0) {
+    const maxHLines = Math.max(...wrappedHeaders.map(h => h.length), 1);
+    for (let lineIdx = 0; lineIdx < maxHLines; lineIdx++) {
+      const hCells = [];
+      for (let c = 0; c < colCount; c++) {
+        const txt = (wrappedHeaders[c] && wrappedHeaders[c][lineIdx]) || '';
+        const align = alignments[c] || 'left';
+        hCells.push(' ' + padCellText(txt, colWidths[c], align) + ' ');
+      }
+      outputLines.push(s.v + hCells.join(s.v) + s.v);
+    }
+    outputLines.push(s.ml + colWidths.map(w => s.h.repeat(w + 2)).join(s.mm) + s.mr);
+  }
+
+  wrappedRows.forEach((row, rIdx) => {
+    const maxRowLines = Math.max(...row.map(cell => cell.length), 1);
+    for (let lineIdx = 0; lineIdx < maxRowLines; lineIdx++) {
+      const rCells = [];
+      for (let c = 0; c < colCount; c++) {
+        const txt = (row[c] && row[c][lineIdx]) || '';
+        const align = alignments[c] || 'left';
+        rCells.push(' ' + padCellText(txt, colWidths[c], align) + ' ');
+      }
+      outputLines.push(s.v + rCells.join(s.v) + s.v);
+    }
+    if (rIdx < wrappedRows.length - 1 && maxRowLines > 1) {
+      outputLines.push(s.ml + colWidths.map(w => s.h.repeat(w + 2)).join(s.mm) + s.mr);
+    }
+  });
+
+  outputLines.push(s.bl + colWidths.map(w => s.h.repeat(w + 2)).join(s.bm) + s.br);
+  return '```text\n' + outputLines.join('\n') + '\n```';
+}
+function renderTableAsCards(headers, rows, alignments) {
+  if (!rows || rows.length === 0) return '';
+  const cards = [];
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    const titleCol = row[0] || `Item ${r + 1}`;
+    let card = `📋 **${titleCol}**\n`;
+    const details = [];
+    for (let c = 1; c < Math.max(headers.length, row.length); c++) {
+      const h = headers[c] || `Field ${c + 1}`;
+      const val = row[c] || '—';
+      details.push(`• **${h}:** ${val}`);
+    }
+    card += details.join('\n');
+    cards.push(card);
+  }
+  return cards.join('\n\n');
+}
+
+function extractMarkdownTables(text) {
+  if (!text || typeof text !== 'string') return [];
+  const tables = [];
+  const lines = text.split('\n');
+
+  const isSeparatorLine = (line) => {
+    const s = line.trim();
+    if (!s.includes('-')) return false;
+    return /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$/.test(s);
+  };
+
+  const isTableRow = (line) => {
+    const s = line.trim();
+    return s.includes('|') && s.length > 1;
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (i + 1 < lines.length && isTableRow(line) && isSeparatorLine(lines[i + 1])) {
+      const headerLine = line;
+      const separatorLine = lines[i + 1];
+      const headers = splitTableRow(headerLine);
+      const alignments = splitTableRow(separatorLine).map(parseColumnAlignment);
+      const rows = [];
+      let rIdx = i + 2;
+
+      while (rIdx < lines.length && isTableRow(lines[rIdx]) && !isSeparatorLine(lines[rIdx])) {
+        rows.push(splitTableRow(lines[rIdx]));
+        rIdx++;
+      }
+
+      let title = '';
+      if (i > 0) {
+        const prev = lines[i - 1].trim();
+        if (prev.startsWith('#') || prev.startsWith('**') || prev.startsWith('__')) {
+          title = prev.replace(/^[#*\s_]+|[#*\s_]+$/g, '').trim();
+        }
+      }
+
+      const rawTableText = lines.slice(i, rIdx).join('\n');
+      tables.push({
+        title,
+        headers,
+        alignments,
+        rows,
+        rawTableText,
+        lineStart: i,
+        lineEnd: rIdx
+      });
+
+      i = rIdx;
+    } else {
+      i++;
+    }
+  }
+
+  return tables;
+}
+
+function buildCanvasTableScript(data) {
+  const safeData = JSON.stringify(data);
+  return `(() => {
+    const data = ${safeData};
+    const scale = 2;
+
+    const measureCanvas = document.createElement('canvas');
+    const mctx = measureCanvas.getContext('2d');
+    const fontTitle = 'bold 13px "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
+    const fontHeader = 'bold 12px "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
+    const fontBody = '12px "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
+
+    const colPadding = 14;
+    const minColWidth = 60;
+    const maxColWidth = 340;
+
+    function wrapText(text, maxW, font) {
+      if (!text) return [''];
+      mctx.font = font;
+      const words = String(text).split(/\\s+/);
+      const lines = [];
+      let currentLine = '';
+
+      for (const word of words) {
+        const testLine = currentLine ? currentLine + ' ' + word : word;
+        if (mctx.measureText(testLine).width <= maxW) {
+          currentLine = testLine;
+        } else {
+          if (currentLine) lines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      if (currentLine) lines.push(currentLine);
+      return lines.length > 0 ? lines : [''];
+    }
+
+    mctx.font = fontHeader;
+    const colCount = Math.max(data.headers.length, ...data.rows.map(r => r.length));
+    const naturalWidths = [];
+
+    for (let c = 0; c < colCount; c++) {
+      const hText = data.headers[c] || '';
+      let maxW = mctx.measureText(hText).width;
+      mctx.font = fontBody;
+      for (const row of data.rows) {
+        const cell = row[c] || '';
+        maxW = Math.max(maxW, mctx.measureText(String(cell)).width);
+      }
+      mctx.font = fontHeader;
+      naturalWidths.push(Math.ceil(maxW + colPadding * 2));
+    }
+
+    const colWidths = naturalWidths.map(w => Math.min(Math.max(w, minColWidth), maxColWidth));
+
+    const wrappedHeaders = [];
+    for (let c = 0; c < colCount; c++) {
+      const h = data.headers[c] || '';
+      wrappedHeaders.push(wrapText(h, colWidths[c] - colPadding * 2, fontHeader));
+    }
+
+    const wrappedRows = data.rows.map(row => {
+      const rCells = [];
+      for (let c = 0; c < colCount; c++) {
+        const cell = row[c] || '';
+        rCells.push(wrapText(cell, colWidths[c] - colPadding * 2, fontBody));
+      }
+      return rCells;
+    });
+
+    const headerLineHeight = 18;
+    const bodyLineHeight = 16;
+    const cellVertPadding = 9;
+
+    const headerHeight = Math.max(34, Math.max(...wrappedHeaders.map(lines => lines.length * headerLineHeight), 1) + cellVertPadding * 2);
+    const rowHeights = wrappedRows.map(row => {
+      const maxLines = Math.max(...row.map(lines => lines.length), 1);
+      return Math.max(32, maxLines * bodyLineHeight + cellVertPadding * 2);
+    });
+
+    const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+    const titleHeight = data.title ? 36 : 0;
+    const tableHeight = headerHeight + rowHeights.reduce((a, b) => a + b, 0);
+    const margin = 12;
+
+    const canvasWidth = totalWidth + margin * 2;
+    const canvasHeight = titleHeight + tableHeight + margin * 2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth * scale;
+    canvas.height = canvasHeight * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+
+    ctx.fillStyle = '#1e1f22';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    if (data.title) {
+      ctx.font = fontTitle;
+      ctx.fillStyle = '#f2f3f5';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('📊 ' + data.title, margin + 2, margin + titleHeight / 2 - 2);
+    }
+
+    const x = margin;
+    const y = margin + titleHeight;
+    const radius = 8;
+
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + totalWidth - radius, y);
+    ctx.arcTo(x + totalWidth, y, x + totalWidth, y + radius, radius);
+    ctx.lineTo(x + totalWidth, y + tableHeight - radius);
+    ctx.arcTo(x + totalWidth, y + tableHeight, x + totalWidth - radius, y + tableHeight, radius);
+    ctx.lineTo(x + radius, y + tableHeight);
+    ctx.arcTo(x, y + tableHeight, x, y + tableHeight - radius, radius);
+    ctx.lineTo(x, y + radius);
+    ctx.arcTo(x, y, x + radius, y, radius);
+    ctx.closePath();
+    ctx.fillStyle = '#2b2d31';
+    ctx.fill();
+    ctx.strokeStyle = '#383a40';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.clip();
+
+    ctx.fillStyle = '#111214';
+    ctx.fillRect(x, y, totalWidth, headerHeight);
+
+    ctx.fillStyle = '#383a40';
+    ctx.fillRect(x, y + headerHeight - 1, totalWidth, 1);
+
+    ctx.font = fontHeader;
+    ctx.fillStyle = '#f2f3f5';
+    ctx.textBaseline = 'top';
+
+    let curX = x;
+    for (let i = 0; i < colCount; i++) {
+      const w = colWidths[i];
+      const align = (data.alignments && data.alignments[i]) || 'left';
+      const lines = wrappedHeaders[i] || [''];
+      const blockH = lines.length * headerLineHeight;
+      const startY = y + (headerHeight - blockH) / 2;
+
+      lines.forEach((line, lineIdx) => {
+        const lineW = mctx.measureText(line).width;
+        let tx = curX + colPadding;
+        if (align === 'center') tx = curX + (w - lineW) / 2;
+        else if (align === 'right') tx = curX + w - colPadding - lineW;
+        ctx.fillText(line, tx, startY + lineIdx * headerLineHeight);
+      });
+
+      if (i > 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.fillRect(curX, y + 6, 1, headerHeight - 12);
+        ctx.fillStyle = '#f2f3f5';
+      }
+      curX += w;
+    }
+
+    let curY = y + headerHeight;
+    for (let r = 0; r < data.rows.length; r++) {
+      const rH = rowHeights[r];
+      const isAlt = r % 2 === 1;
+
+      ctx.fillStyle = isAlt ? '#2e3035' : '#2b2d31';
+      ctx.fillRect(x, curY, totalWidth, rH);
+
+      if (r > 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.fillRect(x, curY, totalWidth, 1);
+      }
+
+      curX = x;
+      for (let c = 0; c < colCount; c++) {
+        const w = colWidths[c];
+        const align = (data.alignments && data.alignments[c]) || 'left';
+        const lines = wrappedRows[r][c] || [''];
+        const rawCell = String((data.rows[r] && data.rows[r][c]) || '');
+
+        mctx.font = fontBody;
+        ctx.font = fontBody;
+
+        const isStatusCol = /status|state|result/i.test(data.headers[c] || '');
+        if (isStatusCol || rawCell.length < 25) {
+          if (/active|enabled|passed|success|ready|ok|green/i.test(rawCell)) {
+            ctx.fillStyle = '#57f287';
+          } else if (/warn|slow|pending|idle/i.test(rawCell)) {
+            ctx.fillStyle = '#fee75c';
+          } else if (/error|fail|stop|cancel|blocked/i.test(rawCell)) {
+            ctx.fillStyle = '#ed4245';
+          } else {
+            ctx.fillStyle = '#dbdee1';
+          }
+        } else {
+          ctx.fillStyle = '#dbdee1';
+        }
+
+        const blockH = lines.length * bodyLineHeight;
+        const startY = curY + (rH - blockH) / 2;
+
+        lines.forEach((line, lineIdx) => {
+          const lineW = mctx.measureText(line).width;
+          let tx = curX + colPadding;
+          if (align === 'center') tx = curX + (w - lineW) / 2;
+          else if (align === 'right') tx = curX + w - colPadding - lineW;
+          ctx.fillText(line, tx, startY + lineIdx * bodyLineHeight);
+        });
+
+        if (c > 0) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+          ctx.fillRect(curX, curY + 4, 1, rH - 8);
+        }
+        curX += w;
+      }
+
+      curY += rH;
+    }
+
+    ctx.restore();
+
+    return canvas.toDataURL('image/png');
+  })()`;
+}
+
+async function renderTableToPng(tableData, cdpProvider) {
+  if (!tableData || !tableData.headers) return null;
+  const script = buildCanvasTableScript(tableData);
+
+  // 1. Try directly via cdpProvider.evaluate (try default context first, then contextId)
+  if (cdpProvider && typeof cdpProvider.evaluate === 'function') {
+    try {
+      let val = await cdpProvider.evaluate(script);
+      if (!val && cdpProvider.contextId) {
+        val = await cdpProvider.evaluate(script, cdpProvider.contextId);
+      }
+      if (val && typeof val === 'string' && val.startsWith('data:image/png;base64,')) {
+        const base64 = val.replace(/^data:image\/png;base64,/, '');
+        return Buffer.from(base64, 'base64');
+      }
+    } catch (err) {}
+  }
+
+  // 2. Try via cdpProvider.call
+  if (cdpProvider && typeof cdpProvider.call === 'function') {
+    try {
+      let res = await cdpProvider.call("Runtime.evaluate", {
+        expression: script,
+        returnByValue: true
+      });
+      let val = res?.result?.value;
+      if (!val && cdpProvider.contextId) {
+        res = await cdpProvider.call("Runtime.evaluate", {
+          expression: script,
+          returnByValue: true,
+          contextId: cdpProvider.contextId
+        });
+        val = res?.result?.value;
+      }
+      if (val && typeof val === 'string' && val.startsWith('data:image/png;base64,')) {
+        const base64 = val.replace(/^data:image\/png;base64,/, '');
+        return Buffer.from(base64, 'base64');
+      }
+    } catch (err) {}
+  }
+
+  // 3. Fallback: direct HTTP discovery + bundled WebSocket (UC)
+  try {
+    const pngBuffer = await new Promise((resolve) => {
+      const http = require('http');
+      const debugPort = vr.workspace?.getConfiguration("antigravity-discord")?.get("debugPort", 9000) || 9000;
+      const req = http.get(`http://127.0.0.1:${debugPort}/json`, (res) => {
+        let raw = '';
+        res.on('data', chunk => raw += chunk);
+        res.on('end', () => {
+          try {
+            const targets = JSON.parse(raw);
+            const target = targets.find(t => t.type === 'page' || t.type === 'app' || t.type === 'webview' || t.type === 'iframe' || !t.type);
+            if (!target || !target.webSocketDebuggerUrl) return resolve(null);
+
+            const WsClass = (typeof UC !== 'undefined' && UC) ||
+                            (typeof kae !== 'undefined' && kae?.default) ||
+                            (typeof WebSocket !== 'undefined' ? WebSocket : null) ||
+                            globalThis.WebSocket;
+            if (!WsClass) return resolve(null);
+            const ws = new WsClass(target.webSocketDebuggerUrl);
+            const timer = setTimeout(() => {
+              try { ws.close(); } catch {}
+              resolve(null);
+            }, 4000);
+
+            const sendPayload = JSON.stringify({
+              id: 9911,
+              method: 'Runtime.evaluate',
+              params: { expression: script, returnByValue: true }
+            });
+
+            const onMsg = (event) => {
+              try {
+                const rawMsg = typeof event === 'string' ? event : (event.data !== undefined ? event.data : event.toString());
+                const resp = JSON.parse(rawMsg);
+                if (resp.id === 9911) {
+                  clearTimeout(timer);
+                  if (resp.result?.result?.value && typeof resp.result.result.value === 'string' && resp.result.result.value.startsWith('data:image/png;base64,')) {
+                    const base64 = resp.result.result.value.replace(/^data:image\/png;base64,/, '');
+                    try { ws.close(); } catch {}
+                    return resolve(Buffer.from(base64, 'base64'));
+                  }
+                  try { ws.close(); } catch {}
+                  return resolve(null);
+                }
+              } catch {}
+            };
+
+            const onErr = () => {
+              clearTimeout(timer);
+              resolve(null);
+            };
+
+            if (typeof ws.on === 'function') {
+              ws.on('open', () => ws.send(sendPayload));
+              ws.on('message', onMsg);
+              ws.on('error', onErr);
+            } else {
+              ws.onopen = () => ws.send(sendPayload);
+              ws.onmessage = onMsg;
+              ws.onerror = onErr;
+            }
+          } catch {
+            resolve(null);
+          }
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.setTimeout(3500, () => {
+        req.destroy();
+        resolve(null);
+      });
+    });
+    if (pngBuffer) return pngBuffer;
+  } catch (err) {}
+
+  // 4. Fallback: Headless Browser (Edge / Chrome) for Copilot, CLI, or Standalone Daemon without CDP
+  try {
+    const headlessBuffer = await renderTableHeadlessFallback(tableData);
+    if (headlessBuffer && headlessBuffer.length > 0) return headlessBuffer;
+  } catch {}
+
+  return null;
+}
+
+function findHeadlessBrowser() {
+  const fs = require('fs');
+  const cp = require('child_process');
+  if (process.platform === 'win32') {
+    const candidates = [
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+  } else {
+    const candidates = ['google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge'];
+    for (const c of candidates) {
+      try {
+        cp.execSync(`which ${c}`, { stdio: 'ignore' });
+        return c;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+function buildHeadlessTableHtml(tableData) {
+  const headers = tableData.headers || [];
+  const rows = tableData.rows || [];
+  const alignments = tableData.alignments || [];
+
+  const esc = (str) => {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+
+  const thHtml = headers.map((h, i) => {
+    const align = alignments[i] || 'left';
+    return `<th style="padding: 10px 14px; text-align: ${align}; border-bottom: 2px solid #5865F2; color: #fff; font-size: 14px; font-weight: 600;">${esc(h)}</th>`;
+  }).join('');
+
+  const trHtml = rows.map((row, rIdx) => {
+    const bg = rIdx % 2 === 0 ? '#2b2d31' : '#313338';
+    const tdHtml = row.map((cell, cIdx) => {
+      const align = alignments[cIdx] || 'left';
+      return `<td style="padding: 9px 14px; text-align: ${align}; border-bottom: 1px solid #3f4147; color: #dbdee1; font-size: 13px;">${esc(cell)}</td>`;
+    }).join('');
+    return `<tr style="background: ${bg};">${tdHtml}</tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; padding: 16px; background: #1e1f22; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: inline-block; }
+  .table-card { border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.4); border: 1px solid #383a40; background: #2b2d31; display: inline-block; }
+  table { border-collapse: collapse; width: 100%; min-width: 320px; }
+  .header-banner { background: linear-gradient(90deg, #5865F2, #4752C4); color: white; padding: 8px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+</style></head><body>
+  <div class="table-card">
+    <div class="header-banner">📊 Dis-Gravity Data Table</div>
+    <table>
+      <thead><tr style="background: #232428;">${thHtml}</tr></thead>
+      <tbody>${trHtml}</tbody>
+    </table>
+  </div>
+</body></html>`;
+}
+
+async function renderTableHeadlessFallback(tableData) {
+  const browserPath = findHeadlessBrowser();
+  if (!browserPath) return null;
+
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+  const cp = require('child_process');
+
+  const tempHtml = path.join(os.tmpdir(), `table_${Date.now()}_${Math.random().toString(36).substring(2)}.html`);
+  const tempPng = path.join(os.tmpdir(), `table_${Date.now()}_${Math.random().toString(36).substring(2)}.png`);
+
+  try {
+    const html = buildHeadlessTableHtml(tableData);
+    fs.writeFileSync(tempHtml, html, 'utf8');
+
+    const colCount = (tableData.headers || []).length || 3;
+    const rowCount = (tableData.rows || []).length || 3;
+    const width = Math.min(1200, Math.max(450, colCount * 180));
+    const height = Math.min(1000, Math.max(200, (rowCount + 2) * 45 + 80));
+
+    const cmd = `"${browserPath}" --headless --disable-gpu --hide-scrollbars --screenshot="${tempPng}" --window-size=${width},${height} "file:///${tempHtml.replace(/\\/g, '/')}"`;
+    cp.execSync(cmd, { timeout: 6000, stdio: 'ignore' });
+
+    if (fs.existsSync(tempPng)) {
+      const buf = fs.readFileSync(tempPng);
+      try { fs.unlinkSync(tempHtml); } catch {}
+      try { fs.unlinkSync(tempPng); } catch {}
+      return buf;
+    }
+  } catch {
+  } finally {
+    try { if (fs.existsSync(tempHtml)) fs.unlinkSync(tempHtml); } catch {}
+    try { if (fs.existsSync(tempPng)) fs.unlinkSync(tempPng); } catch {}
+  }
+  return null;
+}
+
+function formatMarkdownTablesForDiscord(text, styleName = 'image', successfulIndices = null) {
+  if (!text || typeof text !== 'string') return text || '';
+  if (styleName === 'raw') return text;
+
+  const parts = [];
+  const fenceRegex = /(```[\s\S]*?```)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = fenceRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ isCode: false, content: text.substring(lastIndex, match.index) });
+    }
+    parts.push({ isCode: true, content: match[0] });
+    lastIndex = fenceRegex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push({ isCode: false, content: text.substring(lastIndex) });
+  }
+
+  const isSeparatorLine = (line) => {
+    const s = line.trim();
+    if (!s.includes('-')) return false;
+    return /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$/.test(s);
+  };
+
+  const isTableRow = (line) => {
+    const s = line.trim();
+    return s.includes('|') && s.length > 1;
+  };
+
+  let globalTableIndex = 0;
+
+  const transformedParts = parts.map(part => {
+    if (part.isCode) return part.content;
+
+    const lines = part.content.split('\n');
+    const newLines = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (i + 1 < lines.length && isTableRow(line) && isSeparatorLine(lines[i + 1])) {
+        const headerLine = line;
+        const separatorLine = lines[i + 1];
+        const headers = splitTableRow(headerLine);
+        const alignments = splitTableRow(separatorLine).map(parseColumnAlignment);
+        const rows = [];
+        let rIdx = i + 2;
+
+        while (rIdx < lines.length && isTableRow(lines[rIdx]) && !isSeparatorLine(lines[rIdx])) {
+          rows.push(splitTableRow(lines[rIdx]));
+          rIdx++;
+        }
+
+        const tIdx = globalTableIndex++;
+        const hasImage = successfulIndices ? successfulIndices.has(tIdx) : (styleName === 'image' && successfulIndices === null);
+
+        if (styleName === 'cards') {
+          newLines.push(renderTableAsCards(headers, rows, alignments));
+        } else if (styleName === 'image') {
+          if (hasImage) {
+            newLines.push(`📊 **[Table: ${headers.join(' | ')}]** *(Visual table image attached below)*`);
+          } else {
+            newLines.push(renderTableAsCards(headers, rows, alignments));
+          }
+        } else {
+          const tableText = renderCleanBoxTable(headers, rows, alignments, styleName);
+          if (tableText) {
+            newLines.push(tableText);
+          } else {
+            newLines.push(line);
+            newLines.push(separatorLine);
+            for (const row of rows) newLines.push('| ' + row.join(' | ') + ' |');
+          }
+        }
+        i = rIdx;
+      } else {
+        newLines.push(line);
+        i++;
+      }
+    }
+
+    return newLines.join('\n');
+  });
+
+  return transformedParts.join('');
+}
 var COMMAND_PALETTE_CATALOG = [
   // Developer & Window
   { id: "workbench.action.reloadWindow", label: "🔄 Reload Window", title: "Developer: Reload Window", category: "developer", style: 4 },
@@ -323,6 +1236,7 @@ var TC = class {
   log;
   connected = !1;
   interactionCallback = null;
+  bridge = null;
   constructor(e, i) {
     ((this.channelId = e),
       (this.log = i),
@@ -657,6 +1571,33 @@ var TC = class {
           ]
         },
         {
+          name: "table",
+          description: "Configure or preview tabular column rendering style in Discord",
+          options: [
+            {
+              name: "style",
+              description: "Border style for tabular columns (rounded, boxed, ascii, minimal, raw)",
+              type: 3,
+              required: false,
+              choices: [
+                { name: "Rounded Unicode (╭─┬─╮, │, ╰─┴─╯) - Modern (Default)", value: "rounded" },
+                { name: "Boxed Unicode (┌─┬─┐, │, └─┴─┘) - Standard", value: "boxed" },
+                { name: "ASCII (+---+, |, +---+) - Universal", value: "ascii" },
+                { name: "Minimal (underlined header only)", value: "minimal" },
+                { name: "Raw Markdown (unconverted pipes)", value: "raw" }
+              ]
+            }
+          ]
+        },
+        {
+          name: "info",
+          description: "View host hardware resources, workspace state, git branch, and agent health"
+        },
+        {
+          name: "workspace",
+          description: "View current workspace status, dirty files, active editor, and system metrics"
+        },
+        {
           name: "help",
           description: "Show quick reference guide for Dis-Gravity commands"
         }
@@ -724,6 +1665,27 @@ var TC = class {
     });
     return row;
   }
+  buildTableStyleActionRow(currentStyle) {
+    const s = (currentStyle || "image").toLowerCase();
+    const row = new ri.ActionRowBuilder();
+    const styles = [
+      { id: "image", label: "🖼️ Visual Image", key: "image" },
+      { id: "cards", label: "📱 Mobile Cards", key: "cards" },
+      { id: "rounded", label: "╭─╮ Rounded", key: "rounded" },
+      { id: "boxed", label: "┌─┐ Boxed", key: "boxed" },
+      { id: "ascii", label: "+-+ ASCII", key: "ascii" }
+    ];
+    styles.forEach((st) => {
+      const isCurrent = s === st.key;
+      row.addComponents(
+        new ri.ButtonBuilder()
+          .setCustomId(`table:set:${st.id}`)
+          .setLabel(st.label)
+          .setStyle(isCurrent ? ri.ButtonStyle.Success : ri.ButtonStyle.Secondary)
+      );
+    });
+    return row;
+  }
   buildStatusActionRow(isBusy) {
     const row = new ri.ActionRowBuilder();
     if (isBusy) {
@@ -772,6 +1734,24 @@ var TC = class {
       new ri.ButtonBuilder()
         .setCustomId("action:git_status")
         .setLabel("📊 Status")
+        .setStyle(ri.ButtonStyle.Secondary)
+    );
+    return row;
+  }
+  buildInfoActionRow() {
+    const row = new ri.ActionRowBuilder();
+    row.addComponents(
+      new ri.ButtonBuilder()
+        .setCustomId("action:workbench.action.reloadWindow")
+        .setLabel("🔄 Reload Window")
+        .setStyle(ri.ButtonStyle.Secondary),
+      new ri.ButtonBuilder()
+        .setCustomId("action:git_diff")
+        .setLabel("⚡ Git Diff")
+        .setStyle(ri.ButtonStyle.Primary),
+      new ri.ButtonBuilder()
+        .setCustomId("palette:cat:featured")
+        .setLabel("🎮 Palette")
         .setStyle(ri.ButtonStyle.Secondary)
     );
     return row;
@@ -1013,20 +1993,93 @@ var TC = class {
   }
   async sendMessage(e, components = null, files = null) {
     if (!this.channel) throw new Error("Not connected to Discord");
-    let chunks = sU(e, 1850);
+    let config = vr.workspace.getConfiguration("antigravity-discord");
+    let tableStyle = config.get("tableStyle", "image");
+    let autoAttach = config.get("autoAttachTableImages", true);
+
+    let outFiles = files ? [...files] : [];
+    const tables = extractMarkdownTables(e);
+    const successfulTableIndices = new Set();
+    if (tables.length > 0 && (tableStyle === "image" || autoAttach)) {
+      const os = require("os");
+      const path = require("path");
+      const fs = require("fs");
+      const tempDir = path.join(os.tmpdir(), "disgravity-tables");
+      try { if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true }); } catch {}
+
+      for (let tIdx = 0; tIdx < tables.length; tIdx++) {
+        const t = tables[tIdx];
+        try {
+          const pngBuf = await renderTableToPng(t, this.bridge?.cdp);
+          if (pngBuf && pngBuf.length > 0) {
+            const fileName = tables.length === 1 ? "table.png" : `table-${tIdx + 1}.png`;
+            const filePath = path.join(tempDir, `${Date.now()}_${tIdx}_${fileName}`);
+            fs.writeFileSync(filePath, pngBuf);
+            outFiles.push({ attachment: filePath, name: fileName });
+            successfulTableIndices.add(tIdx);
+            this.log?.appendLine(`[Table] Rendered table PNG image card saved: ${filePath} (${pngBuf.length} bytes)`);
+          } else {
+            this.log?.appendLine(`[Table] Warning: renderTableToPng returned null for table ${tIdx + 1}, falling back to mobile card view`);
+          }
+        } catch (err) {
+          this.log?.appendLine(`[Table] Error rendering table image: ${err}`);
+        }
+      }
+    }
+
+    let formatted = formatMarkdownTablesForDiscord(e, tableStyle, successfulTableIndices);
+    let chunks = sU(formatted, 1850);
     let lastMsg = null;
     for (let idx = 0; idx < chunks.length; idx++) {
       let payload = { content: clampDiscordContent(chunks[idx], 1950) };
-      if (idx === chunks.length - 1) {
-        if (components && components.length > 0) payload.components = components;
-        if (files && files.length > 0) payload.files = files;
+      if (outFiles.length > 0 && (chunks[idx].includes("[Table:") || idx === chunks.length - 1)) {
+        payload.files = outFiles;
+        outFiles = [];
+      }
+      if (idx === chunks.length - 1 && components && components.length > 0) {
+        payload.components = components;
       }
       lastMsg = await this.channel.send(payload);
     }
     return lastMsg;
   }
   async sendToThread(e, i, components = null, files = null) {
-    let r = sU(i, 1850);
+    let config = vr.workspace.getConfiguration("antigravity-discord");
+    let tableStyle = config.get("tableStyle", "image");
+    let autoAttach = config.get("autoAttachTableImages", true);
+
+    let outFiles = files ? [...files] : [];
+    const tables = extractMarkdownTables(i);
+    const successfulTableIndices = new Set();
+    if (tables.length > 0 && (tableStyle === "image" || autoAttach)) {
+      const os = require("os");
+      const path = require("path");
+      const fs = require("fs");
+      const tempDir = path.join(os.tmpdir(), "disgravity-tables");
+      try { if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true }); } catch {}
+
+      for (let tIdx = 0; tIdx < tables.length; tIdx++) {
+        const t = tables[tIdx];
+        try {
+          const pngBuf = await renderTableToPng(t, this.bridge?.cdp);
+          if (pngBuf && pngBuf.length > 0) {
+            const fileName = tables.length === 1 ? "table.png" : `table-${tIdx + 1}.png`;
+            const filePath = path.join(tempDir, `${Date.now()}_${tIdx}_${fileName}`);
+            fs.writeFileSync(filePath, pngBuf);
+            outFiles.push({ attachment: filePath, name: fileName });
+            successfulTableIndices.add(tIdx);
+            this.log?.appendLine(`[Table] Rendered table PNG image card saved: ${filePath} (${pngBuf.length} bytes)`);
+          } else {
+            this.log?.appendLine(`[Table] Warning: renderTableToPng returned null for table ${tIdx + 1}, falling back to mobile card view`);
+          }
+        } catch (err) {
+          this.log?.appendLine(`[Table] Error rendering table image: ${err}`);
+        }
+      }
+    }
+
+    let formatted = formatMarkdownTablesForDiscord(i, tableStyle, successfulTableIndices);
+    let r = sU(formatted, 1850);
     let lastMsg = null;
     for (let idx = 0; idx < r.length; idx++) {
       let n = r[idx];
@@ -1034,9 +2087,12 @@ var TC = class {
         .toString()
         .padStart(5, "0")}`;
       let payload = { content: clampDiscordContent(n, 1950), nonce: s, enforceNonce: !0 };
-      if (idx === r.length - 1) {
-        if (components && components.length > 0) payload.components = components;
-        if (files && files.length > 0) payload.files = files;
+      if (outFiles.length > 0 && (n.includes("[Table:") || idx === r.length - 1)) {
+        payload.files = outFiles;
+        outFiles = [];
+      }
+      if (idx === r.length - 1 && components && components.length > 0) {
+        payload.components = components;
       }
       lastMsg = await e.send(payload);
     }
@@ -1126,7 +2182,8 @@ var ol = Xn(require("vscode")),
                   channelId: s.get("channelId", ""),
                   debugPort: s.get("debugPort", 9e3),
                   allowedUsers: s.get("allowedUsers", ""),
-                  agentProvider: s.get("agentProvider", "auto")
+                  agentProvider: s.get("agentProvider", "auto"),
+                  tableStyle: s.get("tableStyle", "rounded")
                 };
               e.webview.postMessage({ type: "settings", data: o });
               break;
@@ -1516,6 +2573,20 @@ var ol = Xn(require("vscode")),
             </select>
         </div>
 
+        <div class="setting-group">
+            <label for="s-table-style">Table Style</label>
+            <div class="description">Tabular column rendering style for Discord</div>
+            <select id="s-table-style" style="width: 100%; padding: 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px;">
+                <option value="image">🖼️ Visual Table Image (PNG - Mobile & Desktop friendly) - Recommended</option>
+                <option value="cards">📱 Mobile Record Cards (Zero-wrap rows)</option>
+                <option value="rounded">Rounded Unicode Box (╭─┬─╮)</option>
+                <option value="boxed">Standard Unicode Box (┌─┬─┐)</option>
+                <option value="ascii">ASCII Universal (+---+)</option>
+                <option value="minimal">Minimal (Header underline)</option>
+                <option value="raw">Raw Markdown Pipes</option>
+            </select>
+        </div>
+
 
 
         <div class="btn-row">
@@ -1553,6 +2624,7 @@ var ol = Xn(require("vscode")),
         const portInput = document.getElementById('s-port');
         const usersInput = document.getElementById('s-users');
         const providerInput = document.getElementById('s-provider');
+        const tableStyleInput = document.getElementById('s-table-style');
         const savedMsg = document.getElementById('saved-msg');
 
         function flashSaved() {
@@ -1578,6 +2650,9 @@ var ol = Xn(require("vscode")),
         usersInput.addEventListener('input', () => debounceSave('allowedUsers', usersInput.value));
         if (providerInput) {
             providerInput.addEventListener('change', () => saveSetting('agentProvider', providerInput.value));
+        }
+        if (tableStyleInput) {
+            tableStyleInput.addEventListener('change', () => saveSetting('tableStyle', tableStyleInput.value));
         }
 
         // Reconnect button
@@ -1642,6 +2717,9 @@ var ol = Xn(require("vscode")),
                 usersInput.value = data.allowedUsers || '';
                 if (providerInput && data.agentProvider) {
                     providerInput.value = data.agentProvider;
+                }
+                if (tableStyleInput && data.tableStyle) {
+                    tableStyleInput.value = data.tableStyle;
                 }
             }
 
@@ -2637,9 +3715,11 @@ var FC = class {
   }
 
   targetPriority(e) {
-    return e.title === "Manager"
+    const title = (e.title || "").toLowerCase();
+    const url = (e.url || "").toLowerCase();
+    return e.title === "Manager" || title.includes("composer") || title.includes("cascade")
       ? 0
-      : e.url?.includes("workbench") || e.title?.toLowerCase().includes("workbench")
+      : url.includes("workbench") || title.includes("workbench")
         ? 1
         : 2;
   }
@@ -2702,6 +3782,14 @@ var FC = class {
                                     const lexical = [...document.querySelectorAll('[data-lexical-editor="true"][contenteditable="true"]')]
                                         .filter(el => el.offsetParent !== null);
                                     if (lexical.length > 0) return { found: true, method: 'lexical' };
+
+                                    const composer = [...document.querySelectorAll('[data-testid="composer-input"], .composer-bar textarea, .composer-bar [contenteditable="true"], textarea.cursor-composer-input')]
+                                        .filter(el => el.offsetParent !== null);
+                                    if (composer.length > 0) return { found: true, method: 'cursor-composer' };
+
+                                    const cascade = [...document.querySelectorAll('textarea[data-testid="cascade-input"], .cascade-input, [data-testid="chat-input"]')]
+                                        .filter(el => el.offsetParent !== null);
+                                    if (cascade.length > 0) return { found: true, method: 'windsurf-cascade' };
 
                                     const anyEditable = [...document.querySelectorAll('[contenteditable="true"]')]
                                         .filter(el => el.offsetParent !== null);
@@ -2798,11 +3886,15 @@ var FC = class {
     '      const rows = Array.from(node.querySelectorAll("tr"));',
     '      if (rows.length > 0) {',
     '        let tableMd = NL;',
+    '        let hasSep = false;',
     '        rows.forEach((tr, rIdx) => {',
     '          const cells = Array.from(tr.querySelectorAll("th, td"));',
-    '          tableMd += "| " + cells.map(c => htmlToMarkdown(c).trim()).join(" | ") + " |" + NL;',
-    '          if (rIdx === 0 && tr.querySelector("th")) {',
+    '          if (cells.length === 0) return;',
+    '          const isHeader = tr.querySelector("th") !== null || tr.closest("thead") !== null || rIdx === 0;',
+    '          tableMd += "| " + cells.map(c => htmlToMarkdown(c).trim().replace(/[\\r\\n]+/g, " ").replace(/\\|/g, "\\\\|")).join(" | ") + " |" + NL;',
+    '          if (isHeader && !hasSep) {',
     '            tableMd += "| " + cells.map(() => "---").join(" | ") + " |" + NL;',
+    '            hasSep = true;',
     '          }',
     '        });',
     '        md += tableMd + NL;',
@@ -3539,66 +4631,230 @@ class AntigravityAgentProvider extends FC {
   }
 }
 
-class CursorAgentProvider extends BaseAgentProvider {
+class CursorAgentProvider extends FC {
   id = "cursor";
-  displayName = "Cursor AI (Composer & Chat)";
+  displayName = "Cursor AI (CDP Composer & Chat)";
   hostApp = "Cursor";
-  constructor(log) {
-    super(log);
+
+  constructor(port, log, extension) {
+    super(port || 9000, log);
+    this.extension = extension;
   }
-  async connect() {
-    this.connected = true;
-    this.log.appendLine("[CursorProvider] Connected to Cursor AI environment");
+
+  targetPriority(e) {
+    const title = (e.title || "").toLowerCase();
+    const url = (e.url || "").toLowerCase();
+    if (title.includes("composer") || title.includes("cursor")) return 0;
+    if (url.includes("workbench") || title.includes("workbench")) return 1;
+    return 2;
   }
-  disconnect() {
-    this.connected = false;
-  }
-  async isBusy() {
-    return false;
-  }
-  async cancelAgent() {
+
+  async sendMessage(text) {
+    this.log?.appendLine(`[CursorProvider] Forwarding prompt to Cursor: ${text.substring(0, 80)}...`);
     try {
-      await vr.commands.executeCommand("composer.cancel").then(null, () => {});
-      await vr.commands.executeCommand("cursor.chat.cancel").then(null, () => {});
-      return { ok: true, method: "cursor_cancel" };
+      await vr.commands.executeCommand("composer.startComposer");
+    } catch {}
+
+    const isPlan = /^\/plan\b/i.test(text.trim());
+    const isEdit = /^\/edit\b/i.test(text.trim());
+
+    if (this.isConnected()) {
+      try {
+        const injectScript = `(() => {
+          // Switch mode if /plan or /edit requested
+          if (${isPlan}) {
+            const planBtn = [...document.querySelectorAll('button, .composer-mode-button, .composer-mode-selector span, [data-testid="composer-mode-dropdown"] option')].find(el => /plan/i.test(el.textContent || ''));
+            if (planBtn) planBtn.click();
+          } else if (${isEdit}) {
+            const editBtn = [...document.querySelectorAll('button, .composer-mode-button, .composer-mode-selector span, [data-testid="composer-mode-dropdown"] option')].find(el => /edit/i.test(el.textContent || ''));
+            if (editBtn) editBtn.click();
+          }
+
+          const composer = document.querySelector('[data-testid="composer-input"]') ||
+                           document.querySelector('.composer-bar textarea') ||
+                           document.querySelector('.composer-bar [contenteditable="true"]') ||
+                           document.querySelector('textarea.cursor-composer-input') ||
+                           document.querySelector('[data-lexical-editor="true"]') ||
+                           document.querySelector('[contenteditable="true"]');
+          if (!composer) return { ok: false, error: "composer_not_found" };
+
+          composer.focus();
+          if (composer.tagName === 'TEXTAREA' || composer.tagName === 'INPUT') {
+            composer.value = ${JSON.stringify(text)};
+            composer.dispatchEvent(new Event('input', { bubbles: true }));
+          } else {
+            composer.innerText = ${JSON.stringify(text)};
+            composer.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+
+          const sendBtn = document.querySelector('[data-testid="composer-submit"]') ||
+                          document.querySelector('button[aria-label*="Send"]') ||
+                          document.querySelector('.composer-bar button:has(svg)');
+          if (sendBtn) {
+            sendBtn.click();
+            return { ok: true, method: "click_submit" };
+          }
+
+          composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          return { ok: true, method: "dispatch_enter" };
+        })()`;
+
+        const res = await this.evaluate(injectScript, this.contextId);
+        if (res && res.ok) {
+          this.log?.appendLine(`[CursorProvider] Injected prompt via CDP (${res.method})`);
+          return { ok: true, method: res.method };
+        }
+      } catch (err) {
+        this.log?.appendLine(`[CursorProvider] CDP injection failed: ${err.message}`);
+      }
+    }
+
+    return { ok: true, method: "cursor_focused" };
+  }
+
+  async isBusy() {
+    if (!this.isConnected()) return false;
+    try {
+      const script = `(() => {
+        return !!(
+          document.querySelector('.cursor-ai-streaming') ||
+          document.querySelector('[data-testid="stop-generating"]') ||
+          document.querySelector('button[aria-label*="Stop"]') ||
+          document.querySelector('.composer-step.is-running') ||
+          document.querySelector('.generating-indicator')
+        );
+      })()`;
+      return !!(await this.evaluate(script, this.contextId));
+    } catch {
+      return false;
+    }
+  }
+
+  async getActiveStepStatus() {
+    if (!this.isConnected()) return null;
+    try {
+      const script = `(() => {
+        const stepEl = document.querySelector('[data-testid="tool-call"]') ||
+                       document.querySelector('.composer-step-pill') ||
+                       document.querySelector('.composer-step-status') ||
+                       document.querySelector('.tool-call-pill') ||
+                       document.querySelector('.composer-progress');
+        if (stepEl) {
+          const text = (stepEl.textContent || '').trim();
+          if (text) return text;
+        }
+        if (document.querySelector('.cursor-ai-streaming')) return "Generating response...";
+        return null;
+      })()`;
+      return await this.evaluate(script, this.contextId);
+    } catch {
+      return null;
+    }
+  }
+
+  async getActivePrompt() {
+    if (!this.isConnected()) return null;
+    try {
+      const script = `(() => {
+        const buttons = [...document.querySelectorAll('button')];
+        const runBtn = buttons.find(b => /^(run command|accept|allow|proceed)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+        const rejectBtn = buttons.find(b => /^(reject|deny|cancel)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+
+        if (runBtn) {
+          return {
+            question: "Cursor Composer action requires approval",
+            options: [
+              { id: "accept", text: runBtn.textContent.trim() },
+              { id: "reject", text: rejectBtn ? rejectBtn.textContent.trim() : "Reject" }
+            ],
+            isApproval: true,
+            hasWriteIn: false,
+            hasSkip: false
+          };
+        }
+        return null;
+      })()`;
+      return await this.evaluate(script, this.contextId);
+    } catch {
+      return null;
+    }
+  }
+
+  async answerPrompt(ans) {
+    if (!this.isConnected()) return { ok: false, error: "not_connected" };
+    try {
+      const ansLower = (ans || "").toLowerCase();
+      const isAffirmative = /^(accept|run|allow|proceed|yes)/i.test(ansLower);
+      const script = `(() => {
+        const buttons = [...document.querySelectorAll('button')];
+        if (${isAffirmative}) {
+          const runBtn = buttons.find(b => /^(run command|accept|allow|proceed)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+          if (runBtn) { runBtn.click(); return { ok: true, clicked: runBtn.textContent.trim() }; }
+        } else {
+          const rejectBtn = buttons.find(b => /^(reject|deny|cancel)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+          if (rejectBtn) { rejectBtn.click(); return { ok: true, clicked: rejectBtn.textContent.trim() }; }
+        }
+        return { ok: false, error: "button_not_found" };
+      })()`;
+      return (await this.evaluate(script, this.contextId)) || { ok: false };
     } catch (err) {
       return { ok: false, error: err.message };
     }
   }
-  async sendMessage(text) {
-    this.log.appendLine(`[CursorProvider] Forwarding prompt to Cursor: ${text.substring(0, 80)}...`);
-    let dispatched = false;
+
+  async extractLastResponseMarkdown() {
+    if (!this.isConnected()) return "";
     try {
-      await vr.commands.executeCommand("composer.startComposer");
-      dispatched = true;
+      const script = `(() => {
+        const turns = [...document.querySelectorAll('.composer-turn.assistant, div[data-message-author="assistant"], .chat-turn.assistant, .composer-assistant-message')];
+        if (turns.length > 0) {
+          return turns[turns.length - 1].innerHTML;
+        }
+        return "";
+      })()`;
+      const html = await this.evaluate(script, this.contextId);
+      if (html) {
+        return this.htmlToMarkdown(html);
+      }
     } catch {}
-    if (!dispatched) {
+    return super.extractLastResponseMarkdown();
+  }
+
+  async cancelAgent() {
+    try {
+      await vr.commands.executeCommand("composer.cancel").then(null, () => {});
+    } catch {}
+    if (this.isConnected()) {
       try {
-        await vr.commands.executeCommand("cursor.chat.focus");
-        dispatched = true;
+        await this.evaluate(`(() => {
+          const stopBtn = document.querySelector('[data-testid="stop-generating"]') ||
+                          document.querySelector('button[aria-label*="Stop"]');
+          if (stopBtn) stopBtn.click();
+        })()`, this.contextId);
       } catch {}
     }
-    return { ok: true, method: dispatched ? "cursor_command" : "workspace_focus" };
+    return { ok: true, method: "cursor_cancel" };
   }
-  async waitForResponse(prevSnapshot, promptText) {
-    return `🚀 **Prompt dispatched to Cursor AI Composer:**\n\`\`\`text\n${promptText.substring(0, 1200)}\n\`\`\`\n💡 *Session focused in Cursor IDE.*`;
-  }
+
   async listModels() {
     return {
       models: [
         { name: "Claude 3.5 Sonnet", isSelected: true, hasEffort: false, speed: "Fast" },
         { name: "GPT-4o", isSelected: false, hasEffort: false, speed: "Standard" },
         { name: "Cursor-Small", isSelected: false, hasEffort: false, speed: "Ultra-fast" },
-        { name: "o1-preview", isSelected: false, hasEffort: true, speed: "Reasoning" }
+        { name: "o1-preview", isSelected: false, hasEffort: true, speed: "Reasoning" },
+        { name: "o1-mini", isSelected: false, hasEffort: true, speed: "Reasoning" }
       ],
       currentModel: "Claude 3.5 Sonnet",
       currentEffort: null,
       statusBar: "Cursor AI"
     };
   }
+
   async switchModel(name) {
     return name;
   }
+
   async createNewConversation() {
     try {
       await vr.commands.executeCommand("composer.startComposer");
@@ -3607,41 +4863,205 @@ class CursorAgentProvider extends BaseAgentProvider {
   }
 }
 
-class WindsurfAgentProvider extends BaseAgentProvider {
+class WindsurfAgentProvider extends FC {
   id = "windsurf";
-  displayName = "Windsurf (Cascade Agent)";
+  displayName = "Windsurf (CDP Cascade Agent)";
   hostApp = "Windsurf";
-  constructor(log) {
-    super(log);
+
+  constructor(port, log, extension) {
+    super(port || 9000, log);
+    this.extension = extension;
   }
-  async connect() {
-    this.connected = true;
-    this.log.appendLine("[WindsurfProvider] Connected to Windsurf Cascade environment");
+
+  targetPriority(e) {
+    const title = (e.title || "").toLowerCase();
+    const url = (e.url || "").toLowerCase();
+    if (title.includes("cascade") || title.includes("windsurf")) return 0;
+    if (url.includes("workbench") || title.includes("workbench")) return 1;
+    return 2;
   }
-  disconnect() {
-    this.connected = false;
-  }
-  async isBusy() {
-    return false;
-  }
-  async cancelAgent() {
+
+  async sendMessage(text) {
+    this.log?.appendLine(`[WindsurfProvider] Forwarding prompt to Windsurf Cascade: ${text.substring(0, 80)}...`);
     try {
-      await vr.commands.executeCommand("windsurf.cascade.cancel").then(null, () => {});
-      return { ok: true, method: "windsurf_cancel" };
+      await vr.commands.executeCommand("windsurf.prioritized.chat.focus").then(null, () => {});
+    } catch {}
+
+    if (this.isConnected()) {
+      try {
+        const injectScript = `(() => {
+          const findCascadeInput = (root = document) => {
+            let el = root.querySelector('textarea[data-testid="cascade-input"]') ||
+                     root.querySelector('.cascade-input') ||
+                     root.querySelector('[data-testid="chat-input"]') ||
+                     root.querySelector('textarea') ||
+                     root.querySelector('[contenteditable="true"]');
+            if (el) return el;
+            const iframes = root.querySelectorAll('iframe');
+            for (const ifr of iframes) {
+              try {
+                const sub = ifr.contentDocument?.querySelector('textarea, [contenteditable="true"]');
+                if (sub) return sub;
+              } catch {}
+            }
+            return null;
+          };
+
+          const cascadeInput = findCascadeInput();
+          if (!cascadeInput) return { ok: false, error: "cascade_input_not_found" };
+
+          cascadeInput.focus();
+          if (cascadeInput.tagName === 'TEXTAREA' || cascadeInput.tagName === 'INPUT') {
+            cascadeInput.value = ${JSON.stringify(text)};
+            cascadeInput.dispatchEvent(new Event('input', { bubbles: true }));
+          } else {
+            cascadeInput.innerText = ${JSON.stringify(text)};
+            cascadeInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+
+          const sendBtn = document.querySelector('[data-testid="send-button"]') ||
+                          document.querySelector('button[aria-label*="Send"]');
+          if (sendBtn) {
+            sendBtn.click();
+            return { ok: true, method: "click_send" };
+          }
+
+          cascadeInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          return { ok: true, method: "dispatch_enter" };
+        })()`;
+
+        const res = await this.evaluate(injectScript, this.contextId);
+        if (res && res.ok) {
+          this.log?.appendLine(`[WindsurfProvider] Injected prompt via CDP (${res.method})`);
+          return { ok: true, method: res.method };
+        }
+      } catch (err) {
+        this.log?.appendLine(`[WindsurfProvider] CDP injection error: ${err.message}`);
+      }
+    }
+    return { ok: true, method: "cascade_focus" };
+  }
+
+  async isBusy() {
+    if (!this.isConnected()) return false;
+    try {
+      const script = `(() => {
+        return !!(
+          document.querySelector('.cascade-generating') ||
+          document.querySelector('[data-testid="stop-cascade"]') ||
+          document.querySelector('.cascade-spinner') ||
+          document.querySelector('.is-generating')
+        );
+      })()`;
+      return !!(await this.evaluate(script, this.contextId));
+    } catch {
+      return false;
+    }
+  }
+
+  async getActiveStepStatus() {
+    if (!this.isConnected()) return null;
+    try {
+      const script = `(() => {
+        const card = document.querySelector('.cascade-step-card') ||
+                     document.querySelector('.cascade-action-status') ||
+                     document.querySelector('[data-testid="cascade-step"]');
+        if (card) {
+          const text = (card.textContent || '').trim();
+          if (text) return text;
+        }
+        if (document.querySelector('.cascade-generating')) return "Cascade running...";
+        return null;
+      })()`;
+      return await this.evaluate(script, this.contextId);
+    } catch {
+      return null;
+    }
+  }
+
+  async getActivePrompt() {
+    if (!this.isConnected()) return null;
+    try {
+      const script = `(() => {
+        const buttons = [...document.querySelectorAll('button')];
+        const acceptBtn = buttons.find(b => /^(accept|run in terminal|allow|approve)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+        const rejectBtn = buttons.find(b => /^(reject|deny|cancel)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+        if (acceptBtn) {
+          return {
+            question: "Windsurf Cascade action requires approval",
+            options: [
+              { id: "accept", text: acceptBtn.textContent.trim() },
+              { id: "reject", text: rejectBtn ? rejectBtn.textContent.trim() : "Reject" }
+            ],
+            isApproval: true,
+            hasWriteIn: false,
+            hasSkip: false
+          };
+        }
+        return null;
+      })()`;
+      return await this.evaluate(script, this.contextId);
+    } catch {
+      return null;
+    }
+  }
+
+  async answerPrompt(ans) {
+    if (!this.isConnected()) return { ok: false, error: "not_connected" };
+    try {
+      const ansLower = (ans || "").toLowerCase();
+      const isAffirmative = /^(accept|run|allow|proceed|yes)/i.test(ansLower);
+      const script = `(() => {
+        const buttons = [...document.querySelectorAll('button')];
+        if (${isAffirmative}) {
+          const btn = buttons.find(b => /^(accept|run in terminal|allow|approve)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+          if (btn) { btn.click(); return { ok: true, clicked: btn.textContent.trim() }; }
+        } else {
+          const btn = buttons.find(b => /^(reject|deny|cancel)/i.test((b.textContent || '').trim()) && b.offsetParent !== null);
+          if (btn) { btn.click(); return { ok: true, clicked: btn.textContent.trim() }; }
+        }
+        return { ok: false, error: "button_not_found" };
+      })()`;
+      return (await this.evaluate(script, this.contextId)) || { ok: false };
     } catch (err) {
       return { ok: false, error: err.message };
     }
   }
-  async sendMessage(text) {
-    this.log.appendLine(`[WindsurfProvider] Forwarding prompt to Windsurf Cascade: ${text.substring(0, 80)}...`);
+
+  async extractLastResponseMarkdown() {
+    if (!this.isConnected()) return "";
     try {
-      await vr.commands.executeCommand("windsurf.prioritized.chat.focus").then(null, () => {});
+      const script = `(() => {
+        const turns = [...document.querySelectorAll('.cascade-turn.assistant, [data-message-author="assistant"], .cascade-message-assistant')];
+        if (turns.length > 0) {
+          return turns[turns.length - 1].innerHTML;
+        }
+        return "";
+      })()`;
+      const html = await this.evaluate(script, this.contextId);
+      if (html) {
+        return this.htmlToMarkdown(html);
+      }
     } catch {}
-    return { ok: true, method: "cascade_focus" };
+    return super.extractLastResponseMarkdown();
   }
-  async waitForResponse(prevSnapshot, promptText) {
-    return `🏄 **Prompt dispatched to Windsurf Cascade:**\n\`\`\`text\n${promptText.substring(0, 1200)}\n\`\`\`\n💡 *Cascade session active in Windsurf.*`;
+
+  async cancelAgent() {
+    try {
+      await vr.commands.executeCommand("windsurf.cascade.cancel").then(null, () => {});
+    } catch {}
+    if (this.isConnected()) {
+      try {
+        await this.evaluate(`(() => {
+          const stopBtn = document.querySelector('[data-testid="stop-cascade"]') ||
+                          document.querySelector('button[aria-label*="Stop"]');
+          if (stopBtn) stopBtn.click();
+        })()`, this.contextId);
+      } catch {}
+    }
+    return { ok: true, method: "windsurf_cancel" };
   }
+
   async listModels() {
     return {
       models: [
@@ -3653,9 +5073,11 @@ class WindsurfAgentProvider extends BaseAgentProvider {
       statusBar: "Windsurf Cascade"
     };
   }
+
   async switchModel(name) {
     return name;
   }
+
   async createNewConversation() {
     try {
       await vr.commands.executeCommand("windsurf.cascade.newSession").then(null, () => {});
@@ -3666,55 +5088,367 @@ class WindsurfAgentProvider extends BaseAgentProvider {
 
 class CopilotAgentProvider extends BaseAgentProvider {
   id = "copilot";
-  displayName = "GitHub Copilot (VS Code)";
+  displayName = "VS Code Copilot (Native LM API)";
   hostApp = "Visual Studio Code";
-  constructor(log) {
+  selectedModelFamily = null;
+  selectedModelId = null;
+  isProcessing = false;
+  currentStepStatus = null;
+  pendingApproval = null;
+  approvalResolver = null;
+  cancellationTokenSource = null;
+  accumulatedMarkdown = "";
+  chatHistory = [];
+
+  constructor(extension, log) {
     super(log);
+    this.extension = extension;
   }
+
   async connect() {
     this.connected = true;
-    this.log.appendLine("[CopilotProvider] Connected to GitHub Copilot environment");
-  }
-  disconnect() {
-    this.connected = false;
-  }
-  async isBusy() {
-    return false;
-  }
-  async cancelAgent() {
     try {
-      await vr.commands.executeCommand("workbench.action.chat.cancel").then(null, () => {});
-      return { ok: true };
+      if (vr.lm && typeof vr.lm.selectChatModels === "function") {
+        const models = await vr.lm.selectChatModels();
+        this.log?.appendLine(`[CopilotProvider] Connected via VS Code Language Model API with ${models.length} model(s): ${models.map(m => m.name || m.id).join(", ")}`);
+        if (models.length > 0 && !this.selectedModelId) {
+          this.selectedModelId = models[0].id;
+          this.selectedModelFamily = models[0].family;
+        }
+      } else {
+        this.log?.appendLine("[CopilotProvider] Note: vr.lm is not supported on this host version. Chat commands will open the VS Code Chat panel.");
+      }
     } catch (err) {
-      return { ok: false, error: err.message };
+      this.log?.appendLine(`[CopilotProvider] Failed to query language models: ${err.message}`);
     }
   }
-  async sendMessage(text) {
-    this.log.appendLine(`[CopilotProvider] Forwarding to GitHub Copilot Chat: ${text.substring(0, 80)}...`);
+
+  disconnect() {
+    this.connected = false;
+    this.cancelAgent();
+  }
+
+  async isBusy() {
+    return this.isProcessing;
+  }
+
+  async getActiveStepStatus() {
+    return this.currentStepStatus;
+  }
+
+  async getActivePrompt() {
+    return this.pendingApproval;
+  }
+
+  async answerPrompt(ans) {
+    if (this.approvalResolver) {
+      const resolver = this.approvalResolver;
+      this.approvalResolver = null;
+      this.pendingApproval = null;
+      resolver(ans);
+      return { ok: true };
+    }
+    return { ok: false, error: "no_pending_approval" };
+  }
+
+  async cancelAgent() {
+    if (this.cancellationTokenSource) {
+      try { this.cancellationTokenSource.cancel(); } catch {}
+      this.cancellationTokenSource = null;
+    }
+    this.isProcessing = false;
+    this.currentStepStatus = null;
+    if (this.approvalResolver) {
+      this.approvalResolver("cancel");
+      this.approvalResolver = null;
+      this.pendingApproval = null;
+    }
     try {
-      await vr.commands.executeCommand("workbench.action.chat.open", text).then(null, () => {});
+      await vr.commands.executeCommand("workbench.action.chat.cancel").then(null, () => {});
     } catch {}
-    return { ok: true, method: "chat_open" };
+    return { ok: true, method: "copilot_cancelled" };
   }
-  async waitForResponse(prevSnapshot, promptText) {
-    return `🤖 **Prompt forwarded to GitHub Copilot Chat:**\n\`\`\`text\n${promptText.substring(0, 1200)}\n\`\`\`\n💡 *Session opened in VS Code Chat panel.*`;
-  }
+
   async listModels() {
+    try {
+      if (vr.lm && typeof vr.lm.selectChatModels === "function") {
+        const models = await vr.lm.selectChatModels();
+        if (models.length > 0) {
+          return {
+            models: models.map(m => ({
+              name: m.name || m.id,
+              id: m.id,
+              family: m.family,
+              isSelected: (m.id === this.selectedModelId || (!this.selectedModelId && m === models[0])),
+              hasEffort: /o1|o3|reasoning/i.test(m.family || m.id),
+              speed: /flash|mini|haiku|small/i.test(m.name || m.id) ? "Fast" : "Standard"
+            })),
+            currentModel: this.selectedModelId || models[0].name || models[0].id,
+            currentEffort: null,
+            statusBar: `VS Code LM (${models.length} models)`
+          };
+        }
+      }
+    } catch {}
+
     return {
       models: [
-        { name: "Claude 3.5 Sonnet (Copilot)", isSelected: true, hasEffort: false, speed: "Fast" },
-        { name: "GPT-4o (Copilot)", isSelected: false, hasEffort: false, speed: "Standard" },
-        { name: "o1-mini (Copilot)", isSelected: false, hasEffort: true, speed: "Reasoning" }
+        { name: "Claude 3.5 Sonnet (Copilot)", id: "copilot-claude-3.5-sonnet", isSelected: true, hasEffort: false, speed: "Fast" },
+        { name: "GPT-4o (Copilot)", id: "copilot-gpt-4o", isSelected: false, hasEffort: false, speed: "Standard" },
+        { name: "o1-mini (Copilot)", id: "copilot-o1-mini", isSelected: false, hasEffort: true, speed: "Reasoning" }
       ],
       currentModel: "Claude 3.5 Sonnet (Copilot)",
       currentEffort: null,
       statusBar: "GitHub Copilot"
     };
   }
+
   async switchModel(name) {
+    this.selectedModelId = name;
+    this.log?.appendLine(`[CopilotProvider] Active model switched to: ${name}`);
     return name;
   }
+
+  async sendMessage(text) {
+    this.log?.appendLine(`[CopilotProvider] Received prompt: ${text.substring(0, 80)}...`);
+    return { ok: true, method: "lm_request" };
+  }
+
+  async waitForResponse(prevSnapshot, promptText) {
+    this.isProcessing = true;
+    this.currentStepStatus = "Initializing Copilot Language Model...";
+    this.accumulatedMarkdown = "";
+
+    try {
+      if (vr.lm && typeof vr.lm.selectChatModels === "function") {
+        let models = [];
+        if (this.selectedModelId) {
+          models = await vr.lm.selectChatModels({ family: this.selectedModelId });
+          if (!models.length) models = await vr.lm.selectChatModels({ id: this.selectedModelId });
+        }
+        if (!models.length) {
+          models = await vr.lm.selectChatModels({ vendor: "copilot" });
+        }
+        if (!models.length) {
+          models = await vr.lm.selectChatModels();
+        }
+
+        if (models.length > 0) {
+          const model = models[0];
+          this.log?.appendLine(`[CopilotProvider] Executing request with model ${model.name || model.id} (${model.vendor})`);
+          this.cancellationTokenSource = new vr.CancellationTokenSource();
+
+          const fs = require("fs");
+          const path = require("path");
+          const root = this.extension?.getWorkspaceRoot ? this.extension.getWorkspaceRoot() : process.cwd();
+          const cfg = vr.workspace.getConfiguration("antigravity-discord");
+          const enableReAct = cfg.get("enableCopilotReAct", true) !== false;
+          const maxSteps = cfg.get("copilotMaxToolSteps", 10) || 10;
+
+          if (!enableReAct) {
+            const systemMsg = new vr.LanguageModelChatMessage(
+              vr.LanguageModelChatMessageRole.User,
+              `You are an AI coding assistant connected via Dis-Gravity. Workspace: ${root}. Provide direct production code and clear markdown.`
+            );
+            const userMsg = new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.User, promptText);
+            this.chatHistory.push(userMsg);
+            if (this.chatHistory.length > 10) this.chatHistory = this.chatHistory.slice(-10);
+
+            this.currentStepStatus = "💭 Thinking...";
+            const response = await model.sendRequest([systemMsg, ...this.chatHistory], {}, this.cancellationTokenSource.token);
+            let streamed = "";
+            for await (const chunk of response.text) {
+              if (this.cancellationTokenSource?.token?.isCancellationRequested) break;
+              streamed += chunk;
+              this.accumulatedMarkdown = streamed;
+            }
+            if (streamed.trim()) {
+              this.chatHistory.push(new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.Assistant, streamed));
+              return streamed;
+            }
+          }
+
+          // Full Autonomous ReAct Loop:
+          const systemMsg = new vr.LanguageModelChatMessage(
+            vr.LanguageModelChatMessageRole.User,
+            `You are an autonomous AI coding assistant connected to the user's workspace via Dis-Gravity.
+Workspace root: "${root}".
+You have access to the following workspace tools:
+1. view_file: Inspect file contents with line numbers. Arguments: {"path": "relative/path", "start_line": 1, "end_line": 100}
+2. edit_file: Write or update a file in the workspace. Arguments: {"path": "relative/path", "content": "..."}
+3. run_command: Run a shell command in the workspace. Arguments: {"command": "npm test"}
+4. git_diff: Inspect working tree git diff and modified files. Arguments: {"file": "optional/file"}
+5. list_dir: List files and folders in a directory. Arguments: {"path": "relative/path"}
+
+When answering, adopt an autonomous ReAct loop:
+If you need to view files, edit code, run commands, or check diffs, output:
+Thought: <what you are reasoning and planning to do>
+Action: <tool_name>
+Action Input: <JSON arguments object>
+
+When you receive the Observation, continue reasoning. When you have achieved the goal or if no tools are needed, output:
+Thought: I have completed the task.
+Final Answer: <your full markdown response to the user>`
+          );
+
+          const userMsg = new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.User, promptText);
+          const messages = [systemMsg, ...this.chatHistory.slice(-4), userMsg];
+          let currentStep = 0;
+          let finalResult = "";
+
+          while (currentStep < maxSteps) {
+            currentStep++;
+            if (this.cancellationTokenSource?.token?.isCancellationRequested) break;
+
+            this.currentStepStatus = currentStep === 1 ? "💭 Thinking..." : `Executing ReAct step ${currentStep}/${maxSteps}...`;
+            const response = await model.sendRequest(messages, {}, this.cancellationTokenSource.token);
+
+            let stepText = "";
+            for await (const chunk of response.text) {
+              if (this.cancellationTokenSource?.token?.isCancellationRequested) break;
+              stepText += chunk;
+              this.accumulatedMarkdown = stepText;
+            }
+
+            const actionMatch = stepText.match(/Action:\s*([a-zA-Z0-9_-]+)/i);
+            const inputMatch = stepText.match(/Action\s*Input:\s*(\{[\s\S]*?\}|\[[\s\S]*?\]|"[^"]*"|[^\n]+)/i);
+            const finalMatch = stepText.match(/Final\s*Answer:\s*([\s\S]*)$/i);
+
+            if (finalMatch) {
+              finalResult = finalMatch[1].trim();
+              break;
+            }
+
+            if (actionMatch && inputMatch) {
+              const toolName = actionMatch[1].trim();
+              let toolArgs = {};
+              try {
+                toolArgs = JSON.parse(inputMatch[1].trim());
+              } catch {
+                toolArgs = { input: inputMatch[1].trim() };
+              }
+
+              this.log?.appendLine(`[CopilotProvider] ReAct Step ${currentStep}: Tool=${toolName}, Args=${JSON.stringify(toolArgs).substring(0, 100)}`);
+              this.currentStepStatus = `⚡ Tool: ${toolName}...`;
+
+              // Check if modifying action requires approval
+              if (toolName === "edit_file" || toolName === "run_command") {
+                this.pendingApproval = {
+                  question: `Allow Copilot to execute: \`${toolName}\`?`,
+                  details: toolName === "run_command" ? (toolArgs.command || "") : (toolArgs.path || ""),
+                  options: [
+                    { id: "allow", text: `🟢 Allow ${toolName}` },
+                    { id: "deny", text: `🔴 Deny Action` }
+                  ],
+                  isApproval: true,
+                  hasWriteIn: false,
+                  hasSkip: false
+                };
+
+                const userChoice = await new Promise((res) => {
+                  this.approvalResolver = res;
+                  setTimeout(() => {
+                    if (this.approvalResolver === res) {
+                      this.approvalResolver = null;
+                      this.pendingApproval = null;
+                      res("timeout");
+                    }
+                  }, 60000);
+                });
+
+                if (userChoice !== "allow" && !/^(allow|yes|proceed|y)/i.test(userChoice)) {
+                  const deniedObservation = `Observation: Tool execution for ${toolName} was denied by the user.`;
+                  messages.push(new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.Assistant, stepText));
+                  messages.push(new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.User, deniedObservation));
+                  continue;
+                }
+              }
+
+              // Execute tool
+              let observation = "";
+              try {
+                if (toolName === "view_file") {
+                  const filePath = path.resolve(root, toolArgs.path || toolArgs.file || "");
+                  if (!fs.existsSync(filePath)) {
+                    observation = `Error: File not found: ${toolArgs.path}`;
+                  } else {
+                    const lines = fs.readFileSync(filePath, "utf8").split("\n");
+                    const start = Math.max(1, toolArgs.start_line || 1);
+                    const end = Math.min(lines.length, toolArgs.end_line || lines.length);
+                    observation = lines.slice(start - 1, end).map((l, i) => `${start + i}: ${l}`).join("\n");
+                    if (observation.length > 3000) observation = observation.substring(0, 3000) + "\n... (truncated)";
+                  }
+                } else if (toolName === "edit_file") {
+                  const filePath = path.resolve(root, toolArgs.path || toolArgs.file || "");
+                  const content = toolArgs.content || "";
+                  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+                  fs.writeFileSync(filePath, content, "utf8");
+                  observation = `File ${toolArgs.path} updated successfully (${content.length} bytes written).`;
+                } else if (toolName === "run_command") {
+                  const cmdStr = toolArgs.command || toolArgs.cmd || "";
+                  const cmdRes = await this.extension.executeShell(cmdStr, 30000);
+                  observation = `Exit Code: ${cmdRes.code} (${cmdRes.duration}s)\nOutput:\n${cmdRes.stdout || cmdRes.stderr || '(No output)'}`;
+                  if (observation.length > 3000) observation = observation.substring(0, 3000) + "\n... (truncated)";
+                } else if (toolName === "git_diff") {
+                  const targetFile = toolArgs.file || "";
+                  const diffRes = await this.extension.executeShell(`git diff ${targetFile}`, 10000);
+                  observation = diffRes.stdout.trim() || "No git diff changes detected.";
+                  if (observation.length > 3000) observation = observation.substring(0, 3000) + "\n... (truncated)";
+                } else if (toolName === "list_dir") {
+                  const targetDir = path.resolve(root, toolArgs.path || ".");
+                  if (!fs.existsSync(targetDir)) {
+                    observation = `Error: Directory not found: ${toolArgs.path}`;
+                  } else {
+                    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+                    observation = entries.slice(0, 50).map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`).join("\n");
+                  }
+                } else {
+                  observation = `Unknown tool: ${toolName}`;
+                }
+              } catch (toolErr) {
+                observation = `Tool execution error: ${toolErr.message}`;
+              }
+
+              messages.push(new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.Assistant, stepText));
+              messages.push(new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.User, `Observation:\n${observation}`));
+            } else {
+              finalResult = stepText.trim();
+              break;
+            }
+          }
+
+          if (!finalResult) finalResult = this.accumulatedMarkdown || "No response generated.";
+
+          this.chatHistory.push(new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.User, promptText));
+          this.chatHistory.push(new vr.LanguageModelChatMessage(vr.LanguageModelChatMessageRole.Assistant, finalResult));
+          if (this.chatHistory.length > 10) this.chatHistory = this.chatHistory.slice(-10);
+
+          return finalResult;
+        }
+      }
+
+      this.log?.appendLine("[CopilotProvider] Falling back to workbench.action.chat.open");
+      try {
+        await vr.commands.executeCommand("workbench.action.chat.open", promptText);
+      } catch {}
+      return `🤖 **Prompt forwarded to VS Code Copilot Chat:**\n\`\`\`text\n${promptText.substring(0, 1200)}\n\`\`\`\n💡 *Session opened in VS Code Chat panel.*`;
+    } catch (err) {
+      this.log?.appendLine(`[CopilotProvider] LM request error: ${err.message}`);
+      return `⚠️ **Error communicating with Copilot Language Model:**\n\`\`\`text\n${err.message}\n\`\`\`\n*Ensure GitHub Copilot or a Language Model extension is installed and active in VS Code.*`;
+    } finally {
+      this.isProcessing = false;
+      this.currentStepStatus = null;
+      this.cancellationTokenSource = null;
+    }
+  }
+
+  async extractLastResponseMarkdown() {
+    return this.accumulatedMarkdown || "";
+  }
+
   async createNewConversation() {
+    this.chatHistory = [];
+    this.accumulatedMarkdown = "";
     try {
       await vr.commands.executeCommand("workbench.action.chat.clear").then(null, () => {});
     } catch {}
@@ -3724,93 +5458,251 @@ class CopilotAgentProvider extends BaseAgentProvider {
 
 class CliAgentProvider extends BaseAgentProvider {
   id = "cli";
-  displayName = "Universal Terminal Agent";
+  displayName = "Universal Terminal / CLI Agent";
   hostApp = "Universal Shell";
+  currentProcess = null;
+  currentStepStatus = null;
+  pendingApproval = null;
+  approvalResolver = null;
+  cliType = "shell";
+
   constructor(extension, log) {
     super(log);
     this.extension = extension;
   }
+
   async connect() {
     this.connected = true;
-    this.log.appendLine("[CliProvider] Universal Terminal Agent provider ready");
+    this.cliType = await this.detectAvailableCli();
+    this.log?.appendLine(`[CliProvider] Universal Terminal Agent provider ready (detected engine: ${this.cliType.toUpperCase()})`);
   }
+
+  async detectAvailableCli() {
+    const configuredPath = vr.workspace.getConfiguration("antigravity-discord").get("cliAgentPath", "auto");
+    if (configuredPath && configuredPath !== "auto") return configuredPath;
+
+    const isWindows = process.platform === "win32";
+    const checkCmd = isWindows ? "where.exe" : "which";
+    const cp = require("child_process");
+
+    const check = (bin) => {
+      try {
+        cp.execSync(`${checkCmd} ${bin}`, { stdio: "ignore" });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (check("agy")) return "agy";
+    if (check("claude")) return "claude";
+    if (check("aider")) return "aider";
+    return "shell";
+  }
+
   disconnect() {
     this.connected = false;
+    this.cancelAgent();
   }
-  currentCommand = null;
+
   async isBusy() {
-    return !!this.currentCommand;
+    return !!this.currentProcess;
   }
+
   async getActiveStepStatus() {
-    return this.currentCommand ? `Executing terminal command: ${this.currentCommand.substring(0, 60)}` : null;
+    return this.currentStepStatus;
   }
-  async cancelAgent() {
-    return { ok: true, method: "cli_noop" };
+
+  async getActivePrompt() {
+    return this.pendingApproval;
   }
-  async sendMessage(text) {
-    return { ok: true, method: "cli_execution" };
-  }
-  async waitForResponse(prevSnapshot, promptText) {
-    this.currentCommand = promptText;
-    try {
-      const cwd = this.extension.getWorkspaceRoot();
-      const res = await this.extension.executeShellCommand(promptText, cwd);
-      const combined = (res.stdout + (res.stderr ? (res.stdout ? "\n" : "") + res.stderr : "")).trim();
-      return `💻 **Terminal Agent Output (${res.duration}s):**\n\`\`\`text\n${combined || "Command executed with no output."}\n\`\`\``;
-    } finally {
-      this.currentCommand = null;
+
+  async answerPrompt(ans) {
+    if (this.currentProcess && this.approvalResolver) {
+      const resolver = this.approvalResolver;
+      this.approvalResolver = null;
+      this.pendingApproval = null;
+      resolver(ans);
+      return { ok: true };
     }
+    return { ok: false, error: "no_active_prompt" };
   }
+
+  async cancelAgent() {
+    if (this.currentProcess) {
+      try {
+        this.currentProcess.kill("SIGINT");
+      } catch {}
+      this.currentProcess = null;
+    }
+    this.currentStepStatus = null;
+    if (this.approvalResolver) {
+      this.approvalResolver("cancel");
+      this.approvalResolver = null;
+      this.pendingApproval = null;
+    }
+    return { ok: true, method: "cli_killed" };
+  }
+
+  async sendMessage(text) {
+    return { ok: true, method: "cli_start" };
+  }
+
+  async waitForResponse(prevSnapshot, promptText) {
+    const cp = require("child_process");
+    const cwd = this.extension?.getWorkspaceRoot ? this.extension.getWorkspaceRoot() : process.cwd();
+    const startTime = Date.now();
+
+    this.currentStepStatus = `Starting ${this.cliType.toUpperCase()} agent...`;
+
+    return new Promise((resolve) => {
+      let stdout = "";
+      let stderr = "";
+      let binary = "";
+      let args = [];
+
+      if (this.cliType === "agy") {
+        binary = "agy";
+        args = [promptText];
+      } else if (this.cliType === "claude") {
+        binary = "claude";
+        args = ["-p", promptText];
+      } else if (this.cliType === "aider") {
+        binary = "aider";
+        args = ["--message", promptText, "--yes-always"];
+      } else {
+        const isWindows = process.platform === "win32";
+        binary = isWindows ? "powershell.exe" : "/bin/bash";
+        args = isWindows ? ["-NoProfile", "-Command", promptText] : ["-c", promptText];
+      }
+
+      this.log?.appendLine(`[CliProvider] Spawning ${binary} in ${cwd}...`);
+      let proc;
+      try {
+        proc = cp.spawn(binary, args, {
+          cwd,
+          env: { ...process.env, CI: "1", TERM: "dumb" }
+        });
+      } catch (err) {
+        this.currentProcess = null;
+        this.currentStepStatus = null;
+        resolve(`❌ **Failed to spawn CLI agent (${binary}):**\n\`\`\`text\n${err.message}\n\`\`\``);
+        return;
+      }
+
+      this.currentProcess = proc;
+
+      const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+
+      proc.stdout.on("data", (chunk) => {
+        const text = stripAnsi(chunk.toString());
+        stdout += text;
+        const lastLine = text.trim().split("\n").pop() || "";
+        if (lastLine) {
+          this.currentStepStatus = lastLine.substring(0, 80);
+        }
+
+        if (/(?:\(|\[)\s*[yY]\s*[\/|]\s*[nN]\s*(?:\)|\])|(?:proceed|allow|continue|confirm|choice|run this)\b.*\?|\?\s+\[[yY]\/[nN]\]/i.test(lastLine)) {
+          this.pendingApproval = {
+            question: lastLine,
+            options: [
+              { id: "yes", text: "🟢 Proceed / Allow (y)" },
+              { id: "no", text: "🔴 Deny / Cancel (n)" }
+            ],
+            isApproval: true,
+            hasWriteIn: false,
+            hasSkip: false
+          };
+
+          this.approvalResolver = (choice) => {
+            const isYes = /^(yes|proceed|allow|y)/i.test(choice || "");
+            const isNo = /^(no|deny|cancel|n)/i.test(choice || "");
+            try {
+              proc.stdin.write(isYes ? "y\n" : isNo ? "n\n" : choice ? `${choice}\n` : "n\n");
+            } catch {}
+          };
+        }
+      });
+
+      proc.stderr.on("data", (chunk) => {
+        stderr += stripAnsi(chunk.toString());
+      });
+
+      proc.on("error", (err) => {
+        this.log?.appendLine(`[CliProvider] Process error: ${err.message}`);
+      });
+
+      proc.on("close", (code) => {
+        this.currentProcess = null;
+        this.currentStepStatus = null;
+        this.pendingApproval = null;
+        this.approvalResolver = null;
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        const combined = (stdout + (stderr ? "\n" + stderr : "")).trim();
+
+        const badge = code === 0 ? `✅ **Completed** (${duration}s)` : `❌ **Exit Code ${code}** (${duration}s)`;
+        resolve(`${badge}\n\`\`\`text\n${combined || "Command executed with no output."}\n\`\`\``);
+      });
+    });
+  }
+
   async listModels() {
     return {
       models: [
-        { name: "Local System Shell", isSelected: true, hasEffort: false, speed: "Native" }
+        { name: `Universal Engine (${this.cliType.toUpperCase()})`, isSelected: true, hasEffort: false, speed: "Native" }
       ],
-      currentModel: "Local System Shell",
+      currentModel: this.cliType.toUpperCase(),
       currentEffort: null,
-      statusBar: "Shell Runner"
+      statusBar: `CLI (${this.cliType})`
     };
   }
+
   async switchModel(name) {
     return name;
   }
+
   async createNewConversation() {
-    return "New Terminal Session";
+    return "New CLI Session";
   }
 }
 
 function resolveAgentProvider(choice, port, extension, log) {
+  const cfg = vr.workspace.getConfiguration("antigravity-discord");
   const rawChoice = (choice || "auto").toLowerCase();
   const appName = (vr.env?.appName || "").toLowerCase();
 
+  const antigravityPort = cfg.get("debugPort", 9000) || port || 9000;
+  const cursorPort = cfg.get("cursorPort", 9000) || port || 9000;
+  const windsurfPort = cfg.get("windsurfPort", 9000) || port || 9000;
+
   log.appendLine(`[AgentProvider] Resolving provider: configured="${choice}", hostApp="${vr.env?.appName || 'Unknown'}"`);
 
-  if (rawChoice === "cursor") return new CursorAgentProvider(log);
-  if (rawChoice === "windsurf") return new WindsurfAgentProvider(log);
-  if (rawChoice === "copilot") return new CopilotAgentProvider(log);
+  if (rawChoice === "cursor") return new CursorAgentProvider(cursorPort, log, extension);
+  if (rawChoice === "windsurf") return new WindsurfAgentProvider(windsurfPort, log, extension);
+  if (rawChoice === "copilot") return new CopilotAgentProvider(extension, log);
   if (rawChoice === "cli") return new CliAgentProvider(extension, log);
-  if (rawChoice === "antigravity") return new AntigravityAgentProvider(port, log);
+  if (rawChoice === "antigravity") return new AntigravityAgentProvider(antigravityPort, log);
 
   // Auto-detection based on host environment
   if (appName.includes("antigravity")) {
     log.appendLine("[AgentProvider] Auto-detected Google Antigravity host environment");
-    return new AntigravityAgentProvider(port, log);
+    return new AntigravityAgentProvider(antigravityPort, log);
   }
   if (appName.includes("cursor")) {
-    log.appendLine("[AgentProvider] Auto-detected Cursor host environment");
-    return new CursorAgentProvider(log);
+    log.appendLine(`[AgentProvider] Auto-detected Cursor host environment (port ${cursorPort})`);
+    return new CursorAgentProvider(cursorPort, log, extension);
   }
   if (appName.includes("windsurf") || appName.includes("codeium")) {
-    log.appendLine("[AgentProvider] Auto-detected Windsurf host environment");
-    return new WindsurfAgentProvider(log);
+    log.appendLine(`[AgentProvider] Auto-detected Windsurf host environment (port ${windsurfPort})`);
+    return new WindsurfAgentProvider(windsurfPort, log, extension);
   }
   if (appName.includes("copilot") || appName.includes("visual studio code") || appName.includes("code - oss")) {
     log.appendLine("[AgentProvider] Auto-detected Visual Studio Code / GitHub Copilot environment");
-    return new CopilotAgentProvider(log);
+    return new CopilotAgentProvider(extension, log);
   }
 
   // Default to Antigravity (CDP) for Google Antigravity
-  return new AntigravityAgentProvider(port, log);
+  return new AntigravityAgentProvider(antigravityPort, log);
 }
 var _g = "antigravity-discord.leaderId",
   Du = "antigravity-discord.leaderHeartbeat",
@@ -3932,6 +5824,48 @@ var oU = class {
       }
       if (allowedList.length === 0) return true;
       return allowedList.includes(String(userId).trim());
+    }
+    getSampleMarkdownTable() {
+      return [
+        "| Feature | Category | Status | Speed | Description |",
+        "| :--- | :---: | :---: | ---: | :--- |",
+        "| Live Step Streaming | Observability | ✅ Active | Realtime | Real-time DOM step and tool extraction |",
+        "| Tool Approvals | Security | 🛡️ Ready | 1-Tap | Interactive Proceed/Cancel action cards |",
+        "| Tabular Columns | Discord UX | 📐 Enabled | Instant | Clean monospaced table rendering |"
+      ].join("\n");
+    }
+    async getTableStylePreview(currentStyle) {
+      const sample = this.getSampleMarkdownTable();
+      let msg = "📊 **Dis-Gravity Tabular Column Rendering in Discord**\n\n";
+      msg += `• **Active Style:** **${currentStyle}**\n\n`;
+      msg += "Preview with active style:\n" + formatMarkdownTablesForDiscord(sample, currentStyle) + "\n\n";
+      msg += "Supported styles:\n";
+      msg += "• `image` — 🖼️ High-resolution visual table card (PNG) rendered natively in Discord (Mobile & Desktop friendly) *(Recommended)*\n";
+      msg += "• `cards` — 📱 Zero-wrap mobile record cards with emoji indicators\n";
+      msg += "• `rounded` — Modern Unicode box with rounded corners (`╭─┬─╮`, `│`, `╰─┴─╯`)\n";
+      msg += "• `boxed` — Standard Unicode box (`┌─┬─┐`, `│`, `└─┴─┘`)\n";
+      msg += "• `ascii` — Classic ASCII borders (`+---+`, `|`, `+---+`)\n";
+      msg += "• `minimal` — Header underline only\n";
+      msg += "• `raw` — Standard Markdown pipes (unconverted)\n\n";
+      msg += "💡 *Tap a button below or type `/table <style>` / `!table <style>` to switch anytime.*";
+
+      const actionRow = this.discord?.buildTableStyleActionRow(currentStyle);
+      const components = actionRow ? [actionRow] : [];
+
+      let files = [];
+      try {
+        const parsed = extractMarkdownTables(sample);
+        if (parsed.length > 0) {
+          const pngBuf = await renderTableToPng(parsed[0], this.cdp);
+          if (pngBuf) {
+            files.push({ attachment: pngBuf, name: "table-preview.png" });
+          }
+        }
+      } catch (err) {
+        this.log?.appendLine(`[Table] Error generating preview image: ${err}`);
+      }
+
+      return { content: msg, components, files };
     }
     getWorkspaceRoot() {
       const folders = vr.workspace.workspaceFolders;
@@ -4325,6 +6259,89 @@ var oU = class {
         return `⚠️ **Failed to open file in editor:** ${err.message}`;
       }
     }
+    async getWorkspaceHealthSummary() {
+      const os = require("os");
+      const path = require("path");
+      const root = this.getWorkspaceRoot();
+      const wsName = root ? path.basename(root) : "No Workspace Open";
+
+      let gitBranch = "unknown";
+      let dirtyCount = 0;
+      let unpushedCount = 0;
+      try {
+        const brRes = await this.executeShell("git rev-parse --abbrev-ref HEAD", 5000);
+        if (brRes.code === 0 && brRes.stdout.trim()) gitBranch = brRes.stdout.trim();
+        const stRes = await this.executeShell("git status --porcelain", 5000);
+        if (stRes.code === 0) {
+          const lines = stRes.stdout.split("\n").filter(l => l.trim().length > 0);
+          dirtyCount = lines.length;
+        }
+        const unpRes = await this.executeShell("git log @{u}.. --oneline", 5000);
+        if (unpRes.code === 0) {
+          unpushedCount = unpRes.stdout.split("\n").filter(l => l.trim().length > 0).length;
+        }
+      } catch {}
+
+      let activeDoc = "None";
+      try {
+        const ed = vr.window?.activeTextEditor;
+        if (ed?.document) {
+          const relDoc = root ? path.relative(root, ed.document.fileName) : path.basename(ed.document.fileName);
+          activeDoc = `\`${relDoc}\` (${ed.document.languageId}, ${ed.document.lineCount} lines)`;
+        }
+      } catch {}
+
+      const providerName = this.cdp?.displayName || "Not connected";
+      const isConnected = !!this.cdp?.isConnected();
+      const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
+      let activeModel = "Unknown";
+      try {
+        const ml = await this.cdp?.listModels();
+        if (ml?.currentModel) activeModel = ml.currentModel;
+      } catch {}
+
+      const platform = os.platform();
+      const release = os.release();
+      const cpus = os.cpus();
+      const cpuModel = cpus && cpus[0] ? cpus[0].model.trim() : "Unknown CPU";
+      const cpuCount = cpus ? cpus.length : 1;
+      const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(1);
+      const freeMemGB = (os.freemem() / (1024 ** 3)).toFixed(1);
+      const usedMemGB = ((os.totalmem() - os.freemem()) / (1024 ** 3)).toFixed(1);
+      const memPct = Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
+
+      const uptimeSec = os.uptime();
+      const days = Math.floor(uptimeSec / 86400);
+      const hours = Math.floor((uptimeSec % 86400) / 3600);
+      const mins = Math.floor((uptimeSec % 3600) / 60);
+      const uptimeStr = `${days > 0 ? days + "d " : ""}${hours}h ${mins}m`;
+
+      let msg = `🖥️ **Dis-Gravity Host & Workspace Health Dashboard**\n\n`;
+      msg += `**📁 Workspace State:**\n`;
+      msg += `• **Project:** 📂 **\`${wsName}\`**\n`;
+      msg += `• **Path:** \`${root}\`\n`;
+      msg += `• **Git Branch:** 🌿 \`${gitBranch}\` (${dirtyCount === 0 ? "🟢 Clean" : `⚠️ ${dirtyCount} dirty file(s)`}${unpushedCount > 0 ? `, 🚀 ${unpushedCount} unpushed` : ""})\n`;
+      msg += `• **Active Editor:** 📝 ${activeDoc}\n\n`;
+
+      msg += `**🤖 AI Agent & Bridge:**\n`;
+      msg += `• **Provider:** ${isConnected ? "🟢" : "🔴"} **${providerName}**\n`;
+      msg += `• **Agent State:** ${isBusy ? "⏳ Busy" : "🟢 Idle (Waiting for commands)"}\n`;
+      msg += `• **Active Model:** ⚡ **${activeModel}**\n\n`;
+
+      msg += `**💻 Host System & Hardware:**\n`;
+      msg += `• **OS:** ${platform === "win32" ? "🪟 Windows" : platform === "darwin" ? "🍎 macOS" : "🐧 Linux"} (${release}, ${os.arch()})\n`;
+      msg += `• **CPU:** ⚡ ${cpuModel} (${cpuCount} cores)\n`;
+      msg += `• **Memory:** 🧠 ${usedMemGB} GB / ${totalMemGB} GB used (${memPct}% used, ${freeMemGB} GB free)\n`;
+      msg += `• **System Uptime:** ⏱️ ${uptimeStr}\n`;
+      msg += `• **Node Runtime:** 🟢 ${process.version} (PID: ${process.pid})\n`;
+
+      const buttons = this.discord?.buildInfoActionRow ? this.discord.buildInfoActionRow() : null;
+
+      return {
+        content: msg,
+        components: buttons ? [buttons] : []
+      };
+    }
     async downloadAttachments(attachments) {
       if (!attachments || attachments.length === 0) return [];
       const fs = require("fs");
@@ -4620,9 +6637,11 @@ var oU = class {
       }
       try {
         (this.discord
-          ? (this.discord.onInteraction((n) => this.handleInteraction(n)),
+          ? ((this.discord.bridge = this),
+            this.discord.onInteraction((n) => this.handleInteraction(n)),
             await this.discord.reconnect(i, r))
           : ((this.discord = new TC(r, this.log)),
+            (this.discord.bridge = this),
             this.discord.onMessage((n) => this.handleMessage(n)),
             this.discord.onInteraction((n) => this.handleInteraction(n)),
             await this.discord.connect(i)),
@@ -5074,6 +7093,8 @@ var oU = class {
             statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
             statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
             statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
+            const tableStyle = vr.workspace.getConfiguration("antigravity-discord").get("tableStyle", "rounded");
+            statusMsg += `• **Table Style:** 📐 **${tableStyle}**\n`;
             statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
 
             const actionRow = this.discord?.buildStatusActionRow(isBusy);
@@ -5086,6 +7107,14 @@ var oU = class {
               content: statusMsg,
               components
             });
+            return;
+          }
+
+          if (cmd === "info" || cmd === "workspace") {
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[Host] Executing /${cmd} from ${interaction.user?.displayName || interaction.user?.username}`);
+            const infoData = await this.getWorkspaceHealthSummary();
+            await this.safeReply(interaction, infoData);
             return;
           }
 
@@ -5181,6 +7210,40 @@ var oU = class {
             return;
           }
 
+          if (cmd === "table") {
+            const style = (interaction.options.getString("style") || "").toLowerCase().trim();
+            const config = vr.workspace.getConfiguration("antigravity-discord");
+            const currentStyle = config.get("tableStyle", "image");
+            if (!style) {
+              const preview = await this.getTableStylePreview(currentStyle);
+              await this.safeReply(interaction, {
+                content: preview.content,
+                components: preview.components,
+                files: preview.files,
+                ephemeral: false
+              });
+              return;
+            }
+            const valid = ["image", "cards", "rounded", "boxed", "ascii", "minimal", "raw"];
+            if (!valid.includes(style)) {
+              await this.safeReply(interaction, {
+                content: `⚠️ Unknown style \`${style}\`. Choose from: \`${valid.join("`, `")}\``,
+                ephemeral: true
+              });
+              return;
+            }
+            await config.update("tableStyle", style, vr.ConfigurationTarget.Global);
+            const preview = await this.getTableStylePreview(style);
+            const confirmation = `✅ **Table rendering style set to:** \`${style}\`\n\n` + preview.content;
+            await this.safeReply(interaction, {
+              content: confirmation,
+              components: preview.components,
+              files: preview.files,
+              ephemeral: false
+            });
+            return;
+          }
+
           if (cmd === "help") {
             let helpMsg = "🤖 **Dis-Gravity Commands & Actions**\n\n";
             helpMsg += "• `/plan <prompt>` — Run task in Planning Mode (deep research + plan artifact)\n";
@@ -5188,11 +7251,13 @@ var oU = class {
             helpMsg += "• `/grill <prompt>` — Start an alignment interview to clarify design decisions\n";
             helpMsg += "• `/stop` — Immediately halt/cancel the active agent in the IDE\n";
             helpMsg += "• `/status` — View bridge health, active model, effort, and quick controls\n";
+            helpMsg += "• `/info` — View host hardware resources, workspace state, git branch, and agent health (`!info`, `/workspace`)\n";
             helpMsg += "• `/models` — Interactive dropdown to switch AI models & effort levels\n";
             helpMsg += "• `/effort <level>` — Switch reasoning effort (Low, Medium, High)\n";
             helpMsg += "• `/model <name>` — Switch active model and effort (e.g. `/model flash high`)\n";
             helpMsg += "• `/palette [category]` — 1-click Command Palette dashboard (reload window, terminal, git, save, etc.)\n";
             helpMsg += "• `/action <command>` — Trigger any Command Palette action with live autocomplete\n";
+            helpMsg += "• `/table [style]` — Configure or preview tabular column rendering (`rounded`, `boxed`, `ascii`, `minimal`, `raw`)\n";
             helpMsg += "• `/sh <command>` — Execute terminal/shell command and view output (`!sh <cmd>`, `$ <cmd>`)\n";
             helpMsg += "• `/git [status|diff|log]` — Inspect working tree status, colored diffs, and commits (`!git`)\n";
             helpMsg += "• `/diff [file]` — Quick colored git diff preview with patch export (`!diff`)\n";
@@ -5202,7 +7267,7 @@ var oU = class {
             helpMsg += "• `/artifact [name]` — List or download AI artifacts (plans, walkthroughs, patches) (`!artifact`)\n";
             helpMsg += "• `/get <path>` — Download workspace file or asset as Discord attachment (`!get`, `!download`)\n";
             helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
-            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, `!artifact`, `!get`, etc.)*";
+            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!table`, `!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, `!artifact`, `!get`, etc.)*";
             await this.safeReply(interaction, { content: helpMsg, ephemeral: true });
             return;
           }
@@ -5263,6 +7328,27 @@ var oU = class {
             await interaction.showModal(modal);
             return;
           }
+          return;
+        }
+
+        if (interaction.isButton() && parts[0] === "table" && parts[1] === "set") {
+          const newStyle = parts[2] || "image";
+          const config = vr.workspace.getConfiguration("antigravity-discord");
+          const valid = ["image", "cards", "rounded", "boxed", "ascii", "minimal", "raw"];
+          if (valid.includes(newStyle)) {
+            await config.update("tableStyle", newStyle, vr.ConfigurationTarget.Global);
+          }
+          const preview = await this.getTableStylePreview(newStyle);
+          const updatePayload = {
+            content: `✅ **Table rendering style updated to:** \`${newStyle}\`\n\n` + preview.content,
+            components: preview.components
+          };
+          if (preview.files && preview.files.length > 0) {
+            updatePayload.files = preview.files;
+          }
+          await interaction.update(updatePayload).catch(async () => {
+            await this.safeReply(interaction, updatePayload);
+          });
           return;
         }
 
@@ -5525,10 +7611,12 @@ var oU = class {
         helpMsg += "• `/grill <prompt>` — Start an alignment interview to clarify design decisions\n";
         helpMsg += "• `/stop` — Immediately halt/cancel the active agent in the IDE\n";
         helpMsg += "• `/status` — View bridge health, active model, and quick control buttons\n";
+        helpMsg += "• `/info` — View host hardware resources, workspace state, git branch, and agent health (`!info`, `/workspace`)\n";
         helpMsg += "• `/models` — Interactive dropdown to switch AI models with 1 tap\n";
         helpMsg += "• `/model <name>` — Switch active model by name\n";
         helpMsg += "• `/palette [category]` — 1-click Command Palette dashboard (reload window, terminal, git, save, etc.)\n";
         helpMsg += "• `/action <command>` — Trigger any Command Palette action with live autocomplete\n";
+        helpMsg += "• `/table [style]` — Configure or preview tabular column rendering (`rounded`, `boxed`, `ascii`, `minimal`, `raw`)\n";
         helpMsg += "• `/sh <command>` — Execute terminal/shell command and view output (`!sh <cmd>`, `$ <cmd>`)\n";
         helpMsg += "• `/git [status|diff|log]` — Inspect working tree status, colored diffs, and commits (`!git`)\n";
         helpMsg += "• `/diff [file]` — Quick colored git diff preview with patch export (`!diff`)\n";
@@ -5539,7 +7627,7 @@ var oU = class {
         helpMsg += "• `!reload` / `!restart` — Instant Reload Window shortcut\n";
         helpMsg += "• `!save` — Instant Save All shortcut\n";
         helpMsg += "• `!terminal` — Instant New Terminal shortcut\n";
-        helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, etc.)*";
+        helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!table`, `!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, etc.)*";
         if (this.discord?.isConnected()) {
           if (e.threadId) {
             let thread = await this.discord.getThread(e.threadId);
@@ -5547,6 +7635,43 @@ var oU = class {
             else await this.discord.sendMessage(helpMsg);
           } else {
             await this.discord.sendMessage(helpMsg);
+          }
+        }
+        return;
+      }
+
+      // Table formatting configuration (!table [style], /table [style])
+      if (msgContent === "!table" || msgContent.startsWith("!table ") || msgContent === "!tables" || msgContent.startsWith("!tables ") || msgContent === "/table" || msgContent.startsWith("/table ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+
+        const raw = msgContent.replace(/^[/!](table|tables)\s*/i, "").trim().toLowerCase();
+        const config = vr.workspace.getConfiguration("antigravity-discord");
+        const currentStyle = config.get("tableStyle", "image");
+
+        let targetStyle = currentStyle;
+        const valid = ["image", "cards", "rounded", "boxed", "ascii", "minimal", "raw"];
+        if (raw && valid.includes(raw)) {
+          targetStyle = raw;
+          await config.update("tableStyle", raw, vr.ConfigurationTarget.Global);
+        }
+
+        const preview = await this.getTableStylePreview(targetStyle);
+        let reply = preview.content;
+        if (raw && valid.includes(raw)) {
+          reply = `✅ **Table rendering style set to:** \`${raw}\`\n\n` + reply;
+        } else if (raw && !valid.includes(raw)) {
+          reply = `⚠️ Unknown style \`${raw}\`. Choose from: \`${valid.join("`, `")}\`\n\n` + reply;
+        }
+
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, reply, preview.components, preview.files);
+            else await this.discord.sendMessage(reply, preview.components, preview.files);
+          } else {
+            await this.discord.sendMessage(reply, preview.components, preview.files);
           }
         }
         return;
@@ -6003,6 +8128,8 @@ var oU = class {
         statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
         statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
         statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
+        const tableStyle = vr.workspace.getConfiguration("antigravity-discord").get("tableStyle", "rounded");
+        statusMsg += `• **Table Style:** 📐 **${tableStyle}**\n`;
         statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
         const actionRow = this.discord?.buildStatusActionRow(isBusy);
         const effortRow = this.discord?.buildEffortActionRow(currentEffort);
@@ -6016,6 +8143,24 @@ var oU = class {
             else await this.discord.sendMessage(statusMsg, components.length > 0 ? components : null);
           } else {
             await this.discord.sendMessage(statusMsg, components.length > 0 ? components : null);
+          }
+        }
+        return;
+      }
+
+      // Host & Workspace Health Dashboard (!info, /info, !workspace, /workspace)
+      if (msgContent === "!info" || msgContent === "/info" || msgContent === "!workspace" || msgContent === "/workspace") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const infoData = await this.getWorkspaceHealthSummary();
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, infoData.content, infoData.components?.length > 0 ? infoData.components : null);
+            else await this.discord.sendMessage(infoData.content, infoData.components?.length > 0 ? infoData.components : null);
+          } else {
+            await this.discord.sendMessage(infoData.content, infoData.components?.length > 0 ? infoData.components : null);
           }
         }
         return;
@@ -6448,7 +8593,7 @@ var oU = class {
               .filter((l) => l.length > 2),
           )
         : new Set();
-      return e
+      let cleaned = e
         .split(
           `
 `,
@@ -6456,7 +8601,7 @@ var oU = class {
         .filter((r) => {
           let n = r.trim();
           if (n.length === 0) return true;
-          if (/^[-*•]\s/.test(n) || /^\d+\.\s/.test(n) || /^#{1,6}\s/.test(n) || /^```/.test(n) || /^>/.test(n) || /^─{5,}/.test(n)) {
+          if (/^[-*•]\s/.test(n) || /^\d+\.\s/.test(n) || /^#{1,6}\s/.test(n) || /^```/.test(n) || /^>/.test(n) || /^─{5,}/.test(n) || /^\|/.test(n) || /^[┌╭├╰└\+]/.test(n)) {
             return true;
           }
           return !(RC(n) || promptLines.has(n) || (i && n === i.trim()) || /^Simple request/i.test(n));
@@ -6472,6 +8617,7 @@ var oU = class {
 `,
         )
         .trim();
+      return cleaned;
     }
     pushStatus() {
       this.panel.updateStatus({

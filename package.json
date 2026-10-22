@@ -11,6 +11,9 @@
 		"url": "https://github.com/h4ck3r420/Dis-Gravity.git"
 	},
 	"preview": false,
+	"bin": {
+		"dis-gravity": "bin/dis-gravity.js"
+	},
 
 	"keywords": [
 		"discord",
@@ -104,13 +107,66 @@
 					"enumDescriptions": [
 						"Automatically detect host IDE and agent",
 						"Google Antigravity (CDP Bridge :9000)",
-						"Cursor (Composer & Chat)",
-						"Windsurf (Cascade Agent)",
-						"VS Code with GitHub Copilot",
-						"Universal CLI Agent (Terminal Execution)"
+						"Cursor AI (CDP Composer & Chat :9000)",
+						"Windsurf (CDP Cascade Agent :9000)",
+						"Visual Studio Code (Native Language Model API / Copilot)",
+						"Universal Terminal / CLI Agent (Antigravity agy, Claude Code, Aider, Shell)"
 					],
 					"default": "auto",
 					"description": "AI Agent Provider to bridge with Discord"
+				},
+				"antigravity-discord.tableStyle": {
+					"type": "string",
+					"enum": [
+						"image",
+						"cards",
+						"rounded",
+						"boxed",
+						"ascii",
+						"minimal",
+						"raw"
+					],
+					"enumDescriptions": [
+						"High-resolution visual table card (PNG) rendered natively in Discord - Mobile & Desktop friendly (Recommended)",
+						"Mobile Record Cards (compact key-value items per row, zero line wrapping on mobile screens)",
+						"Rounded Unicode box borders (╭─┬─╮, │, ╰─┴─╯)",
+						"Standard Unicode box borders (┌─┬─┐, │, └─┴─┘)",
+						"Pure ASCII borders (+---+, |, +---+)",
+						"Minimalist borders (underlined header only)",
+						"Raw Markdown table (standard GFM pipes without box conversion)"
+					],
+					"default": "image",
+					"description": "Style of tabular columns rendered in Discord"
+				},
+				"antigravity-discord.autoAttachTableImages": {
+					"type": "boolean",
+					"default": true,
+					"description": "Automatically render and attach visual table PNG images to Discord messages whenever tables are detected in AI responses"
+				},
+				"antigravity-discord.cursorPort": {
+					"type": "number",
+					"default": 9000,
+					"description": "Remote debugging port for Cursor AI Composer & Chat (--remote-debugging-port)"
+				},
+				"antigravity-discord.windsurfPort": {
+					"type": "number",
+					"default": 9000,
+					"description": "Remote debugging port for Windsurf Cascade Agent (--remote-debugging-port)"
+				},
+				"antigravity-discord.cliAgentPath": {
+					"type": "string",
+					"default": "auto",
+					"description": "Universal CLI agent engine: 'auto' (detects agy, claude, aider), or exact executable path"
+				},
+				"antigravity-discord.enableCopilotReAct": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable autonomous multi-step ReAct agent loop for VS Code Copilot with tool execution and approvals"
+				},
+				"antigravity-discord.copilotMaxToolSteps": {
+					"type": "number",
+					"default": 10,
+					"description": "Maximum tool execution iterations per request in VS Code Copilot ReAct loop"
 				}
 			}
 		}

@@ -1,0 +1,6 @@
+.disgravity/**
+dist/extension.js.bak
+.git/**
+.gitignore
+*.vsix
+scratch/**
