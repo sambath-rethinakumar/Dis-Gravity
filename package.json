@@ -10,6 +10,11 @@
 		"type": "git",
 		"url": "https://github.com/h4ck3r420/Dis-Gravity.git"
 	},
+	"homepage": "https://github.com/h4ck3r420/Dis-Gravity#readme",
+	"bugs": {
+		"url": "https://github.com/h4ck3r420/Dis-Gravity/issues"
+	},
+	"author": "Anon King",
 	"preview": false,
 	"bin": {
 		"dis-gravity": "bin/dis-gravity.js"

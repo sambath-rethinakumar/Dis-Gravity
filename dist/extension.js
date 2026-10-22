@@ -6636,19 +6636,29 @@ var oU = class {
         return;
       }
       try {
-        (this.discord
-          ? ((this.discord.bridge = this),
-            this.discord.onInteraction((n) => this.handleInteraction(n)),
-            await this.discord.reconnect(i, r))
-          : ((this.discord = new TC(r, this.log)),
-            (this.discord.bridge = this),
-            this.discord.onMessage((n) => this.handleMessage(n)),
-            this.discord.onInteraction((n) => this.handleInteraction(n)),
-            await this.discord.connect(i)),
-          this.cdp?.isConnected()
-            ? this.discord.setPresence("online", "Waiting for commands")
-            : this.discord.setPresence("idle", "⚠️ Agent not connected"),
-          vr.window.showInformationMessage(`Dis-Gravity (${vr.env?.appName || "IDE"}): Connected to Discord!`));
+        if (this.discord) {
+          this.discord.bridge = this;
+          this.discord.onInteraction((n) => this.handleInteraction(n));
+          await this.discord.reconnect(i, r);
+        } else {
+          this.discord = new TC(r, this.log);
+          this.discord.bridge = this;
+          this.discord.onMessage((n) => this.handleMessage(n));
+          this.discord.onInteraction((n) => this.handleInteraction(n));
+          await this.discord.connect(i);
+        }
+        if (this.cdp?.isConnected()) {
+          this.discord.setPresence("online", "Waiting for commands");
+        } else {
+          this.discord.setPresence("idle", "⚠️ Agent not connected");
+        }
+        vr.window.showInformationMessage(`Dis-Gravity (${vr.env?.appName || "IDE"}): Connected to Discord!`);
+        const rawAllowed = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
+        if (!rawAllowed || rawAllowed.trim().length === 0) {
+          this.log.appendLine(`[Security Warning] No allowedUsers whitelist configured! Anyone in the Discord channel can control the IDE and execute shell commands. Set antigravity-discord.allowedUsers to your Discord User ID.`);
+        } else {
+          this.log.appendLine(`[Security] User authorization whitelist active: ${rawAllowed}`);
+        }
       } catch (n) {
         let s = n instanceof Error ? n.message : String(n);
         (this.log.appendLine(`[Extension] Discord failed: ${s}`),
@@ -7096,6 +7106,13 @@ var oU = class {
             const tableStyle = vr.workspace.getConfiguration("antigravity-discord").get("tableStyle", "rounded");
             statusMsg += `• **Table Style:** 📐 **${tableStyle}**\n`;
             statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
+            if (!providerConnected) {
+              statusMsg += `\n> 💡 *Agent bridge disconnected. Launch your IDE with \`--remote-debugging-port=9000\` (Antigravity/Cursor/Windsurf) or switch \`agentProvider\` to \`copilot\` (requires no port).*`;
+            }
+            const rawAllowedUsers = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
+            if (!rawAllowedUsers || rawAllowedUsers.trim().length === 0) {
+              statusMsg += `\n> ⚠️ *Security notice: No \`allowedUsers\` configured. Add your Discord User ID in settings to restrict access.*`;
+            }
 
             const actionRow = this.discord?.buildStatusActionRow(isBusy);
             const effortRow = this.discord?.buildEffortActionRow(currentEffort);

@@ -233,9 +233,10 @@ async function startDaemon() {
   log.appendLine(`Initializing Daemon with workspace: ${config.workspace}`);
   log.appendLine(`Provider: ${config.provider.toUpperCase()} | Channel ID: ${config.channelId}`);
   if (config.allowedUsers.length > 0) {
-    log.appendLine(`Security Whitelist: ${config.allowedUsers.length} user(s) allowed`);
+    log.appendLine(`Security Whitelist: ${config.allowedUsers.length} user(s) allowed (${config.allowedUsers.join(', ')})`);
   } else {
-    log.appendLine(`Security: Channel-wide open access (no whitelist specified)`);
+    log.appendLine(`⚠️  SECURITY WARNING: No --allowed-users configured! Anyone with access to channel #${config.channelId} can execute commands and access files in this workspace.`);
+    log.appendLine(`   To restrict access to your user only, launch with: --allowed-users="YOUR_DISCORD_USER_ID"`);
   }
 
   const client = new Client({
