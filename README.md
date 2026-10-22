@@ -18,7 +18,13 @@
 - 📋 **Message Queue** — Concurrent Discord messages are queued (up to 5) instead of rejected, with position feedback
 - 🔒 **Single-instance** — Leader election via VS Code `globalState` ensures only one extension host connects to Discord, even with multiple windows open
 - 🎨 **Rich Markdown** — Code blocks, bold, italic, inline code, lists, and blockquotes are preserved on Discord
-- ⚙️ **Settings GUI** — Tabbed sidebar panel with built-in settings form (Bot Token, Channel ID, Debug Port)
+- 💻 **Remote Shell Runner (`/sh`, `!sh`, `$`)** — Execute terminal commands in your workspace root directly from Discord (e.g. `npm test`, `git status`, `cargo check`) and inspect stdout/stderr in syntax-highlighted code blocks with exit code and duration metrics
+- 🌿 **Git Review & Colored Diff Inspector (`/git`, `/diff`, `!git`, `!diff`)** — Full remote Git workflow away from your desk. Inspect repository status (`/git status`), view colored syntax-highlighted diffs (`/diff`, `/git diff [file]`), browse recent commits (`/git log`), and stage/push changes with 1-tap interactive buttons (`[ 🔍 View Diff ]`, `[ ✅ Stage All ]`, `[ 🚀 Push ]`). Large diffs automatically generate and attach a downloadable `.patch` file
+- 📁 **Remote File Explorer & Slicer (`/cat`, `/tree`, `/open`, `!cat`, `!tree`, `!open`)** — Inspect files remotely with syntax highlighting and line numbers (`/cat <path> [startLine] [endLine]`), generate clean visual directory tree structure (`/tree [dir] [depth]`), and open files directly into active IDE editor tabs (`/open <path>`)
+- 📎 **Inbound Attachment & Screenshot Ingestion** — Drop mobile screenshots of UI bugs, crash logs, error snippets, or code files directly into Discord. Dis-Gravity automatically downloads them into `.disgravity/attachments/` and passes the local paths and file contexts directly into the AI agent prompt
+- 🛡️ **User Access Whitelist (`allowedUsers`)** — Secure your IDE from unauthorized Discord users. Whitelist specific Discord User IDs so only you can execute commands, trigger actions, or interact with the AI assistant
+- 🧵 **Persistent Conversation Mapping** — Thread-to-conversation bindings are stored in VS Code `workspaceState`, surviving window reloads, extension reboots, and crashes without losing thread context
+- ⚙️ **Settings GUI** — Tabbed sidebar panel with built-in settings form (Bot Token, Channel ID, Debug Port, Allowed Users)
 - 📡 **Live Status** — Green/red connection indicators for Discord and CDP right in the sidebar
 - ✂️ **Smart message splitting** — Automatically splits long responses to respect Discord's 2000-character limit
 - 🔇 **Noise filtering** — Strips Antigravity UI chrome and diagnostic logs from responses automatically

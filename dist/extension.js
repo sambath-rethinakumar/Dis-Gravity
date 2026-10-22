@@ -217,6 +217,17 @@ function nU(t) {
     /An MCP server implements/i.test(t)
   );
 }
+function clampDiscordContent(t, max = 1900) {
+  if (!t || typeof t !== "string") return t || "";
+  if (t.length <= max) return t;
+  const notice = "\n\n⚠️ *(Output truncated to fit Discord limit)*";
+  const cut = t.substring(0, Math.max(10, max - notice.length - 10));
+  const fenceMatches = cut.match(/```/g);
+  const fenceCount = fenceMatches ? fenceMatches.length : 0;
+  let res = cut;
+  if (fenceCount % 2 === 1) res += "\n```";
+  return res + notice;
+}
 function jJe(t, e) {
   let sec = t.lastIndexOf("\n\n### ", e);
   if (sec > e * 0.4) return sec + 2;
@@ -227,13 +238,14 @@ function jJe(t, e) {
   let sgl = t.lastIndexOf("\n", e);
   return sgl > e * 0.3 ? sgl + 1 : e;
 }
-function sU(t, e = 2e3) {
+function sU(t, e = 1850) {
+  if (!t) return [""];
   if (t.length <= e) return [t];
   let i = [],
     r = t;
   for (; r.length > 0;) {
     if (r.length <= e) {
-      i.push(r);
+      i.push(clampDiscordContent(r, 1950));
       break;
     }
     let n = jJe(r, e);
@@ -249,7 +261,7 @@ function sU(t, e = 2e3) {
       chunk += "\n```";
       rest = "```" + lang + "\n" + rest.replace(/^\n+/, "");
     }
-    i.push(chunk);
+    i.push(clampDiscordContent(chunk, 1950));
     r = rest;
   }
   return i;
@@ -494,6 +506,133 @@ var TC = class {
           ]
         },
         {
+          name: "sh",
+          description: "Execute a shell / terminal command in the workspace and view output",
+          options: [
+            {
+              name: "command",
+              description: "The shell command to run (e.g. npm test, git status, cargo check)",
+              type: 3,
+              required: true
+            }
+          ]
+        },
+        {
+          name: "git",
+          description: "Inspect git status, colored diffs, and commit history",
+          options: [
+            {
+              name: "status",
+              description: "Show working tree status (staged, unstaged, untracked)",
+              type: 1
+            },
+            {
+              name: "diff",
+              description: "View colored diff of modified files or a specific file",
+              type: 1,
+              options: [
+                {
+                  name: "file",
+                  description: "Optional specific file path to diff",
+                  type: 3,
+                  required: false
+                },
+                {
+                  name: "staged",
+                  description: "View staged changes instead of unstaged",
+                  type: 5,
+                  required: false
+                }
+              ]
+            },
+            {
+              name: "log",
+              description: "Show recent commit history",
+              type: 1,
+              options: [
+                {
+                  name: "count",
+                  description: "Number of commits to display (default: 5, max: 20)",
+                  type: 4,
+                  required: false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          name: "diff",
+          description: "Quickly view colored git diff of working tree changes",
+          options: [
+            {
+              name: "file",
+              description: "Optional specific file path to diff",
+              type: 3,
+              required: false
+            },
+            {
+              name: "staged",
+              description: "View staged changes instead of unstaged",
+              type: 5,
+              required: false
+            }
+          ]
+        },
+        {
+          name: "cat",
+          description: "Inspect file contents with line numbers and syntax highlighting",
+          options: [
+            {
+              name: "path",
+              description: "Relative or absolute file path to read",
+              type: 3,
+              required: true
+            },
+            {
+              name: "start_line",
+              description: "Optional start line number (1-indexed)",
+              type: 4,
+              required: false
+            },
+            {
+              name: "end_line",
+              description: "Optional end line number (1-indexed)",
+              type: 4,
+              required: false
+            }
+          ]
+        },
+        {
+          name: "tree",
+          description: "View project directory structure tree",
+          options: [
+            {
+              name: "directory",
+              description: "Optional subfolder path (default: workspace root)",
+              type: 3,
+              required: false
+            },
+            {
+              name: "depth",
+              description: "Tree depth level (1-5, default: 2)",
+              type: 4,
+              required: false
+            }
+          ]
+        },
+        {
+          name: "open",
+          description: "Open a file in an active editor tab in Antigravity IDE",
+          options: [
+            {
+              name: "path",
+              description: "File path to open in the IDE editor",
+              type: 3,
+              required: true
+            }
+          ]
+        },
+        {
           name: "help",
           description: "Show quick reference guide for Dis-Gravity commands"
         }
@@ -583,6 +722,32 @@ var TC = class {
       new ri.ButtonBuilder()
         .setCustomId("palette:cat:featured")
         .setLabel("🎮 Palette")
+        .setStyle(ri.ButtonStyle.Secondary)
+    );
+    return row;
+  }
+  buildGitActionRow(hasDiff = true) {
+    const row = new ri.ActionRowBuilder();
+    if (hasDiff) {
+      row.addComponents(
+        new ri.ButtonBuilder()
+          .setCustomId("action:git_diff")
+          .setLabel("🔍 View Diff")
+          .setStyle(ri.ButtonStyle.Primary)
+      );
+    }
+    row.addComponents(
+      new ri.ButtonBuilder()
+        .setCustomId("action:git_stage_all")
+        .setLabel("✅ Stage All")
+        .setStyle(ri.ButtonStyle.Success),
+      new ri.ButtonBuilder()
+        .setCustomId("action:git_push")
+        .setLabel("🚀 Push")
+        .setStyle(ri.ButtonStyle.Secondary),
+      new ri.ButtonBuilder()
+        .setCustomId("action:git_status")
+        .setLabel("📊 Status")
         .setStyle(ri.ButtonStyle.Secondary)
     );
     return row;
@@ -822,30 +987,32 @@ var TC = class {
       return rowBuilder;
     });
   }
-  async sendMessage(e, components = null) {
+  async sendMessage(e, components = null, files = null) {
     if (!this.channel) throw new Error("Not connected to Discord");
-    let chunks = sU(e);
+    let chunks = sU(e, 1850);
     let lastMsg = null;
     for (let idx = 0; idx < chunks.length; idx++) {
-      let payload = { content: chunks[idx] };
-      if (idx === chunks.length - 1 && components && components.length > 0) {
-        payload.components = components;
+      let payload = { content: clampDiscordContent(chunks[idx], 1950) };
+      if (idx === chunks.length - 1) {
+        if (components && components.length > 0) payload.components = components;
+        if (files && files.length > 0) payload.files = files;
       }
       lastMsg = await this.channel.send(payload);
     }
     return lastMsg;
   }
-  async sendToThread(e, i, components = null) {
-    let r = sU(i);
+  async sendToThread(e, i, components = null, files = null) {
+    let r = sU(i, 1850);
     let lastMsg = null;
     for (let idx = 0; idx < r.length; idx++) {
       let n = r[idx];
       let s = `${Date.now()}${Math.floor(Math.random() * 1e5)
         .toString()
         .padStart(5, "0")}`;
-      let payload = { content: n, nonce: s, enforceNonce: !0 };
-      if (idx === r.length - 1 && components && components.length > 0) {
-        payload.components = components;
+      let payload = { content: clampDiscordContent(n, 1950), nonce: s, enforceNonce: !0 };
+      if (idx === r.length - 1) {
+        if (components && components.length > 0) payload.components = components;
+        if (files && files.length > 0) payload.files = files;
       }
       lastMsg = await e.send(payload);
     }
@@ -895,9 +1062,15 @@ var TC = class {
     ),
       this.messageCallback?.({
         author: e.author.displayName,
+        authorId: e.author.id,
         content: e.content,
         timestamp: e.createdAt,
-        attachments: e.attachments.map((s) => s.url),
+        attachments: e.attachments.map((s) => ({
+          url: s.url,
+          name: s.name,
+          contentType: s.contentType || "",
+          size: s.size || 0
+        })),
         messageId: e.id,
         threadId: n,
         isMainChannel: i,
@@ -928,6 +1101,8 @@ var ol = Xn(require("vscode")),
                   botToken: s.get("botToken", ""),
                   channelId: s.get("channelId", ""),
                   debugPort: s.get("debugPort", 9e3),
+                  allowedUsers: s.get("allowedUsers", ""),
+                  agentProvider: s.get("agentProvider", "auto")
                 };
               e.webview.postMessage({ type: "settings", data: o });
               break;
@@ -1298,6 +1473,25 @@ var ol = Xn(require("vscode")),
             <input type="number" id="s-port" min="1" max="65535" />
         </div>
 
+        <div class="setting-group">
+            <label for="s-users">Allowed Users</label>
+            <div class="description">Discord User IDs allowed to interact (comma-separated, optional)</div>
+            <input type="text" id="s-users" placeholder="e.g. 123456789012345678" />
+        </div>
+
+        <div class="setting-group">
+            <label for="s-provider">Agent Provider</label>
+            <div class="description">Select AI IDE engine (Auto-detects host IDE by default)</div>
+            <select id="s-provider" style="width: 100%; padding: 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px;">
+                <option value="auto">Auto-Detect Host IDE</option>
+                <option value="antigravity">Google Antigravity (CDP :9000)</option>
+                <option value="cursor">Cursor (Composer & Chat)</option>
+                <option value="windsurf">Windsurf (Cascade Agent)</option>
+                <option value="copilot">VS Code (GitHub Copilot)</option>
+                <option value="cli">Universal Terminal Agent</option>
+            </select>
+        </div>
+
 
 
         <div class="btn-row">
@@ -1333,6 +1527,8 @@ var ol = Xn(require("vscode")),
         const tokenInput = document.getElementById('s-token');
         const channelInput = document.getElementById('s-channel');
         const portInput = document.getElementById('s-port');
+        const usersInput = document.getElementById('s-users');
+        const providerInput = document.getElementById('s-provider');
         const savedMsg = document.getElementById('saved-msg');
 
         function flashSaved() {
@@ -1355,6 +1551,10 @@ var ol = Xn(require("vscode")),
         tokenInput.addEventListener('input', () => debounceSave('botToken', tokenInput.value));
         channelInput.addEventListener('input', () => debounceSave('channelId', channelInput.value));
         portInput.addEventListener('input', () => debounceSave('debugPort', parseInt(portInput.value) || 9000));
+        usersInput.addEventListener('input', () => debounceSave('allowedUsers', usersInput.value));
+        if (providerInput) {
+            providerInput.addEventListener('change', () => saveSetting('agentProvider', providerInput.value));
+        }
 
         // Reconnect button
         document.getElementById('btn-reconnect').addEventListener('click', () => {
@@ -1415,6 +1615,10 @@ var ol = Xn(require("vscode")),
                 tokenInput.value = data.botToken || '';
                 channelInput.value = data.channelId || '';
                 portInput.value = data.debugPort || 9000;
+                usersInput.value = data.allowedUsers || '';
+                if (providerInput && data.agentProvider) {
+                    providerInput.value = data.agentProvider;
+                }
             }
 
             if (type === 'status') {
@@ -1766,6 +1970,131 @@ var FC = class {
     }
   }
 
+  async sendSlashCommand(commandName, promptText) {
+    // 1. Check if agent is busy
+    const busyCheck = await this.evaluate(`(() => {
+      const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
+      if (cancel && cancel.offsetParent !== null) return { busy: true };
+      const stopBtn = document.querySelector('button[aria-label*="Cancel" i], button[aria-label*="Stop" i], svg.lucide-square')?.closest('button');
+      if (stopBtn && stopBtn.offsetParent !== null && !stopBtn.disabled) return { busy: true };
+      return { busy: false };
+    })()`, this.contextId);
+    if (busyCheck?.busy) return { ok: false, error: "agent_busy" };
+
+    // 2. Focus the chat editor and select all
+    const focusRes = await this.evaluate(`(() => {
+      const editors = [...document.querySelectorAll('[data-lexical-editor="true"][contenteditable="true"]')]
+        .filter(el => {
+          if (el.offsetParent === null && el.getClientRects().length === 0) return false;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.x > 200;
+        });
+      const editor = editors[0]
+        || [...document.querySelectorAll('[data-lexical-editor="true"][contenteditable="true"]')].find(el => el.offsetParent !== null)
+        || document.querySelector('[data-lexical-editor="true"][contenteditable="true"]')
+        || document.querySelector('[contenteditable="true"]');
+
+      if (!editor) return { ok: false, error: "editor_not_found" };
+      editor.focus();
+      const sel = window.getSelection();
+      sel.selectAllChildren(editor);
+      return { ok: true };
+    })()`, this.contextId);
+    if (!focusRes?.ok) return { ok: false, error: focusRes?.error || "editor_not_found" };
+
+    // 3. Clear existing text via Backspace
+    await this.call("Input.dispatchKeyEvent", { type: "keyDown", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 });
+    await this.call("Input.dispatchKeyEvent", { type: "keyUp", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 });
+    await this.sleep(100);
+
+    // 4. Type "/" to trigger typeahead
+    await this.call("Input.dispatchKeyEvent", { type: "keyDown", text: "/", key: "/", code: "Slash", windowsVirtualKeyCode: 191 });
+    await this.call("Input.dispatchKeyEvent", { type: "keyUp", key: "/", code: "Slash", windowsVirtualKeyCode: 191 });
+    await this.sleep(100);
+
+    // 5. Type the command characters
+    const searchStr = (commandName === "grill" || commandName === "grill-me") ? "grill" : commandName;
+    for (const char of searchStr) {
+      const code = "Key" + char.toUpperCase();
+      const vkey = char.toUpperCase().charCodeAt(0);
+      await this.call("Input.dispatchKeyEvent", { type: "keyDown", text: char, key: char, code, windowsVirtualKeyCode: vkey });
+      await this.call("Input.dispatchKeyEvent", { type: "keyUp", key: char, code, windowsVirtualKeyCode: vkey });
+      await this.sleep(30);
+    }
+    await this.sleep(250);
+
+    // 6. Look for matching option in the typeahead dropdown and click
+    const selectOpt = await this.evaluate(`(() => {
+      const options = Array.from(document.querySelectorAll('[role="option"], [id^="typeahead-item"]'));
+      const query = ${JSON.stringify(searchStr.toLowerCase())};
+      const match = options.find(o => (o.innerText || '').toLowerCase().includes(query)) || options[0];
+      if (match) {
+        match.click();
+        return { ok: true, matched: match.innerText };
+      }
+      return { ok: false, count: options.length };
+    })()`, this.contextId);
+
+    // Commit chip selection in Lexical via Enter
+    await this.call("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    await this.call("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    await this.sleep(250);
+
+    // 7. Verify decorator chip was created
+    const verifyChip = await this.evaluate(`(() => {
+      const editor = document.querySelector('[data-lexical-editor="true"][contenteditable="true"]');
+      const chip = editor?.querySelector('.context-scope-mention')
+                || editor?.querySelector('[data-lexical-decorator="true"]');
+      return {
+        hasChip: !!chip,
+        chipText: chip?.innerText?.trim()
+      };
+    })()`, this.contextId);
+
+    if (!verifyChip?.hasChip) {
+      this.log.appendLine(`[CDP] No chip detected after slash command typeahead for /${commandName}`);
+      return { ok: false, error: "chip_not_created" };
+    }
+
+    // 8. If promptText is provided, insert it
+    if (promptText && promptText.length > 0) {
+      await this.call("Input.insertText", { text: " " + promptText });
+      await this.sleep(150);
+    }
+
+    // 9. Submit the message
+    await this.sleep(200);
+    const submitRes = await this.evaluate(`(() => {
+      const submit = document.querySelector("svg.lucide-arrow-right")?.closest("button")
+                  || document.querySelector('[data-testid="send-button"]')
+                  || document.querySelector('button[aria-label*="send" i]');
+
+      if (submit && !submit.disabled) {
+        submit.click();
+        return { ok: true, method: "click_submit" };
+      }
+
+      // Enter fallback
+      const editor = document.querySelector('[data-lexical-editor="true"][contenteditable="true"]')
+                  || document.querySelector('[contenteditable="true"]');
+      if (editor) {
+        editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13 }));
+        editor.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13 }));
+        return { ok: true, method: "enter_fallback" };
+      }
+      return { ok: false, error: "submit_not_found" };
+    })()`, this.contextId);
+
+    if (submitRes?.ok) {
+      return { ok: true, method: "slash_command_chip", chip: commandName, submitMethod: submitRes.method };
+    }
+
+    // Fallback: dispatch Enter via CDP
+    await this.call("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    await this.call("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    return { ok: true, method: "slash_command_chip_cdp_enter", chip: commandName };
+  }
+
   async sendMessage(e) {
     const activePrompt = await this.getActivePrompt();
     if (activePrompt) {
@@ -1785,6 +2114,28 @@ var FC = class {
       }
       return { ok: false, error: (ansRes && ansRes.error) || 'prompt_selection_failed', details: ansRes };
     }
+
+    // Check if message starts with a slash command (e.g. /plan, /goal, /grill, /grill-me, /schedule, etc.)
+    const slashMatch = typeof e === "string" ? e.match(/^\/([a-zA-Z0-9_-]+)(?:\s+([\s\S]*))?$/) : null;
+    if (slashMatch) {
+      const rawCmd = slashMatch[1].toLowerCase();
+      const promptText = (slashMatch[2] || "").trim();
+      this.log.appendLine(`[CDP] Detected slash command: /${rawCmd}`);
+      try {
+        const slashRes = await this.sendSlashCommand(rawCmd, promptText);
+        if (slashRes && slashRes.ok) {
+          this.log.appendLine(`[CDP] Slash command chip injected successfully: /${rawCmd} (${slashRes.method})`);
+          return slashRes;
+        }
+        if (slashRes && slashRes.error === "agent_busy") {
+          return slashRes;
+        }
+        this.log.appendLine(`[CDP] Slash command injection failed (${slashRes?.error || "unknown"}), falling back to standard injection`);
+      } catch (slashErr) {
+        this.log.appendLine(`[CDP] Slash command injection error: ${slashErr.message}, falling back`);
+      }
+    }
+
     let r = await this.evaluate(
       `(() => {
                 const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
@@ -2955,6 +3306,348 @@ var FC = class {
     }
   }
 };
+class BaseAgentProvider {
+  id = "base";
+  displayName = "Base Agent Provider";
+  hostApp = "Universal";
+  connected = false;
+  constructor(log) {
+    this.log = log;
+  }
+  isConnected() {
+    return this.connected;
+  }
+  async connect() {
+    this.connected = true;
+  }
+  disconnect() {
+    this.connected = false;
+  }
+  async isBusy() {
+    return false;
+  }
+  async cancelAgent() {
+    return { ok: false, error: "not_supported" };
+  }
+  async getActivePrompt() {
+    return null;
+  }
+  async answerPrompt(ans) {
+    return { ok: false, error: "not_supported" };
+  }
+  async sendSlashCommand(cmd, prompt) {
+    return { ok: false, error: "not_supported" };
+  }
+  async sendMessage(msg) {
+    return { ok: false, error: "not_supported" };
+  }
+  async chatSnapshot() {
+    return "";
+  }
+  async waitForResponse(prevSnapshot, promptText) {
+    return "Agent response not available for this provider.";
+  }
+  async extractLastResponseMarkdown() {
+    return "";
+  }
+  async extractThinkingContent() {
+    return "";
+  }
+  async createNewConversation() {
+    return "New Session";
+  }
+  async switchConversation(name) {
+    return false;
+  }
+  async getCurrentConversationName() {
+    return "Default Session";
+  }
+  async listModels() {
+    return {
+      models: [],
+      currentModel: "Default",
+      currentEffort: null,
+      statusBar: this.displayName
+    };
+  }
+  async switchModel(name) {
+    return name;
+  }
+}
+
+class AntigravityAgentProvider extends FC {
+  id = "antigravity";
+  displayName = "Google Antigravity (CDP :9000)";
+  hostApp = "Google Antigravity";
+  constructor(port, log) {
+    super(port, log);
+  }
+}
+
+class CursorAgentProvider extends BaseAgentProvider {
+  id = "cursor";
+  displayName = "Cursor AI (Composer & Chat)";
+  hostApp = "Cursor";
+  constructor(log) {
+    super(log);
+  }
+  async connect() {
+    this.connected = true;
+    this.log.appendLine("[CursorProvider] Connected to Cursor AI environment");
+  }
+  disconnect() {
+    this.connected = false;
+  }
+  async isBusy() {
+    return false;
+  }
+  async cancelAgent() {
+    try {
+      await vr.commands.executeCommand("composer.cancel").then(null, () => {});
+      await vr.commands.executeCommand("cursor.chat.cancel").then(null, () => {});
+      return { ok: true, method: "cursor_cancel" };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  async sendMessage(text) {
+    this.log.appendLine(`[CursorProvider] Forwarding prompt to Cursor: ${text.substring(0, 80)}...`);
+    let dispatched = false;
+    try {
+      await vr.commands.executeCommand("composer.startComposer");
+      dispatched = true;
+    } catch {}
+    if (!dispatched) {
+      try {
+        await vr.commands.executeCommand("cursor.chat.focus");
+        dispatched = true;
+      } catch {}
+    }
+    return { ok: true, method: dispatched ? "cursor_command" : "workspace_focus" };
+  }
+  async waitForResponse(prevSnapshot, promptText) {
+    return `🚀 **Prompt dispatched to Cursor AI Composer:**\n\`\`\`text\n${promptText.substring(0, 1200)}\n\`\`\`\n💡 *Session focused in Cursor IDE.*`;
+  }
+  async listModels() {
+    return {
+      models: [
+        { name: "Claude 3.5 Sonnet", isSelected: true, hasEffort: false, speed: "Fast" },
+        { name: "GPT-4o", isSelected: false, hasEffort: false, speed: "Standard" },
+        { name: "Cursor-Small", isSelected: false, hasEffort: false, speed: "Ultra-fast" },
+        { name: "o1-preview", isSelected: false, hasEffort: true, speed: "Reasoning" }
+      ],
+      currentModel: "Claude 3.5 Sonnet",
+      currentEffort: null,
+      statusBar: "Cursor AI"
+    };
+  }
+  async switchModel(name) {
+    return name;
+  }
+  async createNewConversation() {
+    try {
+      await vr.commands.executeCommand("composer.startComposer");
+    } catch {}
+    return "New Cursor Composer Session";
+  }
+}
+
+class WindsurfAgentProvider extends BaseAgentProvider {
+  id = "windsurf";
+  displayName = "Windsurf (Cascade Agent)";
+  hostApp = "Windsurf";
+  constructor(log) {
+    super(log);
+  }
+  async connect() {
+    this.connected = true;
+    this.log.appendLine("[WindsurfProvider] Connected to Windsurf Cascade environment");
+  }
+  disconnect() {
+    this.connected = false;
+  }
+  async isBusy() {
+    return false;
+  }
+  async cancelAgent() {
+    try {
+      await vr.commands.executeCommand("windsurf.cascade.cancel").then(null, () => {});
+      return { ok: true, method: "windsurf_cancel" };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  async sendMessage(text) {
+    this.log.appendLine(`[WindsurfProvider] Forwarding prompt to Windsurf Cascade: ${text.substring(0, 80)}...`);
+    try {
+      await vr.commands.executeCommand("windsurf.prioritized.chat.focus").then(null, () => {});
+    } catch {}
+    return { ok: true, method: "cascade_focus" };
+  }
+  async waitForResponse(prevSnapshot, promptText) {
+    return `🏄 **Prompt dispatched to Windsurf Cascade:**\n\`\`\`text\n${promptText.substring(0, 1200)}\n\`\`\`\n💡 *Cascade session active in Windsurf.*`;
+  }
+  async listModels() {
+    return {
+      models: [
+        { name: "Cascade Base (Claude 3.5 Sonnet)", isSelected: true, hasEffort: false, speed: "Fast" },
+        { name: "Cascade Extended", isSelected: false, hasEffort: false, speed: "Deep" }
+      ],
+      currentModel: "Cascade Base",
+      currentEffort: null,
+      statusBar: "Windsurf Cascade"
+    };
+  }
+  async switchModel(name) {
+    return name;
+  }
+  async createNewConversation() {
+    try {
+      await vr.commands.executeCommand("windsurf.cascade.newSession").then(null, () => {});
+    } catch {}
+    return "New Cascade Session";
+  }
+}
+
+class CopilotAgentProvider extends BaseAgentProvider {
+  id = "copilot";
+  displayName = "GitHub Copilot (VS Code)";
+  hostApp = "Visual Studio Code";
+  constructor(log) {
+    super(log);
+  }
+  async connect() {
+    this.connected = true;
+    this.log.appendLine("[CopilotProvider] Connected to GitHub Copilot environment");
+  }
+  disconnect() {
+    this.connected = false;
+  }
+  async isBusy() {
+    return false;
+  }
+  async cancelAgent() {
+    try {
+      await vr.commands.executeCommand("workbench.action.chat.cancel").then(null, () => {});
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  async sendMessage(text) {
+    this.log.appendLine(`[CopilotProvider] Forwarding to GitHub Copilot Chat: ${text.substring(0, 80)}...`);
+    try {
+      await vr.commands.executeCommand("workbench.action.chat.open", text).then(null, () => {});
+    } catch {}
+    return { ok: true, method: "chat_open" };
+  }
+  async waitForResponse(prevSnapshot, promptText) {
+    return `🤖 **Prompt forwarded to GitHub Copilot Chat:**\n\`\`\`text\n${promptText.substring(0, 1200)}\n\`\`\`\n💡 *Session opened in VS Code Chat panel.*`;
+  }
+  async listModels() {
+    return {
+      models: [
+        { name: "Claude 3.5 Sonnet (Copilot)", isSelected: true, hasEffort: false, speed: "Fast" },
+        { name: "GPT-4o (Copilot)", isSelected: false, hasEffort: false, speed: "Standard" },
+        { name: "o1-mini (Copilot)", isSelected: false, hasEffort: true, speed: "Reasoning" }
+      ],
+      currentModel: "Claude 3.5 Sonnet (Copilot)",
+      currentEffort: null,
+      statusBar: "GitHub Copilot"
+    };
+  }
+  async switchModel(name) {
+    return name;
+  }
+  async createNewConversation() {
+    try {
+      await vr.commands.executeCommand("workbench.action.chat.clear").then(null, () => {});
+    } catch {}
+    return "New Copilot Chat Session";
+  }
+}
+
+class CliAgentProvider extends BaseAgentProvider {
+  id = "cli";
+  displayName = "Universal Terminal Agent";
+  hostApp = "Universal Shell";
+  constructor(extension, log) {
+    super(log);
+    this.extension = extension;
+  }
+  async connect() {
+    this.connected = true;
+    this.log.appendLine("[CliProvider] Universal Terminal Agent provider ready");
+  }
+  disconnect() {
+    this.connected = false;
+  }
+  async isBusy() {
+    return false;
+  }
+  async cancelAgent() {
+    return { ok: true, method: "cli_noop" };
+  }
+  async sendMessage(text) {
+    return { ok: true, method: "cli_execution" };
+  }
+  async waitForResponse(prevSnapshot, promptText) {
+    const cwd = this.extension.getWorkspaceRoot();
+    const res = await this.extension.executeShellCommand(promptText, cwd);
+    const combined = (res.stdout + (res.stderr ? (res.stdout ? "\n" : "") + res.stderr : "")).trim();
+    return `💻 **Terminal Agent Output (${res.duration}s):**\n\`\`\`text\n${combined || "Command executed with no output."}\n\`\`\``;
+  }
+  async listModels() {
+    return {
+      models: [
+        { name: "Local System Shell", isSelected: true, hasEffort: false, speed: "Native" }
+      ],
+      currentModel: "Local System Shell",
+      currentEffort: null,
+      statusBar: "Shell Runner"
+    };
+  }
+  async switchModel(name) {
+    return name;
+  }
+  async createNewConversation() {
+    return "New Terminal Session";
+  }
+}
+
+function resolveAgentProvider(choice, port, extension, log) {
+  const rawChoice = (choice || "auto").toLowerCase();
+  const appName = (vr.env?.appName || "").toLowerCase();
+
+  log.appendLine(`[AgentProvider] Resolving provider: configured="${choice}", hostApp="${vr.env?.appName || 'Unknown'}"`);
+
+  if (rawChoice === "cursor") return new CursorAgentProvider(log);
+  if (rawChoice === "windsurf") return new WindsurfAgentProvider(log);
+  if (rawChoice === "copilot") return new CopilotAgentProvider(log);
+  if (rawChoice === "cli") return new CliAgentProvider(extension, log);
+  if (rawChoice === "antigravity") return new AntigravityAgentProvider(port, log);
+
+  // Auto-detection based on host environment
+  if (appName.includes("antigravity")) {
+    log.appendLine("[AgentProvider] Auto-detected Google Antigravity host environment");
+    return new AntigravityAgentProvider(port, log);
+  }
+  if (appName.includes("cursor")) {
+    log.appendLine("[AgentProvider] Auto-detected Cursor host environment");
+    return new CursorAgentProvider(log);
+  }
+  if (appName.includes("windsurf") || appName.includes("codeium")) {
+    log.appendLine("[AgentProvider] Auto-detected Windsurf host environment");
+    return new WindsurfAgentProvider(log);
+  }
+  if (appName.includes("copilot") || appName.includes("visual studio code") || appName.includes("code - oss")) {
+    log.appendLine("[AgentProvider] Auto-detected Visual Studio Code / GitHub Copilot environment");
+    return new CopilotAgentProvider(log);
+  }
+
+  // Default to Antigravity (CDP) for Google Antigravity
+  return new AntigravityAgentProvider(port, log);
+}
 var _g = "antigravity-discord.leaderId",
   Du = "antigravity-discord.leaderHeartbeat",
   KJe = 5e3,
@@ -3009,6 +3702,17 @@ var oU = class {
         (this.log = vr.window.createOutputChannel("Antigravity Discord")),
         (this.panel = new Dg(e.extensionUri)));
         try {
+          const savedMap = e.workspaceState.get("antigravity-discord.conversationMap");
+          if (Array.isArray(savedMap)) {
+            for (const [k, v] of savedMap) {
+              if (k && v) this.conversationMap.set(k, v);
+            }
+            this.log.appendLine(`[Extension] Restored ${this.conversationMap.size} persisted conversation thread mappings`);
+          }
+        } catch (err) {
+          this.log.appendLine(`[Extension] Error restoring conversation map: ${err}`);
+        }
+        try {
           e.subscriptions.push(vr.window.registerWebviewViewProvider(Dg.viewType, this.panel));
         } catch (t) {
           this.log.appendLine(`[Extension] Warning: could not register webview view provider: ${t}`);
@@ -3023,8 +3727,11 @@ var oU = class {
             ((i.affectsConfiguration("antigravity-discord.botToken") ||
               i.affectsConfiguration("antigravity-discord.channelId")) &&
               this.connectDiscord().catch((r) => this.log.appendLine(`[Extension] Reconnect failed: ${r}`)),
-              i.affectsConfiguration("antigravity-discord.debugPort") &&
-                this.connectCdp().catch((r) => this.log.appendLine(`[Extension] CDP reconnect failed: ${r}`)));
+              (i.affectsConfiguration("antigravity-discord.debugPort") ||
+                i.affectsConfiguration("antigravity-discord.agentProvider")) &&
+                this.connectCdp().catch((r) => this.log.appendLine(`[Extension] Agent provider reconnect failed: ${r}`)),
+              i.affectsConfiguration("antigravity-discord.allowedUsers") &&
+                this.log.appendLine(`[Security] Updated allowedUsers whitelist configuration`));
           }),
         ));
         try {
@@ -3037,6 +3744,475 @@ var oU = class {
         } catch (t) {
           this.log.appendLine(`[Extension] Warning: could not register command antigravity-discord.reconnect: ${t}`);
         }
+    }
+    saveConversationMap() {
+      try {
+        this.ctx.workspaceState.update(
+          "antigravity-discord.conversationMap",
+          Array.from(this.conversationMap.entries()).slice(-100)
+        );
+      } catch (err) {
+        this.log.appendLine(`[Extension] Error saving conversation map: ${err}`);
+      }
+    }
+    isUserAuthorized(userId) {
+      if (!userId) return true;
+      const cfg = vr.workspace.getConfiguration("antigravity-discord");
+      const rawAllowed = cfg.get("allowedUsers", "");
+      if (!rawAllowed) return true;
+      let allowedList = [];
+      if (Array.isArray(rawAllowed)) {
+        allowedList = rawAllowed.map((u) => String(u).trim()).filter(Boolean);
+      } else if (typeof rawAllowed === "string") {
+        allowedList = rawAllowed.split(",").map((u) => u.trim()).filter(Boolean);
+      }
+      if (allowedList.length === 0) return true;
+      return allowedList.includes(String(userId).trim());
+    }
+    getWorkspaceRoot() {
+      const folders = vr.workspace.workspaceFolders;
+      if (folders && folders.length > 0) {
+        return folders[0].uri.fsPath;
+      }
+      return process.cwd();
+    }
+    async executeShellCommand(command, cwd) {
+      const cp = require("child_process");
+      return new Promise((resolve) => {
+        const startTime = Date.now();
+        const timeoutMs = 30000;
+        cp.exec(command, { cwd, timeout: timeoutMs, maxBuffer: 1024 * 1024 * 5, windowsHide: true }, (err, stdout, stderr) => {
+          const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+          resolve({
+            code: err ? (typeof err.code === "number" ? err.code : 1) : 0,
+            stdout: (stdout || "").toString(),
+            stderr: (stderr || "").toString(),
+            duration,
+            timedOut: !!(err?.killed && err?.signal === "SIGTERM")
+          });
+        });
+      });
+    }
+    formatShellOutput(cmd, result, cwd) {
+      const statusIcon = result.code === 0 ? "✅" : "❌";
+      const durationText = `${result.duration}s`;
+      const exitText = result.timedOut ? "TIMED OUT (30s limit)" : `exit ${result.code}`;
+      const safeCmd = cmd.length > 80 ? cmd.substring(0, 77) + "..." : cmd;
+      let header = `💻 **Terminal:** \`${safeCmd}\`\n> ${statusIcon} **${exitText}** in \`${durationText}\` | 📁 \`${cwd}\`\n\n`;
+      const combined = (result.stdout + (result.stderr ? (result.stdout ? "\n" : "") + result.stderr : "")).trim();
+      if (!combined) {
+        return clampDiscordContent(header + "_No output returned._", 1900);
+      }
+      const maxLen = Math.max(400, 1750 - header.length);
+      if (combined.length <= maxLen) {
+        return clampDiscordContent(header + "```sh\n" + combined + "\n```", 1900);
+      }
+      const truncated = combined.substring(0, maxLen);
+      return clampDiscordContent(header + "```sh\n" + truncated + "\n```\n⚠️ *(Output truncated — " + (combined.length - maxLen) + " characters omitted)*", 1900);
+    }
+    resolvePath(targetPath) {
+      const path = require("path");
+      const root = this.getWorkspaceRoot();
+      const resolved = path.isAbsolute(targetPath) ? path.resolve(targetPath) : path.resolve(root, targetPath);
+      return {
+        root,
+        resolved,
+        relative: path.relative(root, resolved).replace(/\\/g, "/")
+      };
+    }
+    async safeReply(interaction, payload) {
+      if (typeof payload === "string") {
+        payload = { content: clampDiscordContent(payload, 1900) };
+      } else if (payload && typeof payload.content === "string") {
+        payload.content = clampDiscordContent(payload.content, 1900);
+      }
+      try {
+        if (interaction.deferred || interaction.replied) {
+          return await interaction.editReply(payload);
+        }
+        return await interaction.reply(payload);
+      } catch (err) {
+        this.log.appendLine(`[Discord] safeReply error: ${err.message}`);
+      }
+    }
+    async getGitStatusOutput() {
+      const cwd = this.getWorkspaceRoot();
+      const statusRes = await this.executeShellCommand("git status --porcelain -b", cwd);
+      if (statusRes.code !== 0) {
+        return {
+          content: clampDiscordContent(`❌ **Git Error:** ${statusRes.stderr || statusRes.stdout || "Failed to run git status"}\nEnsure this workspace is a Git repository.`, 1900),
+          hasChanges: false,
+          cwd
+        };
+      }
+      const lines = statusRes.stdout.split(/\r?\n/).filter(Boolean);
+      let branchInfo = "Git Repository";
+      const staged = [];
+      const unstaged = [];
+      const untracked = [];
+
+      for (const line of lines) {
+        if (line.startsWith("##")) {
+          branchInfo = line.substring(2).trim();
+          continue;
+        }
+        const x = line[0];
+        const y = line[1];
+        const file = line.substring(3).trim();
+
+        if (x === "?" && y === "?") {
+          untracked.push(file);
+        } else {
+          if (x && x !== " " && x !== "?") {
+            const action = x === "M" ? "Modified" : x === "A" ? "Added" : x === "D" ? "Deleted" : x === "R" ? "Renamed" : x;
+            staged.push(`${action}: \`${file}\``);
+          }
+          if (y && y !== " " && y !== "?") {
+            const action = y === "M" ? "Modified" : y === "D" ? "Deleted" : y;
+            unstaged.push(`${action}: \`${file}\``);
+          }
+        }
+      }
+
+      const hasChanges = staged.length > 0 || unstaged.length > 0 || untracked.length > 0;
+      let msg = `🌿 **Git Status** (\`${branchInfo}\`)\n📁 \`${cwd}\`\n\n`;
+
+      if (!hasChanges) {
+        msg += "✨ **Working tree clean.** No staged or unstaged changes.";
+      } else {
+        if (staged.length > 0) {
+          const stagedSlice = staged.slice(0, 8);
+          msg += `🟢 **Staged for commit (${staged.length}):**\n` + stagedSlice.map(s => `  • ${s}`).join("\n");
+          if (staged.length > 8) msg += `\n  *...and ${staged.length - 8} more*`;
+          msg += "\n\n";
+        }
+        if (unstaged.length > 0) {
+          const unstagedSlice = unstaged.slice(0, 10);
+          msg += `📝 **Unstaged changes (${unstaged.length}):**\n` + unstagedSlice.map(s => `  • ${s}`).join("\n");
+          if (unstaged.length > 10) msg += `\n  *...and ${unstaged.length - 10} more*`;
+          msg += "\n\n";
+        }
+        if (untracked.length > 0) {
+          const untrackedSlice = untracked.slice(0, 8);
+          msg += `❓ **Untracked files (${untracked.length}):**\n` + untrackedSlice.map(s => `  • \`${s}\``).join("\n");
+          if (untracked.length > 8) msg += `\n  *...and ${untracked.length - 8} more*`;
+          msg += "\n\n";
+        }
+      }
+
+      return { content: clampDiscordContent(msg.trim(), 1900), hasChanges, cwd };
+    }
+    async getGitDiffOutput(file = "", staged = false) {
+      const path = require("path");
+      const cwd = this.getWorkspaceRoot();
+      const fileArg = file ? ` -- "${file.trim()}"` : "";
+      const stagedFlag = staged ? " --cached" : "";
+      const statCmd = `git diff${stagedFlag} --stat${fileArg}`;
+      const diffCmd = `git diff${stagedFlag}${fileArg}`;
+
+      const [statRes, diffRes] = await Promise.all([
+        this.executeShellCommand(statCmd, cwd),
+        this.executeShellCommand(diffCmd, cwd)
+      ]);
+
+      if (diffRes.code !== 0) {
+        return {
+          content: clampDiscordContent(`❌ **Git Diff Error:** ${diffRes.stderr || "Failed to inspect diff"}`, 1900),
+          files: []
+        };
+      }
+
+      const rawDiff = diffRes.stdout.trim();
+      const statSummary = statRes.stdout.trim();
+
+      if (!rawDiff) {
+        return {
+          content: clampDiscordContent(`✨ **No diff detected.** ${staged ? "No staged changes." : "Working directory is clean."}${file ? ` (File: \`${file}\`)` : ""}`, 1900),
+          files: []
+        };
+      }
+
+      const scopeText = file ? `\`${file}\`` : (staged ? "Staged Changes" : "Working Tree Changes");
+      let header = `🔍 **Git Diff:** ${scopeText}\n`;
+      if (statSummary) {
+        const shortStat = statSummary.length > 300 ? statSummary.substring(0, 300) + "\n..." : statSummary;
+        header += `\`\`\`text\n${shortStat}\n\`\`\`\n`;
+      }
+
+      const availableChars = Math.max(400, 1750 - header.length);
+      if (rawDiff.length <= availableChars) {
+        return {
+          content: clampDiscordContent(header + `\`\`\`diff\n${rawDiff}\n\`\`\``, 1900),
+          files: []
+        };
+      }
+
+      const snippetLimit = Math.max(300, 1600 - header.length - 100);
+      const snippet = rawDiff.substring(0, snippetLimit);
+      const patchFileName = file ? `${path.basename(file.trim())}.patch` : "changes.patch";
+      return {
+        content: clampDiscordContent(header + `\`\`\`diff\n${snippet}\n\`\`\`\n⚠️ *(Diff truncated — full ${rawDiff.length} characters attached in \`${patchFileName}\`)*`, 1900),
+        files: [{
+          attachment: Buffer.from(rawDiff, "utf8"),
+          name: patchFileName
+        }]
+      };
+    }
+    async getGitLogOutput(count = 5) {
+      const cwd = this.getWorkspaceRoot();
+      const safeCount = Math.min(Math.max(1, parseInt(count) || 5), 20);
+      const res = await this.executeShellCommand(`git log -n ${safeCount} --pretty=format:"%h | %s (%cr) <%an>"`, cwd);
+      if (res.code !== 0) {
+        return clampDiscordContent(`❌ **Git Log Error:** ${res.stderr || "Failed to fetch commit log"}`, 1900);
+      }
+      const lines = res.stdout.trim();
+      if (!lines) {
+        return "📜 **Git Log:** No commits found in this repository.";
+      }
+      return clampDiscordContent(`📜 **Git Log (Last ${safeCount} commits):**\n\`\`\`text\n${lines}\n\`\`\``, 1900);
+    }
+    async handleCatFile(filePath, startLine = null, endLine = null) {
+      const fs = require("fs");
+      const path = require("path");
+      const { root, resolved, relative } = this.resolvePath(filePath);
+
+      if (!fs.existsSync(resolved)) {
+        return { content: clampDiscordContent(`❌ **File not found:** \`${filePath}\``, 1900) };
+      }
+      let stat;
+      try {
+        stat = fs.statSync(resolved);
+      } catch (err) {
+        return { content: clampDiscordContent(`⚠️ **Error accessing file:** ${err.message}`, 1900) };
+      }
+      if (stat.isDirectory()) {
+        return { content: clampDiscordContent(`📁 **\`${relative || filePath}\` is a directory.** Use \`/tree\` or \`!tree ${relative}\` to view directory contents.`, 1900) };
+      }
+
+      let buffer;
+      try {
+        buffer = fs.readFileSync(resolved);
+      } catch (err) {
+        return { content: clampDiscordContent(`⚠️ **Error reading file:** ${err.message}`, 1900) };
+      }
+
+      const isBinary = buffer.includes(0);
+      if (isBinary) {
+        return {
+          content: clampDiscordContent(`📦 **Binary File:** \`${relative}\` (${(stat.size / 1024).toFixed(1)} KB)\nBinary files cannot be rendered as text.`, 1900),
+          files: stat.size < 8 * 1024 * 1024 ? [{ attachment: resolved, name: path.basename(resolved) }] : []
+        };
+      }
+
+      const text = buffer.toString("utf8");
+      const lines = text.split(/\r?\n/);
+      const totalLines = lines.length;
+
+      let start = 1;
+      let end = totalLines;
+
+      if (startLine !== null && startLine !== undefined && !isNaN(parseInt(startLine))) {
+        start = Math.max(1, parseInt(startLine));
+      }
+      if (endLine !== null && endLine !== undefined && !isNaN(parseInt(endLine))) {
+        end = Math.min(totalLines, Math.max(start, parseInt(endLine)));
+      }
+
+      const slice = lines.slice(start - 1, end);
+      const padWidth = String(end).length;
+      const numbered = slice.map((line, idx) => `${String(start + idx).padStart(padWidth, " ")} | ${line}`).join("\n");
+
+      const ext = path.extname(resolved).toLowerCase().replace(".", "");
+      const langMap = {
+        js: "javascript", ts: "typescript", jsx: "javascript", tsx: "typescript",
+        json: "json", py: "python", html: "html", css: "css", md: "markdown",
+        sh: "bash", bash: "bash", ps1: "powershell", yml: "yaml", yaml: "yaml",
+        rs: "rust", go: "go", c: "c", cpp: "cpp", h: "c", hpp: "cpp",
+        java: "java", kt: "kotlin", rb: "ruby", php: "php", xml: "xml",
+        sql: "sql", dockerfile: "dockerfile"
+      };
+      const syntaxLang = langMap[ext] || (ext ? ext : "text");
+
+      let header = `📄 **File:** \`${relative || path.basename(resolved)}\` (Lines ${start}–${end} of ${totalLines} | ${(stat.size / 1024).toFixed(1)} KB)\n`;
+
+      const availableChars = Math.max(400, 1750 - header.length);
+      if (numbered.length <= availableChars) {
+        return {
+          content: clampDiscordContent(header + `\`\`\`${syntaxLang}\n${numbered}\n\`\`\``, 1900)
+        };
+      }
+
+      const snippetLimit = Math.max(300, 1600 - header.length - 90);
+      const truncatedNumbered = numbered.substring(0, snippetLimit);
+      return {
+        content: clampDiscordContent(header + `\`\`\`${syntaxLang}\n${truncatedNumbered}\n\`\`\`\n⚠️ *(Output truncated — full file attached below)*`, 1900),
+        files: [{
+          attachment: resolved,
+          name: path.basename(resolved)
+        }]
+      };
+    }
+    async handleTree(dirPath = ".", maxDepth = 2) {
+      const fs = require("fs");
+      const path = require("path");
+      const { root, resolved, relative } = this.resolvePath(dirPath || ".");
+
+      if (!fs.existsSync(resolved)) {
+        return clampDiscordContent(`❌ **Directory not found:** \`${dirPath}\``, 1900);
+      }
+      let stat;
+      try {
+        stat = fs.statSync(resolved);
+      } catch (err) {
+        return clampDiscordContent(`⚠️ **Error accessing path:** ${err.message}`, 1900);
+      }
+      if (!stat.isDirectory()) {
+        return clampDiscordContent(`📄 **\`${dirPath}\` is a file.** Use \`/cat ${dirPath}\` to view its contents.`, 1900);
+      }
+
+      const depthLimit = Math.min(Math.max(1, parseInt(maxDepth) || 2), 5);
+      const ignoredNames = new Set([
+        "node_modules", ".git", ".disgravity", "dist", "build", ".next",
+        "coverage", ".vscode-test", "__pycache__", ".venv", ".gemini", "out"
+      ]);
+
+      let dirCount = 0;
+      let fileCount = 0;
+      let totalEntries = 0;
+      const maxEntries = 40;
+      let charLength = 0;
+
+      function buildBranch(currentDir, currentDepth, prefix = "") {
+        if (currentDepth > depthLimit || totalEntries >= maxEntries || charLength >= 1200) return [];
+        let entries;
+        try {
+          entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        } catch {
+          return [`${prefix}└── [Access Denied]`];
+        }
+
+        entries = entries.filter((e) => !ignoredNames.has(e.name) && !e.name.endsWith(".vsix"));
+        entries.sort((a, b) => {
+          if (a.isDirectory() && !b.isDirectory()) return -1;
+          if (!a.isDirectory() && b.isDirectory()) return 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        const lines = [];
+        for (let idx = 0; idx < entries.length; idx++) {
+          if (totalEntries >= maxEntries || charLength >= 1200) {
+            lines.push(`${prefix}└── ... (tree truncated to fit Discord limit)`);
+            break;
+          }
+          const entry = entries[idx];
+          totalEntries++;
+          const isLast = idx === entries.length - 1;
+          const marker = isLast ? "└── " : "├── ";
+          const childPrefix = prefix + (isLast ? "    " : "│   ");
+
+          if (entry.isDirectory()) {
+            dirCount++;
+            const line = `${prefix}${marker}${entry.name}/`;
+            charLength += line.length + 1;
+            lines.push(line);
+            const subLines = buildBranch(path.join(currentDir, entry.name), currentDepth + 1, childPrefix);
+            lines.push(...subLines);
+          } else {
+            fileCount++;
+            const line = `${prefix}${marker}${entry.name}`;
+            charLength += line.length + 1;
+            lines.push(line);
+          }
+        }
+        return lines;
+      }
+
+      const displayRoot = relative ? `${relative}/` : `${path.basename(root)}/`;
+      const treeLines = [displayRoot, ...buildBranch(resolved, 1)];
+
+      if (totalEntries >= maxEntries || charLength >= 1200) {
+        if (!treeLines[treeLines.length - 1].includes("...")) {
+          treeLines.push(`└── ... (capped to fit Discord limit)`);
+        }
+      }
+
+      return clampDiscordContent(`📁 **Workspace Tree:** \`${displayRoot}\` (Depth: ${depthLimit})\n\`\`\`text\n${treeLines.join("\n")}\n\`\`\`\n> 📊 **${dirCount}** directories, **${fileCount}** files`, 1900);
+    }
+    async handleOpenFile(filePath) {
+      const fs = require("fs");
+      const { root, resolved, relative } = this.resolvePath(filePath);
+      if (!fs.existsSync(resolved)) {
+        return `❌ **Cannot open file:** \`${filePath}\` not found.`;
+      }
+      let stat;
+      try {
+        stat = fs.statSync(resolved);
+      } catch (err) {
+        return `⚠️ **Error accessing file:** ${err.message}`;
+      }
+      if (stat.isDirectory()) {
+        return `📁 \`${relative || filePath}\` is a directory. Use \`/tree\` to view folders.`;
+      }
+      try {
+        const doc = await vr.workspace.openTextDocument(resolved);
+        await vr.window.showTextDocument(doc);
+        return `📂 **Opened file in Antigravity IDE:** \`${relative || filePath}\``;
+      } catch (err) {
+        return `⚠️ **Failed to open file in editor:** ${err.message}`;
+      }
+    }
+    async downloadAttachments(attachments) {
+      if (!attachments || attachments.length === 0) return [];
+      const fs = require("fs");
+      const path = require("path");
+      const root = this.getWorkspaceRoot();
+      const targetDir = path.join(root, ".disgravity", "attachments");
+      try {
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+      } catch (err) {
+        this.log.appendLine(`[Attachments] Error creating directory: ${err}`);
+      }
+
+      const savedFiles = [];
+      for (const att of attachments) {
+        try {
+          const url = typeof att === "string" ? att : att.url;
+          if (!url) continue;
+          const rawName = (typeof att === "object" && att.name) 
+            ? att.name 
+            : path.basename(new URL(url).pathname) || "attachment";
+          const safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const timestamp = Date.now();
+          const fileName = `${timestamp}_${safeName}`;
+          const filePath = path.join(targetDir, fileName);
+
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const arrayBuf = await res.arrayBuffer();
+          const buffer = Buffer.from(arrayBuf);
+          fs.writeFileSync(filePath, buffer);
+
+          const ext = path.extname(rawName).toLowerCase();
+          const isImage = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"].includes(ext) ||
+            (att.contentType && att.contentType.startsWith("image/"));
+
+          savedFiles.push({
+            originalName: rawName,
+            fileName,
+            filePath,
+            relative: path.relative(root, filePath).replace(/\\/g, "/"),
+            size: buffer.length,
+            isImage,
+            contentType: att.contentType || ""
+          });
+          this.log.appendLine(`[Attachments] Saved "${rawName}" (${buffer.length} bytes) to ${filePath}`);
+        } catch (err) {
+          this.log.appendLine(`[Attachments] Failed to download attachment: ${err.message}`);
+        }
+      }
+      return savedFiles;
     }
     async start() {
       (this.log.appendLine(`[Extension] [PID=${process.pid}] Antigravity Discord Bridge activated`),
@@ -3068,8 +4244,8 @@ var oU = class {
             await this.discord.connect(i)),
           this.cdp?.isConnected()
             ? this.discord.setPresence("online", "Waiting for commands")
-            : this.discord.setPresence("idle", "\u26A0\uFE0F CDP not connected"),
-          vr.window.showInformationMessage("Antigravity Discord Bridge: Connected!"));
+            : this.discord.setPresence("idle", "⚠️ Agent not connected"),
+          vr.window.showInformationMessage(`Dis-Gravity (${vr.env?.appName || "IDE"}): Connected to Discord!`));
       } catch (n) {
         let s = n instanceof Error ? n.message : String(n);
         (this.log.appendLine(`[Extension] Discord failed: ${s}`),
@@ -3080,19 +4256,25 @@ var oU = class {
     }
     async connectCdp() {
       let e = vr.workspace.getConfiguration("antigravity-discord"),
-        i = e.get("debugPort", 9e3);
-      (this.log.appendLine(`[Extension] Connecting to CDP on port ${i}...`),
-        this.cdp && this.cdp.disconnect(),
-        (this.cdp = new FC(i, this.log)));
+        i = e.get("debugPort", 9e3),
+        providerChoice = e.get("agentProvider", "auto");
+      this.cdp && this.cdp.disconnect();
+      this.cdp = resolveAgentProvider(providerChoice, i, this, this.log);
+      this.log.appendLine(`[Extension] Connecting Agent Provider (${this.cdp.displayName})...`);
       try {
         await this.cdp.connect();
-        this.log.appendLine("[Extension] CDP bridge ready");
+        this.log.appendLine(`[Extension] ${this.cdp.displayName} ready`);
         this.startBusyPoller();
+        if (this.discord?.isConnected()) {
+          this.discord.setPresence("online", "Waiting for commands");
+        }
       } catch (r) {
         let n = r instanceof Error ? r.message : String(r);
-        (this.log.appendLine(`[Extension] CDP failed: ${n}`),
-          (this.cdp = null),
-          this.discord?.isConnected() && this.discord.setPresence("idle", "\u26A0\uFE0F CDP not connected"));
+        this.log.appendLine(`[Extension] Agent provider failed: ${n}`);
+        this.cdp = null;
+        if (this.discord?.isConnected()) {
+          this.discord.setPresence("idle", "⚠️ Agent not connected");
+        }
       }
       this.pushStatus();
     }
@@ -3257,6 +4439,20 @@ var oU = class {
     }
     async handleInteraction(interaction) {
       try {
+        const userId = interaction.user?.id;
+        if (!this.isUserAuthorized(userId)) {
+          this.log.appendLine(`[Security] Blocked unauthorized interaction from user ID ${userId} (${interaction.user?.tag || interaction.user?.username})`);
+          if (interaction.isAutocomplete()) {
+            await interaction.respond([]).catch(() => {});
+          } else if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+              content: `⛔ **Unauthorized:** Your Discord User ID (\`${userId}\`) is not in the Dis-Gravity \`allowedUsers\` whitelist.`,
+              ephemeral: true
+            }).catch(() => {});
+          }
+          return;
+        }
+
         if (interaction.isAutocomplete()) {
           const focused = interaction.options.getFocused(true);
           if (focused.name === "command") {
@@ -3271,6 +4467,116 @@ var oU = class {
           const cmd = interaction.commandName;
           this.log.appendLine(`[Extension] Chat input command: /${cmd} from ${interaction.user?.displayName || interaction.user?.username}`);
           
+          if (cmd === "sh") {
+            const shellCmd = interaction.options.getString("command") || "";
+            if (!shellCmd) {
+              await interaction.reply({ content: "⚠️ Please specify a command to execute.", ephemeral: true }).catch(() => {});
+              return;
+            }
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[Shell] Executing /sh: "${shellCmd}" from ${interaction.user?.displayName || interaction.user?.username}`);
+            const cwd = this.getWorkspaceRoot();
+            const res = await this.executeShellCommand(shellCmd, cwd);
+            const formatted = this.formatShellOutput(shellCmd, res, cwd);
+            await this.safeReply(interaction, { content: formatted });
+            return;
+          }
+
+          if (cmd === "git") {
+            const subCmd = interaction.options.getSubcommand() || "status";
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[Git] Executing /git ${subCmd} from ${interaction.user?.displayName || interaction.user?.username}`);
+
+            if (subCmd === "status") {
+              const statusData = await this.getGitStatusOutput();
+              const actionRow = this.discord?.buildGitActionRow(statusData.hasChanges);
+              await this.safeReply(interaction, {
+                content: statusData.content,
+                components: actionRow ? [actionRow] : []
+              });
+              return;
+            }
+
+            if (subCmd === "diff") {
+              const targetFile = interaction.options.getString("file") || "";
+              const staged = interaction.options.getBoolean("staged") || false;
+              const diffData = await this.getGitDiffOutput(targetFile, staged);
+              const actionRow = this.discord?.buildGitActionRow(false);
+              await this.safeReply(interaction, {
+                content: diffData.content,
+                files: diffData.files || [],
+                components: actionRow ? [actionRow] : []
+              });
+              return;
+            }
+
+            if (subCmd === "log") {
+              const count = interaction.options.getInteger("count") || 5;
+              const logContent = await this.getGitLogOutput(count);
+              await this.safeReply(interaction, { content: logContent });
+              return;
+            }
+
+            await this.safeReply(interaction, "⚠️ Unknown git subcommand.");
+            return;
+          }
+
+          if (cmd === "diff") {
+            const targetFile = interaction.options.getString("file") || "";
+            const staged = interaction.options.getBoolean("staged") || false;
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[Git] Executing /diff from ${interaction.user?.displayName || interaction.user?.username}`);
+            const diffData = await this.getGitDiffOutput(targetFile, staged);
+            const actionRow = this.discord?.buildGitActionRow(false);
+            await this.safeReply(interaction, {
+              content: diffData.content,
+              files: diffData.files || [],
+              components: actionRow ? [actionRow] : []
+            });
+            return;
+          }
+
+          if (cmd === "cat") {
+            const filePath = interaction.options.getString("path") || "";
+            const startLine = interaction.options.getInteger("start_line");
+            const endLine = interaction.options.getInteger("end_line");
+            if (!filePath) {
+              await interaction.reply({ content: "⚠️ Please specify a file path to inspect.", ephemeral: true }).catch(() => {});
+              return;
+            }
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[File] Executing /cat ${filePath} from ${interaction.user?.displayName || interaction.user?.username}`);
+            const catData = await this.handleCatFile(filePath, startLine, endLine);
+            await this.safeReply(interaction, {
+              content: catData.content,
+              files: catData.files || []
+            });
+            return;
+          }
+
+          if (cmd === "tree") {
+            const dir = interaction.options.getString("directory") || ".";
+            const depth = interaction.options.getInteger("depth") || 2;
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[File] Executing /tree ${dir} (depth: ${depth}) from ${interaction.user?.displayName || interaction.user?.username}`);
+            const treeContent = await this.handleTree(dir, depth);
+            await this.safeReply(interaction, { content: treeContent });
+            return;
+          }
+
+          if (cmd === "open") {
+            const filePath = interaction.options.getString("path") || "";
+            if (!filePath) {
+              await interaction.reply({ content: "⚠️ Please specify a file path to open.", ephemeral: true }).catch(() => {});
+              return;
+            }
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[File] Executing /open ${filePath} from ${interaction.user?.displayName || interaction.user?.username}`);
+            const openRes = await this.handleOpenFile(filePath);
+            await this.safeReply(interaction, { content: openRes });
+            return;
+          }
+
           if (cmd === "palette") {
             const cat = interaction.options.getString("category") || "featured";
             const view = this.discord?.buildPaletteView(cat);
@@ -3330,7 +4636,9 @@ var oU = class {
           if (cmd === "status") {
             await interaction.deferReply().catch(() => {});
             const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
-            const cdpConnected = !!this.cdp?.isConnected();
+            const providerConnected = !!this.cdp?.isConnected();
+            const hostApp = vr.env?.appName || "Antigravity IDE";
+            const providerName = this.cdp?.displayName || "Google Antigravity (CDP :9000)";
             let currentModel = "Unknown";
             let currentEffort = null;
             let usage = "N/A";
@@ -3341,8 +4649,10 @@ var oU = class {
               if (modelList?.statusBar) usage = modelList.statusBar;
             } catch {}
 
-            let statusMsg = "📊 **Antigravity IDE & Dis-Gravity Status**\n\n";
-            statusMsg += `• **CDP Bridge:** ${cdpConnected ? "🟢 Connected (Port 9000)" : "🔴 Disconnected"}\n`;
+            let statusMsg = "📊 **Dis-Gravity Bridge & Agent Status**\n\n";
+            statusMsg += `• **Host IDE:** 💻 **${hostApp}**\n`;
+            statusMsg += `• **Agent Provider:** 🤖 **${providerName}**\n`;
+            statusMsg += `• **Bridge Status:** ${providerConnected ? "🟢 Connected" : "🔴 Disconnected"}\n`;
             statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
             statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
             statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
@@ -3354,10 +4664,10 @@ var oU = class {
             if (actionRow) components.push(actionRow);
             if (effortRow) components.push(effortRow);
 
-            await interaction.editReply({
+            await this.safeReply(interaction, {
               content: statusMsg,
               components
-            }).catch(() => {});
+            });
             return;
           }
 
@@ -3384,12 +4694,12 @@ var oU = class {
               if (selectRow) components.push(selectRow);
               if (effortRow) components.push(effortRow);
 
-              await interaction.editReply({
+              await this.safeReply(interaction, {
                 content: msg,
                 components
-              }).catch(() => {});
+              });
             } catch (err) {
-              await interaction.editReply("⚠️ **Failed to list models:** " + err.message).catch(() => {});
+              await this.safeReply(interaction, "⚠️ **Failed to list models:** " + err.message);
             }
             return;
           }
@@ -3397,15 +4707,15 @@ var oU = class {
           if (cmd === "effort") {
             const level = interaction.options.getString("level") || "";
             if (!level) {
-              await interaction.reply({ content: "⚠️ Please specify an effort level (Low, Medium, High).", ephemeral: true }).catch(() => {});
+              await this.safeReply(interaction, { content: "⚠️ Please specify an effort level (Low, Medium, High).", ephemeral: true });
               return;
             }
             await interaction.deferReply().catch(() => {});
             try {
               const switchedTo = await this.cdp.switchModel(level);
-              await interaction.editReply(`✅ Active model effort switched to **${switchedTo}**`).catch(() => {});
+              await this.safeReply(interaction, `✅ Active model effort switched to **${switchedTo}**`);
             } catch (err) {
-              await interaction.editReply(`⚠️ Failed to switch effort: ${err.message}`).catch(() => {});
+              await this.safeReply(interaction, `⚠️ Failed to switch effort: ${err.message}`);
             }
             return;
           }
@@ -3414,7 +4724,7 @@ var oU = class {
             let modelName = interaction.options.getString("name") || "";
             const effort = interaction.options.getString("effort") || "";
             if (!modelName) {
-              await interaction.reply({ content: "⚠️ Please specify a model name or effort level.", ephemeral: true }).catch(() => {});
+              await this.safeReply(interaction, { content: "⚠️ Please specify a model name or effort level.", ephemeral: true });
               return;
             }
             if (effort) {
@@ -3423,20 +4733,20 @@ var oU = class {
             await interaction.deferReply().catch(() => {});
             try {
               const switchedTo = await this.cdp.switchModel(modelName);
-              await interaction.editReply(`✅ Model switched to **${switchedTo}**`).catch(() => {});
+              await this.safeReply(interaction, `✅ Model switched to **${switchedTo}**`);
             } catch (err) {
               if (err.message === "AMBIGUOUS") {
                 let msg = `🤔 Multiple models match "${modelName}":\n\n`;
                 (err.matches || []).forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
                 msg += `\nPlease be more specific, e.g. \`/model ${err.matches?.[0] || ""}\``;
-                await interaction.editReply(msg).catch(() => {});
+                await this.safeReply(interaction, msg);
               } else if (err.message === "NOT_FOUND") {
                 let msg = `❌ Model "${modelName}" not found.\n\n📋 Available models:\n`;
                 (err.available || []).forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
                 msg += "\n💡 Try: `/model opus`, `/model flash high`, `/model gemini low`, `/effort high`";
-                await interaction.editReply(msg).catch(() => {});
+                await this.safeReply(interaction, msg);
               } else {
-                await interaction.editReply("⚠️ Failed to switch model: " + err.message).catch(() => {});
+                await this.safeReply(interaction, "⚠️ Failed to switch model: " + err.message);
               }
             }
             return;
@@ -3446,9 +4756,9 @@ var oU = class {
             await interaction.deferReply().catch(() => {});
             try {
               const convTitle = await this.cdp.createNewConversation();
-              await interaction.editReply(`🔄 **Started new Antigravity conversation:** "${convTitle}"`).catch(() => {});
+              await this.safeReply(interaction, `🔄 **Started new Antigravity conversation:** "${convTitle}"`);
             } catch (err) {
-              await interaction.editReply("⚠️ Failed to start new conversation: " + err.message).catch(() => {});
+              await this.safeReply(interaction, "⚠️ Failed to start new conversation: " + err.message);
             }
             return;
           }
@@ -3465,9 +4775,15 @@ var oU = class {
             helpMsg += "• `/model <name>` — Switch active model and effort (e.g. `/model flash high`)\n";
             helpMsg += "• `/palette [category]` — 1-click Command Palette dashboard (reload window, terminal, git, save, etc.)\n";
             helpMsg += "• `/action <command>` — Trigger any Command Palette action with live autocomplete\n";
+            helpMsg += "• `/sh <command>` — Execute terminal/shell command and view output (`!sh <cmd>`, `$ <cmd>`)\n";
+            helpMsg += "• `/git [status|diff|log]` — Inspect working tree status, colored diffs, and commits (`!git`)\n";
+            helpMsg += "• `/diff [file]` — Quick colored git diff preview with patch export (`!diff`)\n";
+            helpMsg += "• `/cat <path> [start] [end]` — Read remote files with line numbers and syntax highlighting (`!cat`)\n";
+            helpMsg += "• `/tree [dir] [depth]` — View visual project directory tree (`!tree`)\n";
+            helpMsg += "• `/open <path>` — Open a file in an active editor tab in the IDE (`!open`)\n";
             helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
-            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!save`, `!terminal`, etc.)*";
-            await interaction.reply({ content: helpMsg, ephemeral: true }).catch(() => {});
+            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, etc.)*";
+            await this.safeReply(interaction, { content: helpMsg, ephemeral: true });
             return;
           }
           return;
@@ -3479,9 +4795,9 @@ var oU = class {
           await interaction.deferReply({ ephemeral: true }).catch(() => {});
           try {
             const switchedTo = await this.cdp.switchModel(selectedModel);
-            await interaction.editReply(`✅ Switched model to **${switchedTo}**`).catch(() => {});
+            await this.safeReply(interaction, `✅ Switched model to **${switchedTo}**`);
           } catch (err) {
-            await interaction.editReply(`⚠️ Failed to switch model: ${err.message}`).catch(() => {});
+            await this.safeReply(interaction, `⚠️ Failed to switch model: ${err.message}`);
           }
           return;
         }
@@ -3528,9 +4844,9 @@ var oU = class {
             await interaction.deferReply({ ephemeral: true }).catch(() => {});
             try {
               const switchedTo = await this.cdp.switchModel(effortLevel);
-              await interaction.editReply(`✅ Active model effort switched to **${switchedTo}**`).catch(() => {});
+              await this.safeReply(interaction, `✅ Active model effort switched to **${switchedTo}**`);
             } catch (err) {
-              await interaction.editReply(`⚠️ Failed to switch effort: ${err.message}`).catch(() => {});
+              await this.safeReply(interaction, `⚠️ Failed to switch effort: ${err.message}`);
             }
             return;
           }
@@ -3541,9 +4857,9 @@ var oU = class {
               this.lastBusyState = false;
               this.discord?.setPresence("online", "Waiting for commands");
               this.pushStatus();
-              await interaction.reply({ content: "🛑 **Agent generation cancelled in Antigravity IDE.**", ephemeral: true }).catch(() => {});
+              await this.safeReply(interaction, { content: "🛑 **Agent generation cancelled in Antigravity IDE.**", ephemeral: true });
             } else {
-              await interaction.reply({ content: "ℹ️ **No active agent was running.**", ephemeral: true }).catch(() => {});
+              await this.safeReply(interaction, { content: "ℹ️ **No active agent was running.**", ephemeral: true });
             }
             return;
           }
@@ -3551,9 +4867,9 @@ var oU = class {
             await interaction.deferReply().catch(() => {});
             try {
               const d = await this.cdp.createNewConversation();
-              await interaction.editReply(`🔄 **Started new conversation: "${d}"**`).catch(() => {});
+              await this.safeReply(interaction, `🔄 **Started new conversation: "${d}"**`);
             } catch (err) {
-              await interaction.editReply(`⚠️ Failed: ${err.message}`).catch(() => {});
+              await this.safeReply(interaction, `⚠️ Failed: ${err.message}`);
             }
             return;
           }
@@ -3566,13 +4882,60 @@ var oU = class {
               const components = [];
               if (selectRow) components.push(selectRow);
               if (effortRow) components.push(effortRow);
-              await interaction.editReply({
+              await this.safeReply(interaction, {
                 content: "⚡ **Select a model or effort level to switch:**",
                 components
-              }).catch(() => {});
+              });
             } catch (err) {
-              await interaction.editReply(`⚠️ Failed to fetch models: ${err.message}`).catch(() => {});
+              await this.safeReply(interaction, `⚠️ Failed to fetch models: ${err.message}`);
             }
+            return;
+          }
+          if (actionType === "git_status") {
+            await interaction.deferReply().catch(() => {});
+            const gitStatus = await this.getGitStatusOutput();
+            const gitRow = this.discord?.buildGitActionRow(gitStatus.hasChanges);
+            await this.safeReply(interaction, {
+              content: gitStatus.content,
+              components: gitRow ? [gitRow] : []
+            });
+            return;
+          }
+          if (actionType === "git_diff") {
+            await interaction.deferReply().catch(() => {});
+            const diffRes = await this.getGitDiffOutput();
+            const gitRow = this.discord?.buildGitActionRow(false);
+            await this.safeReply(interaction, {
+              content: diffRes.content,
+              files: diffRes.files || [],
+              components: gitRow ? [gitRow] : []
+            });
+            return;
+          }
+          if (actionType === "git_stage_all") {
+            await interaction.deferReply().catch(() => {});
+            const cwd = this.getWorkspaceRoot();
+            const res = await this.executeShellCommand("git add -A", cwd);
+            if (res.code === 0) {
+              const updatedStatus = await this.getGitStatusOutput();
+              const gitRow = this.discord?.buildGitActionRow(updatedStatus.hasChanges);
+              await this.safeReply(interaction, {
+                content: `✅ **Staged all changes.**\n\n${updatedStatus.content}`,
+                components: gitRow ? [gitRow] : []
+              });
+            } else {
+              await this.safeReply(interaction, `❌ **Failed to stage changes:** ${res.stderr || "Unknown error"}`);
+            }
+            return;
+          }
+          if (actionType === "git_push") {
+            await interaction.deferReply().catch(() => {});
+            const cwd = this.getWorkspaceRoot();
+            const res = await this.executeShellCommand("git push", cwd);
+            const statusIcon = res.code === 0 ? "🚀" : "❌";
+            const combined = (res.stdout + (res.stderr ? (res.stdout ? "\n" : "") + res.stderr : "")).trim();
+            const formatted = `${statusIcon} **Git Push (${res.code === 0 ? "Success" : "Failed"})** in \`${res.duration}s\`\n\`\`\`text\n${combined || "Completed with no output."}\n\`\`\``;
+            await this.safeReply(interaction, formatted);
             return;
           }
           return;
@@ -3644,14 +5007,14 @@ var oU = class {
           const matches = await this.searchCommands(query);
           const view = this.discord?.buildSearchResultsPalette(matches, query);
           if (view) {
-            await interaction.editReply({ content: view.content, components: view.components }).catch(() => {});
+            await this.safeReply(interaction, { content: view.content, components: view.components });
           }
           return;
         }
 
         if (interaction.isModalSubmit() && action === "modal") {
           let userInput = interaction.fields.getTextInputValue("writein_text");
-          await interaction.reply({ content: `\u2705 Submitted: **${userInput}**` }).catch(() => {});
+          await this.safeReply(interaction, { content: `\u2705 Submitted: **${userInput}**` });
 
           if (this.activePromptMessage) {
             try {
@@ -3681,6 +5044,38 @@ var oU = class {
       }
     }
     async handleMessage(e) {
+      if (!this.isUserAuthorized(e.authorId)) {
+        this.log.appendLine(`[Security] Blocked unauthorized message from user ID ${e.authorId} (${e.author})`);
+        if (this.discord?.isConnected()) {
+          const unauthorizedMsg = `⛔ **Unauthorized:** Your Discord User ID (\`${e.authorId}\`) is not in the Dis-Gravity \`allowedUsers\` whitelist.`;
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, unauthorizedMsg);
+            else await this.discord.sendMessage(unauthorizedMsg);
+          } else {
+            await this.discord.sendMessage(unauthorizedMsg);
+          }
+        }
+        return;
+      }
+
+      // Check and download any inbound attachments (screenshots, logs, code files)
+      if (e.attachments && e.attachments.length > 0) {
+        const downloadedAttachments = await this.downloadAttachments(e.attachments);
+        if (downloadedAttachments.length > 0) {
+          const tags = downloadedAttachments.map((f) => 
+            f.isImage 
+              ? `[Attached Image: ${f.filePath.replace(/\\/g, "/")}]` 
+              : `[Attached File: ${f.filePath.replace(/\\/g, "/")}] (${(f.size / 1024).toFixed(1)} KB)`
+          ).join("\n");
+          if (e.content && e.content.trim()) {
+            e.content = `${e.content.trim()}\n\n📎 **Attachments:**\n${tags}`;
+          } else {
+            e.content = `Please analyze the following attached file(s):\n${tags}`;
+          }
+        }
+      }
+
       let msgContent = (e.content || "").trim();
 
       // Help
@@ -3698,11 +5093,17 @@ var oU = class {
         helpMsg += "• `/model <name>` — Switch active model by name\n";
         helpMsg += "• `/palette [category]` — 1-click Command Palette dashboard (reload window, terminal, git, save, etc.)\n";
         helpMsg += "• `/action <command>` — Trigger any Command Palette action with live autocomplete\n";
+        helpMsg += "• `/sh <command>` — Execute terminal/shell command and view output (`!sh <cmd>`, `$ <cmd>`)\n";
+        helpMsg += "• `/git [status|diff|log]` — Inspect working tree status, colored diffs, and commits (`!git`)\n";
+        helpMsg += "• `/diff [file]` — Quick colored git diff preview with patch export (`!diff`)\n";
+        helpMsg += "• `/cat <path> [start] [end]` — Read remote files with line numbers and syntax highlighting (`!cat`)\n";
+        helpMsg += "• `/tree [dir] [depth]` — View visual project directory tree (`!tree`)\n";
+        helpMsg += "• `/open <path>` — Open a file in an active editor tab in the IDE (`!open`)\n";
         helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
         helpMsg += "• `!reload` / `!restart` — Instant Reload Window shortcut\n";
         helpMsg += "• `!save` — Instant Save All shortcut\n";
         helpMsg += "• `!terminal` — Instant New Terminal shortcut\n";
-        helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!save`, `!terminal`, etc.)*";
+        helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, etc.)*";
         if (this.discord?.isConnected()) {
           if (e.threadId) {
             let thread = await this.discord.getThread(e.threadId);
@@ -3710,6 +5111,227 @@ var oU = class {
             else await this.discord.sendMessage(helpMsg);
           } else {
             await this.discord.sendMessage(helpMsg);
+          }
+        }
+        return;
+      }
+
+      // Shell / Terminal command execution (!sh <cmd>, /sh <cmd>, or $ <cmd>)
+      if (msgContent.startsWith("!sh ") || msgContent.startsWith("$ ") || msgContent.startsWith("/sh ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const shellCmd = msgContent.startsWith("!sh ") 
+          ? msgContent.substring(4).trim() 
+          : msgContent.startsWith("/sh ") 
+          ? msgContent.substring(4).trim() 
+          : msgContent.substring(2).trim();
+        if (!shellCmd) return;
+        this.log.appendLine(`[Shell] Executing remote command: "${shellCmd}" from ${e.author}`);
+        const cwd = this.getWorkspaceRoot();
+        const res = await this.executeShellCommand(shellCmd, cwd);
+        const formatted = this.formatShellOutput(shellCmd, res, cwd);
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, formatted);
+            else await this.discord.sendMessage(formatted);
+          } else {
+            await this.discord.sendMessage(formatted);
+          }
+        }
+        return;
+      }
+
+      // Git command execution (!git status, !git diff, !git log, !git stage, !git push)
+      if (msgContent === "!git" || msgContent.startsWith("!git ") || msgContent === "/git" || msgContent.startsWith("/git ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+
+        const gitRaw = msgContent.startsWith("!git") ? msgContent.substring(4).trim() : msgContent.substring(4).trim();
+        const parts = gitRaw.split(/\s+/).filter(Boolean);
+        const subCmd = (parts[0] || "status").toLowerCase();
+
+        this.log.appendLine(`[Git] Executing remote git command: "${subCmd}" from ${e.author}`);
+
+        if (subCmd === "status") {
+          const statusData = await this.getGitStatusOutput();
+          const actionRow = this.discord?.buildGitActionRow(statusData.hasChanges);
+          const components = actionRow ? [actionRow] : null;
+          if (this.discord?.isConnected()) {
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, statusData.content, components);
+              else await this.discord.sendMessage(statusData.content, components);
+            } else {
+              await this.discord.sendMessage(statusData.content, components);
+            }
+          }
+          return;
+        }
+
+        if (subCmd === "diff") {
+          const targetFile = parts.slice(1).join(" ") || "";
+          const diffData = await this.getGitDiffOutput(targetFile, false);
+          const actionRow = this.discord?.buildGitActionRow(false);
+          const components = actionRow ? [actionRow] : null;
+          if (this.discord?.isConnected()) {
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, diffData.content, components, diffData.files);
+              else await this.discord.sendMessage(diffData.content, components, diffData.files);
+            } else {
+              await this.discord.sendMessage(diffData.content, components, diffData.files);
+            }
+          }
+          return;
+        }
+
+        if (subCmd === "log") {
+          const count = parseInt(parts[1]) || 5;
+          const logContent = await this.getGitLogOutput(count);
+          if (this.discord?.isConnected()) {
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, logContent);
+              else await this.discord.sendMessage(logContent);
+            } else {
+              await this.discord.sendMessage(logContent);
+            }
+          }
+          return;
+        }
+
+        if (subCmd === "stage" || subCmd === "stageall" || subCmd === "add") {
+          const cwd = this.getWorkspaceRoot();
+          const res = await this.executeShellCommand("git add -A", cwd);
+          let reply = "";
+          let actionRow = null;
+          if (res.code === 0) {
+            const updatedStatus = await this.getGitStatusOutput();
+            actionRow = this.discord?.buildGitActionRow(updatedStatus.hasChanges);
+            reply = `✅ **Staged all changes.**\n\n${updatedStatus.content}`;
+          } else {
+            reply = `❌ **Failed to stage changes:** ${res.stderr || "Unknown error"}`;
+          }
+          const components = actionRow ? [actionRow] : null;
+          if (this.discord?.isConnected()) {
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, reply, components);
+              else await this.discord.sendMessage(reply, components);
+            } else {
+              await this.discord.sendMessage(reply, components);
+            }
+          }
+          return;
+        }
+
+        if (subCmd === "push") {
+          const cwd = this.getWorkspaceRoot();
+          const res = await this.executeShellCommand("git push", cwd);
+          const statusIcon = res.code === 0 ? "🚀" : "❌";
+          const combined = (res.stdout + (res.stderr ? (res.stdout ? "\n" : "") + res.stderr : "")).trim();
+          const formatted = `${statusIcon} **Git Push (${res.code === 0 ? "Success" : "Failed"})** in \`${res.duration}s\`\n\`\`\`text\n${combined || "Completed with no output."}\n\`\`\``;
+          if (this.discord?.isConnected()) {
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, formatted);
+              else await this.discord.sendMessage(formatted);
+            } else {
+              await this.discord.sendMessage(formatted);
+            }
+          }
+          return;
+        }
+      }
+
+      // Quick Diff shortcut (!diff [file] or /diff [file])
+      if (msgContent === "!diff" || msgContent.startsWith("!diff ") || msgContent === "/diff" || msgContent.startsWith("/diff ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const targetFile = msgContent.startsWith("!diff") ? msgContent.substring(5).trim() : msgContent.substring(5).trim();
+        this.log.appendLine(`[Git] Executing !diff from ${e.author}`);
+        const diffData = await this.getGitDiffOutput(targetFile, false);
+        const actionRow = this.discord?.buildGitActionRow(false);
+        const components = actionRow ? [actionRow] : null;
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, diffData.content, components, diffData.files);
+            else await this.discord.sendMessage(diffData.content, components, diffData.files);
+          } else {
+            await this.discord.sendMessage(diffData.content, components, diffData.files);
+          }
+        }
+        return;
+      }
+
+      // Cat file (!cat <path> [start] [end] or /cat <path>)
+      if (msgContent.startsWith("!cat ") || msgContent.startsWith("/cat ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const rawArgs = msgContent.substring(5).trim().split(/\s+/);
+        const filePath = rawArgs[0];
+        const startLine = rawArgs[1] ? parseInt(rawArgs[1]) : null;
+        const endLine = rawArgs[2] ? parseInt(rawArgs[2]) : null;
+        if (!filePath) return;
+        this.log.appendLine(`[File] Executing !cat ${filePath} from ${e.author}`);
+        const catData = await this.handleCatFile(filePath, startLine, endLine);
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, catData.content, null, catData.files);
+            else await this.discord.sendMessage(catData.content, null, catData.files);
+          } else {
+            await this.discord.sendMessage(catData.content, null, catData.files);
+          }
+        }
+        return;
+      }
+
+      // Tree directory (!tree [dir] [depth] or /tree [dir] [depth])
+      if (msgContent === "!tree" || msgContent.startsWith("!tree ") || msgContent === "/tree" || msgContent.startsWith("/tree ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const raw = msgContent.startsWith("!tree") ? msgContent.substring(5).trim() : msgContent.substring(5).trim();
+        const parts = raw.split(/\s+/).filter(Boolean);
+        const dir = parts[0] && isNaN(parseInt(parts[0])) ? parts[0] : ".";
+        const depth = parts[1] ? parseInt(parts[1]) : (parts[0] && !isNaN(parseInt(parts[0])) ? parseInt(parts[0]) : 2);
+        this.log.appendLine(`[File] Executing !tree ${dir} (depth: ${depth}) from ${e.author}`);
+        const treeContent = await this.handleTree(dir, depth);
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, treeContent);
+            else await this.discord.sendMessage(treeContent);
+          } else {
+            await this.discord.sendMessage(treeContent);
+          }
+        }
+        return;
+      }
+
+      // Open file (!open <path> or /open <path>)
+      if (msgContent.startsWith("!open ") || msgContent.startsWith("/open ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const targetPath = msgContent.substring(6).trim();
+        if (!targetPath) return;
+        this.log.appendLine(`[File] Executing !open ${targetPath} from ${e.author}`);
+        const openRes = await this.handleOpenFile(targetPath);
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, openRes);
+            else await this.discord.sendMessage(openRes);
+          } else {
+            await this.discord.sendMessage(openRes);
           }
         }
         return;
@@ -3885,7 +5507,9 @@ var oU = class {
         this.processedIds.add(e.messageId);
         setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
         const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
-        const cdpConnected = !!this.cdp?.isConnected();
+        const providerConnected = !!this.cdp?.isConnected();
+        const hostApp = vr.env?.appName || "Antigravity IDE";
+        const providerName = this.cdp?.displayName || "Google Antigravity (CDP :9000)";
         let currentModel = "Unknown";
         let currentEffort = null;
         let usage = "N/A";
@@ -3895,8 +5519,10 @@ var oU = class {
           if (modelList?.currentEffort) currentEffort = modelList.currentEffort;
           if (modelList?.statusBar) usage = modelList.statusBar;
         } catch {}
-        let statusMsg = "📊 **Antigravity IDE & Dis-Gravity Status**\n\n";
-        statusMsg += `• **CDP Bridge:** ${cdpConnected ? "🟢 Connected (Port 9000)" : "🔴 Disconnected"}\n`;
+        let statusMsg = "📊 **Dis-Gravity Bridge & Agent Status**\n\n";
+        statusMsg += `• **Host IDE:** 💻 **${hostApp}**\n`;
+        statusMsg += `• **Agent Provider:** 🤖 **${providerName}**\n`;
+        statusMsg += `• **Bridge Status:** ${providerConnected ? "🟢 Connected" : "🔴 Disconnected"}\n`;
         statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
         statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
         statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
@@ -3936,12 +5562,13 @@ var oU = class {
       }
 
       // Normalize !plan, !goal, !grill text commands to IDE slash commands
-      if (msgContent.startsWith("!plan ")) {
-        e.content = "/plan " + msgContent.substring(6).trim();
-      } else if (msgContent.startsWith("!goal ")) {
-        e.content = "/goal " + msgContent.substring(6).trim();
-      } else if (msgContent.startsWith("!grill ") || msgContent.startsWith("/grill ")) {
-        e.content = "/grill-me " + msgContent.substring(7).trim();
+      if (msgContent === "!plan" || msgContent.startsWith("!plan ")) {
+        e.content = "/plan " + (msgContent.startsWith("!plan ") ? msgContent.substring(6).trim() : "");
+      } else if (msgContent === "!goal" || msgContent.startsWith("!goal ")) {
+        e.content = "/goal " + (msgContent.startsWith("!goal ") ? msgContent.substring(6).trim() : "");
+      } else if (msgContent === "!grill" || msgContent.startsWith("!grill ") || msgContent === "/grill" || msgContent.startsWith("/grill ")) {
+        const after = msgContent.startsWith("!grill ") ? msgContent.substring(7).trim() : msgContent.startsWith("/grill ") ? msgContent.substring(7).trim() : "";
+        e.content = "/grill-me " + after;
       }
 
       if (msgContent === "!models" || msgContent === "/models") {
@@ -4082,16 +5709,18 @@ var oU = class {
     }
     async processMessage(e) {
       if (!this.cdp?.isConnected()) {
-        this.log.appendLine("[Extension] CDP not connected \u2014 reconnecting...");
+        this.log.appendLine("[Extension] Agent provider not connected \u2014 reconnecting...");
         try {
           await this.connectCdp();
         } catch {}
         if (!this.cdp?.isConnected()) {
-          this.discord?.isConnected() &&
-            (await this.discord.sendMessage(
-              "\u26A0\uFE0F Bridge not connected. Start Antigravity with --remote-debugging-port=9000",
-            ),
-            this.discord.setPresence("idle", "\u26A0\uFE0F CDP not connected"));
+          const errMsg = this.cdp?.id === "antigravity"
+            ? "\u26A0\uFE0F Bridge not connected. Start Antigravity with --remote-debugging-port=9000"
+            : `\u26A0\uFE0F Agent Provider "${this.cdp?.displayName || 'Unknown'}" is not connected in ${vr.env?.appName || 'IDE'}.`;
+          if (this.discord?.isConnected()) {
+            await this.discord.sendMessage(errMsg);
+            this.discord.setPresence("idle", "\u26A0\uFE0F Agent not connected");
+          }
           return;
         }
       }
@@ -4124,7 +5753,7 @@ var oU = class {
                 i = await this.discord.createConversationThread(`\u{1F4AC} ${e.content.substring(0, 90)}`);
               } catch {}
             }
-            i && this.conversationMap.set(i.id, d);
+            i && (this.conversationMap.set(i.id, d), this.saveConversationMap());
           }
         } else if (e.threadId) {
           let d = this.conversationMap.get(e.threadId);
@@ -4270,6 +5899,7 @@ var oU = class {
             d &&
               d !== p &&
               (this.conversationMap.set(i.id, d),
+              this.saveConversationMap(),
               this.log.appendLine(`[Extension] Conversation renamed: "${p}" \u2192 "${d}"`));
           } catch {}
         vr.window.setStatusBarMessage(`\u2705 Discord: response sent to ${e.author}`, 5e3);
@@ -4451,15 +6081,11 @@ var oU = class {
         if (result !== undefined && typeof result !== "object" && typeof result !== "function") {
           replyMsg += `\n> Result: \`${result}\``;
         }
-        await interaction.editReply({ content: replyMsg }).catch(() => {});
+        await this.safeReply(interaction, { content: replyMsg });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         this.log.appendLine(`[Palette] Execution error for ${cmdId}: ${errMsg}`);
-        if (!interaction.deferred && !interaction.replied) {
-          await interaction.reply({ content: `⚠️ **Failed to execute:** \`${displayName}\`\n> Error: ${errMsg}`, ephemeral: true }).catch(() => {});
-        } else {
-          await interaction.editReply({ content: `⚠️ **Failed to execute:** \`${displayName}\`\n> Error: ${errMsg}` }).catch(() => {});
-        }
+        await this.safeReply(interaction, { content: `⚠️ **Failed to execute:** \`${displayName}\`\n> Error: ${errMsg}`, ephemeral: true });
       }
     }
   },

@@ -1,0 +1,5 @@
+node_modules/
+.disgravity/
+*.vsix
+.DS_Store
+Thumbs.db

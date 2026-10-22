@@ -19,7 +19,11 @@
 		"ai",
 		"language-model",
 		"copilot",
-		"gemini"
+		"gemini",
+		"antigravity",
+		"cursor",
+		"windsurf",
+		"agentic-ide"
 	],
 	"galleryBanner": {
 		"color": "#5865F2",
@@ -81,6 +85,32 @@
 					"type": "number",
 					"default": 9000,
 					"description": "Antigravity remote debugging port (--remote-debugging-port)"
+				},
+				"antigravity-discord.allowedUsers": {
+					"type": "string",
+					"default": "",
+					"description": "Allowed Discord User IDs (comma-separated). Leave empty to allow all users in the channel."
+				},
+				"antigravity-discord.agentProvider": {
+					"type": "string",
+					"enum": [
+						"auto",
+						"antigravity",
+						"cursor",
+						"windsurf",
+						"copilot",
+						"cli"
+					],
+					"enumDescriptions": [
+						"Automatically detect host IDE and agent",
+						"Google Antigravity (CDP Bridge :9000)",
+						"Cursor (Composer & Chat)",
+						"Windsurf (Cascade Agent)",
+						"VS Code with GitHub Copilot",
+						"Universal CLI Agent (Terminal Execution)"
+					],
+					"default": "auto",
+					"description": "AI Agent Provider to bridge with Discord"
 				}
 			}
 		}
