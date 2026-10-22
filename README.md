@@ -9,6 +9,8 @@
 ## Features
 
 - 🤖 **Auto-processing** — Discord messages are automatically sent to the IDE Language Model (Gemini, Copilot, etc.) and responses are posted back
+- ⚡ **Native Slash Commands (`/`) & IDE Actions** — Native autocomplete picker in Discord for `/plan` (planning mode), `/goal` (goal mode), `/grill` (alignment interview), `/stop` (remote cancel agent), `/status` (bridge health & model status), `/models` (model & effort selector), `/effort` (dedicated Low/Medium/High switcher), and `/new` (fresh chat)
+- 🧠 **Model & Reasoning Effort Switching** — Switch reasoning effort (Low, Medium, High) on Gemini, Claude, and other models directly from Discord using 1-tap quick buttons (`[ 🟢 Low ]`, `[ 🟡 Medium ]`, `[ 🔴 High ]`), the `/models` interactive dropdown, the `/effort <level>` command, or text shortcuts (`!effort high`, `!low`, `!medium`, `!high`, `!model flash high`)
 - 💬 **Multi-conversation** — Each Discord message creates a thread; replies in threads continue the same Antigravity conversation
 - 🔧 **CDP Bridge** — Uses Chrome DevTools Protocol to interact with the Antigravity chat editor, preferring the Manager window for stability
 - 📋 **Interactive Buttons & Prompts** — Selection and confirmation prompts in the IDE are forwarded as native Discord buttons and modal dialogs, allowing choices to be made with a single tap

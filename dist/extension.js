@@ -175,25 +175,19 @@ function RC(t) {
     /^Found chat editor|^Still waiting for agent/.test(t) ||
     /^"svgs"\s*:\s*\[/.test(t) ||
     /^\{$|^\}$|^\]$|^\[$/.test(t) ||
-    /^Thought for/.test(t) ||
-    /^Thinking\.{0,3}$/.test(t) ||
+    /^(Thought|Worked)\s+for\b/i.test(t) ||
+    /^Thinking\.{0,3}$/i.test(t) ||
+    /^\d+[smh]\s+thought$/i.test(t) ||
     /^✅\s*Elaborazione completata/.test(t) ||
     /^Elaborazione completata/.test(t) ||
-    /^Simple request/i.test(t) ||
-    /no task needed/i.test(t) ||
-    /^⋯ Expand \d+ more lines?$/.test(t) ||
-    t === "Always run" ||
-    t === "Planning" ||
-    t === "Review Changes" ||
-    t === "Review" ||
-    t === "Cancel" ||
-    t === "Submit" ||
-    t === "Reject" ||
-    t === "Accept" ||
-    t === "No more older messages" ||
-    /^(Ran|Explored|Edited|Asking)\b/i.test(t) ||
+    /^[⏳✅⚠️❌]\s*(Analyzing|Processing|Completed|Elaborazione|Completato)\s*(\(\d+s\))?$/i.test(t) ||
+    /^[⏳✅⚠️❌]\s*(Queue full \(\d+\)\. Please try again later\.|Queued \(pos \d+\)\.|Bridge not connected\..*|No response detected|Error:.*)$/i.test(t) ||
+    /^[+-]\d+$/.test(t) ||
+    /^\d+\s+files?\s+changed$/i.test(t) ||
+    /^(Explored|Ran|Edited|Viewed|Searching|Analyzing|Directory analysis|Web search|File edit|Command execution)\b/i.test(t) ||
+    /^(Review|Accept|Reject|Cancel|Submit|Always run|Planning|Review Changes|No more older messages)$/i.test(t) ||
     /^Waiting for user input\.?$/i.test(t) ||
-    /^\d+ (commands?|files?|folder|search|questions?)\b/i.test(t) ||
+    /^\d+\s+(commands?|files?|folders?|search|questions?)\b/i.test(t) ||
     /^\d+:\d+\s*(AM|PM)$/i.test(t) ||
     /^\[AutoAccept\]/.test(t) ||
     /^\[CDP\]\s*\[AutoAccept\]/.test(t) ||
@@ -201,9 +195,15 @@ function RC(t) {
     /^\d+ more lines","/.test(t) ||
     /^"\u22ef Expand \d+/.test(t) ||
     (/","/.test(t) && (/"Always run"/.test(t) || /"Review Changes"/.test(t) || /"Planning"/.test(t))) ||
-    /^"Thought for/.test(t) ||
-    /^for \d+s"/.test(t) ||
-    /^"",""/.test(t)
+    /^"(Thought|Worked)\s+for/i.test(t) ||
+    /^for \d+s"/i.test(t) ||
+    /^"",""/.test(t) ||
+    /^node\s+.*\.js/i.test(t) ||
+    /^…\\.*>\s*node/i.test(t) ||
+    /^[A-Z]:\\.*\.js/i.test(t) ||
+    /^Simple request/i.test(t) ||
+    /no task needed/i.test(t) ||
+    /^⋯ Expand \d+ more lines?$/.test(t)
   );
 }
 function nU(t) {
@@ -218,19 +218,14 @@ function nU(t) {
   );
 }
 function jJe(t, e) {
-  let i = t.lastIndexOf(
-    `
-
-`,
-    e,
-  );
-  if (i > e * 0.5) return i + 2;
-  let r = t.lastIndexOf(
-    `
-`,
-    e,
-  );
-  return r > e * 0.3 ? r + 1 : e;
+  let sec = t.lastIndexOf("\n\n### ", e);
+  if (sec > e * 0.4) return sec + 2;
+  let div = t.lastIndexOf("\n\n───", e);
+  if (div > e * 0.4) return div + 2;
+  let dbl = t.lastIndexOf("\n\n", e);
+  if (dbl > e * 0.4) return dbl + 2;
+  let sgl = t.lastIndexOf("\n", e);
+  return sgl > e * 0.3 ? sgl + 1 : e;
 }
 function sU(t, e = 2e3) {
   if (t.length <= e) return [t];
@@ -242,7 +237,20 @@ function sU(t, e = 2e3) {
       break;
     }
     let n = jJe(r, e);
-    (i.push(r.substring(0, n)), (r = r.substring(n)));
+    let chunk = r.substring(0, n);
+    let rest = r.substring(n);
+    let fenceMatches = chunk.match(/```/g);
+    let fenceCount = fenceMatches ? fenceMatches.length : 0;
+    if (fenceCount % 2 === 1) {
+      let lastFenceIdx = chunk.lastIndexOf("```");
+      let afterFence = chunk.substring(lastFenceIdx + 3);
+      let langMatch = afterFence.match(/^([a-zA-Z0-9_-]+)/);
+      let lang = langMatch ? langMatch[1] : "";
+      chunk += "\n```";
+      rest = "```" + lang + "\n" + rest.replace(/^\n+/, "");
+    }
+    i.push(chunk);
+    r = rest;
   }
   return i;
 }
@@ -280,6 +288,7 @@ var TC = class {
     if (!i || !(i instanceof ri.TextChannel))
       throw new Error(`Channel ${this.channelId} not found or not a text channel`);
     ((this.channel = i), (this.connected = !0), this.log.appendLine(`[Discord] Connected to #${this.channel.name}`));
+    this.registerSlashCommands().catch((err) => this.log.appendLine("[Discord] Slash cmd reg error: " + err));
   }
   async reconnect(e, i) {
     (i && (this.channelId = i),
@@ -288,6 +297,7 @@ var TC = class {
     if (!r || !(r instanceof ri.TextChannel))
       throw new Error(`Channel ${this.channelId} not found or not a text channel`);
     ((this.channel = r), (this.connected = !0), this.log.appendLine(`[Discord] Reconnected to #${this.channel.name}`));
+    this.registerSlashCommands().catch((err) => this.log.appendLine("[Discord] Slash cmd reg error: " + err));
   }
   async disconnect() {
     ((this.connected = !1), this.client.destroy(), this.log.appendLine("[Discord] Disconnected"));
@@ -302,14 +312,192 @@ var TC = class {
     this.interactionCallback = e;
   }
   async routeInteraction(e) {
-    if (!e.isButton() && !e.isModalSubmit()) return;
+    if (!e.isButton() && !e.isModalSubmit() && !e.isChatInputCommand() && !e.isStringSelectMenu()) return;
     let i = e.channelId === this.channelId,
       r = e.channel?.isThread?.() && e.channel.parentId === this.channelId;
     if (!i && !r) return;
     this.log.appendLine(
-      `[Discord] Interaction ${e.isButton() ? "Button" : "Modal"} from ${e.user?.displayName || e.user?.username}: "${e.customId}"`
+      `[Discord] Interaction ${e.isChatInputCommand() ? "SlashCommand: /" + e.commandName : e.isButton() ? "Button: " + e.customId : e.isStringSelectMenu() ? "Select: " + e.customId : "Modal: " + e.customId} from ${e.user?.displayName || e.user?.username}`
     );
     await this.interactionCallback?.(e);
+  }
+  async registerSlashCommands() {
+    if (!this.channel?.guild?.commands) return;
+    try {
+      const commands = [
+        {
+          name: "plan",
+          description: "Run task in Planning Mode (deep research + plan artifact)",
+          options: [{
+            name: "prompt",
+            description: "The task or feature to plan",
+            type: 3,
+            required: true
+          }]
+        },
+        {
+          name: "goal",
+          description: "Run task in Goal Mode (autonomous execution until completed)",
+          options: [{
+            name: "prompt",
+            description: "The objective to achieve",
+            type: 3,
+            required: true
+          }]
+        },
+        {
+          name: "grill",
+          description: "Start an alignment interview to clarify design decisions",
+          options: [{
+            name: "prompt",
+            description: "Topic or architecture to grill on",
+            type: 3,
+            required: true
+          }]
+        },
+        {
+          name: "stop",
+          description: "Immediately halt/cancel the active agent in the IDE"
+        },
+        {
+          name: "status",
+          description: "View IDE connection, active model, agent state, and quick controls"
+        },
+        {
+          name: "models",
+          description: "List available IDE models with an interactive switch dropdown"
+        },
+        {
+          name: "effort",
+          description: "Switch reasoning effort (Low, Medium, High) for the active AI model",
+          options: [{
+            name: "level",
+            description: "Effort level to set",
+            type: 3,
+            required: true,
+            choices: [
+              { name: "Low", value: "Low" },
+              { name: "Medium", value: "Medium" },
+              { name: "High", value: "High" }
+            ]
+          }]
+        },
+        {
+          name: "model",
+          description: "Switch active AI model or reasoning effort in the IDE",
+          options: [
+            {
+              name: "name",
+              description: "Model name (e.g. flash, opus, sonnet) or effort (low, medium, high)",
+              type: 3,
+              required: true
+            },
+            {
+              name: "effort",
+              description: "Optional reasoning effort (Low, Medium, High)",
+              type: 3,
+              required: false,
+              choices: [
+                { name: "Low", value: "Low" },
+                { name: "Medium", value: "Medium" },
+                { name: "High", value: "High" }
+              ]
+            }
+          ]
+        },
+        {
+          name: "new",
+          description: "Start a fresh conversation thread in the IDE"
+        },
+        {
+          name: "help",
+          description: "Show quick reference guide for Dis-Gravity commands"
+        }
+      ];
+      await this.channel.guild.commands.set(commands);
+      this.log.appendLine(`[Discord] Registered ${commands.length} guild slash commands on "${this.channel.guild.name}"`);
+    } catch (err) {
+      this.log.appendLine(`[Discord] Failed to register slash commands: ${err}`);
+    }
+  }
+  buildModelSelectRow(models, currentEffort, activeModelName) {
+    if (!models || models.length === 0) return null;
+    const select = new ri.StringSelectMenuBuilder()
+      .setCustomId("action:select_model")
+      .setPlaceholder("⚡ Select an AI Model / Effort to switch...")
+      .setMaxValues(1)
+      .setMinValues(1);
+    const opts = [];
+    const effLower = (currentEffort || "").toLowerCase();
+
+    for (const m of models) {
+      if (m.hasEffort) {
+        const effortLevels = ["Low", "Medium", "High"];
+        for (const eff of effortLevels) {
+          const isCurrent = m.isSelected && (effLower.includes(eff.toLowerCase()) || (!currentEffort && eff === "Medium"));
+          opts.push({
+            label: `${m.baseName} (${eff})`.substring(0, 100),
+            value: `${m.baseName} ${eff}`,
+            description: (isCurrent ? `Currently Active • Effort: ${eff}` : `Reasoning Effort: ${eff}${m.speed ? " • " + m.speed : ""}`).substring(0, 100),
+            default: isCurrent,
+            emoji: isCurrent ? { name: "✅" } : { name: "⚡" }
+          });
+        }
+      } else {
+        const isCurrent = !!m.isSelected;
+        opts.push({
+          label: m.name.substring(0, 100),
+          value: m.name,
+          description: (isCurrent ? "Currently Active" : (m.speed ? `Speed: ${m.speed}` : "AI Model")).substring(0, 100),
+          default: isCurrent,
+          emoji: isCurrent ? { name: "✅" } : { name: "⚡" }
+        });
+      }
+    }
+
+    select.addOptions(opts.slice(0, 25));
+    return new ri.ActionRowBuilder().addComponents(select);
+  }
+  buildEffortActionRow(currentEffort) {
+    const eff = (currentEffort || "").toLowerCase();
+    const row = new ri.ActionRowBuilder();
+    const levels = [
+      { id: "Low", label: "🟢 Low Effort", key: "low" },
+      { id: "Medium", label: "🟡 Medium Effort", key: "medium" },
+      { id: "High", label: "🔴 High Effort", key: "high" }
+    ];
+    levels.forEach((lvl) => {
+      const isCurrent = eff.includes(lvl.key);
+      row.addComponents(
+        new ri.ButtonBuilder()
+          .setCustomId(`action:set_effort:${lvl.id}`)
+          .setLabel(lvl.label)
+          .setStyle(isCurrent ? ri.ButtonStyle.Success : ri.ButtonStyle.Secondary)
+      );
+    });
+    return row;
+  }
+  buildStatusActionRow(isBusy) {
+    const row = new ri.ActionRowBuilder();
+    if (isBusy) {
+      row.addComponents(
+        new ri.ButtonBuilder()
+          .setCustomId("action:stop")
+          .setLabel("🛑 Stop Agent")
+          .setStyle(ri.ButtonStyle.Danger)
+      );
+    }
+    row.addComponents(
+      new ri.ButtonBuilder()
+        .setCustomId("action:new_chat")
+        .setLabel("🔄 New Chat")
+        .setStyle(ri.ButtonStyle.Primary),
+      new ri.ButtonBuilder()
+        .setCustomId("action:show_models")
+        .setLabel("⚡ Models")
+        .setStyle(ri.ButtonStyle.Secondary)
+    );
+    return row;
   }
   getOptionStyle(text) {
     let lower = (text || "").toLowerCase().trim();
@@ -832,7 +1020,7 @@ var ol = Xn(require("vscode")),
     <!-- Chat panel -->
     <div id="chat-panel" class="panel active">
         <div id="chat">
-            <div id="empty">In attesa di messaggi Discord...</div>
+            <div id="empty">Waiting for Discord messages...</div>
         </div>
         <div id="typing"></div>
     </div>
@@ -964,7 +1152,7 @@ var ol = Xn(require("vscode")),
 
             if (type === 'typing') {
                 if (data.typing) {
-                    typing.textContent = data.author + ' sta scrivendo...';
+                    typing.textContent = data.author + ' is typing...';
                 } else {
                     typing.textContent = '';
                 }
@@ -1061,6 +1249,28 @@ var FC = class {
             })()`,
         this.contextId,
       )) === !0
+    );
+  }
+  async cancelAgent() {
+    if (!this.isConnected()) return { ok: false, error: "not_connected" };
+    return (
+      (await this.evaluate(
+        `(() => {
+          const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
+          if (cancel && cancel.offsetParent !== null) {
+            cancel.click();
+            return { ok: true, method: "tooltip_cancel" };
+          }
+          const stopBtn = document.querySelector('button[aria-label*="Cancel" i], button[aria-label*="Stop" i], svg.lucide-square')?.closest('button');
+          if (stopBtn && stopBtn.offsetParent !== null && !stopBtn.disabled) {
+            stopBtn.click();
+            return { ok: true, method: "aria_cancel" };
+          }
+          return { ok: false, error: "not_busy" };
+        })()`,
+        this.contextId,
+        !1,
+      )) || { ok: false, error: "eval_failed" }
     );
   }
   async getActivePrompt() {
@@ -1433,8 +1643,11 @@ var FC = class {
     let s = 0;
     for (;;) {
       if (!(await this.isBusy()) && n) {
-        (await this.sleep(1500), this.log.appendLine("[CDP] Agent finished processing"));
-        break;
+        await this.sleep(2000);
+        if (!(await this.isBusy())) {
+          this.log.appendLine("[CDP] Agent finished processing");
+          break;
+        }
       }
       if (await this.getActivePrompt()) {
         this.log.appendLine("[CDP] Active prompt detected while waiting for response");
@@ -1466,9 +1679,6 @@ var FC = class {
   async extractLastResponseMarkdown() {
     if (!this.isConnected()) return "";
     let e = `(() => { ${this.htmlToMarkdownScript}
-            // Find conversation area
-            const convArea = document.querySelector('.relative.flex.flex-col.gap-y-3');
-
             function isInsideThinking(el) {
                 let p = el.parentElement;
                 while (p) {
@@ -1488,20 +1698,40 @@ var FC = class {
                 return false;
             }
 
+            // Strategy 1: Find inside conversation area turns (.relative.flex.flex-col.gap-y-3)
+            const convArea = document.querySelector('.relative.flex.flex-col.gap-y-3');
             if (convArea && convArea.children.length > 0) {
-                const lastTurn = convArea.children[convArea.children.length - 1];
-                const aiDivs = Array.from(lastTurn.querySelectorAll('div.leading-relaxed.select-text'))
-                    .filter(el => el.offsetParent !== null && !isInsideThinking(el) && !isInsideTaskBlock(el));
-
-                if (aiDivs.length > 0) {
-                    return aiDivs.map(el => htmlToMarkdown(el).trim()).filter(Boolean).join('\n\n');
+                for (let idx = convArea.children.length - 1; idx >= 0; idx--) {
+                    const turn = convArea.children[idx];
+                    const aiDivs = Array.from(turn.querySelectorAll('div.leading-relaxed.select-text'))
+                        .filter(el => el.offsetParent !== null && !isInsideThinking(el) && !isInsideTaskBlock(el) && (el.innerText || '').trim().length > 0);
+                    if (aiDivs.length > 0) {
+                        return aiDivs.map(el => htmlToMarkdown(el).trim()).filter(Boolean).join('\\n\\n');
+                    }
                 }
             }
 
-            // Fallback: global search
+            // Strategy 2: Find all agent response articles
+            const agentArticles = Array.from(document.querySelectorAll('div[role="article"][aria-label="Agent response"]'));
+            if (agentArticles.length > 0) {
+                for (let idx = agentArticles.length - 1; idx >= 0; idx--) {
+                    const article = agentArticles[idx];
+                    const aiDivs = Array.from(article.querySelectorAll('div.leading-relaxed.select-text'))
+                        .filter(el => el.offsetParent !== null && !isInsideThinking(el) && !isInsideTaskBlock(el) && (el.innerText || '').trim().length > 0);
+                    if (aiDivs.length > 0) {
+                        return aiDivs.map(el => htmlToMarkdown(el).trim()).filter(Boolean).join('\\n\\n');
+                    }
+                }
+            }
+
+            // Fallback: search leading-relaxed divs specifically inside chat containers (excluding open editor tabs)
             const aiDivs = Array.from(document.querySelectorAll('div.leading-relaxed.select-text'))
-                .filter(el => el.offsetParent !== null && !isInsideThinking(el) && !isInsideTaskBlock(el)
-                    && (el.innerText || '').trim().length > 0);
+                .filter(el => {
+                    if (el.offsetParent === null || isInsideThinking(el) || isInsideTaskBlock(el)) return false;
+                    if (!(el.innerText || '').trim()) return false;
+                    if (el.closest('.editor-container, .monaco-workbench, .markdown-editor') && !el.closest('.relative.flex.flex-col.gap-y-3, div[role="article"]')) return false;
+                    return true;
+                });
 
             if (aiDivs.length > 0) {
                 return htmlToMarkdown(aiDivs[aiDivs.length - 1]).trim();
@@ -1759,8 +1989,8 @@ var FC = class {
     '        || (node.className || "").includes("copy");',
     '      if (isCopy) continue;',
     '      const btnText = (node.textContent || node.getAttribute("title") || node.getAttribute("aria-label") || "").trim();',
-    '      if (!btnText) continue;',
-    '      if (/^(copy|good response|bad response|undo changes|thought for|ran |explored )/i.test(btnText)) continue;',
+    '      if (/^(copy|good response|bad response|undo changes|thought for|worked for|ran |explored |edited |viewed |review|accept|reject|cancel|submit)/i.test(btnText)) continue;',
+    '      if (/^[+-]\\d+$/.test(btnText)) continue;',
     '      let clean = btnText.replace(/\\s+/g, " ");',
     '      while (clean.startsWith(BT)) clean = clean.slice(1);',
     '      while (clean.endsWith(BT)) clean = clean.slice(0, -1);',
@@ -1792,15 +2022,22 @@ var FC = class {
     "      continue;",
     "    }",
     '    if (tag === "CODE") { md += BT + (node.textContent || "") + BT; continue; }',
-    '    if (tag === "STRONG" || tag === "B") { md += "**" + htmlToMarkdown(node) + "**"; continue; }',
-    '    if (tag === "EM" || tag === "I") { md += "*" + htmlToMarkdown(node) + "*"; continue; }',
-    '    if (/^H[1-6]$/.test(tag)) { md += NL + "#".repeat(parseInt(tag[1])) + " " + htmlToMarkdown(node) + NL; continue; }',
+    '    if (tag === "STRONG" || tag === "B") { md += "**" + htmlToMarkdown(node).trim() + "**"; continue; }',
+    '    if (tag === "EM" || tag === "I") { md += "*" + htmlToMarkdown(node).trim() + "*"; continue; }',
+    '    if (/^H[1-3]$/.test(tag)) { md += NL + "#".repeat(parseInt(tag[1])) + " " + htmlToMarkdown(node).trim() + NL; continue; }',
+    '    if (/^H[4-6]$/.test(tag)) { md += NL + "### " + htmlToMarkdown(node).trim() + NL; continue; }',
     '    if (tag === "UL" || tag === "OL") {',
     '      node.querySelectorAll(":scope > li").forEach((li, i) => {',
     '        md += (tag === "OL" ? (i+1) + ". " : "- ") + htmlToMarkdown(li).trim() + NL;',
     "      }); md += NL; continue;",
     "    }",
-    '    if (tag === "LI") { md += htmlToMarkdown(node); continue; }',
+    '    if (tag === "LI") {',
+    '      const isChecked = node.classList.contains("task-checked") || node.querySelector(\'input[type="checkbox"]:checked\');',
+    '      const isUnchecked = node.classList.contains("task-list-item") || node.querySelector(\'input[type="checkbox"]\');',
+    '      if (isChecked) { md += "✅ " + htmlToMarkdown(node).trim(); continue; }',
+    '      if (isUnchecked) { md += "⬜ " + htmlToMarkdown(node).trim(); continue; }',
+    '      md += htmlToMarkdown(node); continue;',
+    '    }',
     '    if (tag === "TABLE") {',
     '      const rows = Array.from(node.querySelectorAll("tr"));',
     '      if (rows.length > 0) {',
@@ -1824,11 +2061,8 @@ var FC = class {
     '        md += "[" + (text || href) + "](" + href + ")";',
     '      } else if (href.startsWith("file://")) {',
     '        const filePath = decodeURIComponent(href.replace(/^file:\\/\\/\\/?/, ""));',
-    '        if (text && text !== filePath) {',
-    '          md += text + " (" + BT + filePath + BT + ")";',
-    '        } else {',
-    '          md += BT + (text || filePath) + BT;',
-    '        }',
+    '        const baseName = filePath.split(/[\\\\/]/).pop() || filePath;',
+    '        md += BT + (text || baseName) + BT;',
     '      } else {',
     '        md += text || href;',
     '      }',
@@ -1836,8 +2070,17 @@ var FC = class {
     '    }',
     '    if (tag === "P" || tag === "DIV") { md += htmlToMarkdown(node) + NL; continue; }',
     '    if (tag === "BR") { md += NL; continue; }',
-    '    if (tag === "BLOCKQUOTE") { md += htmlToMarkdown(node).split(NL).map(l => "> " + l).join(NL) + NL; continue; }',
-    '    if (tag === "HR") { md += NL + "---" + NL; continue; }',
+    '    if (tag === "BLOCKQUOTE") {',
+    '      let bq = htmlToMarkdown(node).trim();',
+    '      bq = bq.replace(/^\\[!NOTE\\]/i, "ℹ️ **NOTE:**")',
+    '             .replace(/^\\[!TIP\\]/i, "💡 **TIP:**")',
+    '             .replace(/^\\[!IMPORTANT\\]/i, "📌 **IMPORTANT:**")',
+    '             .replace(/^\\[!WARNING\\]/i, "⚠️ **WARNING:**")',
+    '             .replace(/^\\[!CAUTION\\]/i, "🛑 **CAUTION:**");',
+    '      md += NL + bq.split(NL).map(l => "> " + l).join(NL) + NL + NL;',
+    '      continue;',
+    '    }',
+    '    if (tag === "HR") { md += NL + "────────────────────────────" + NL; continue; }',
     "    md += htmlToMarkdown(node);",
     "  }",
     "  return md;",
@@ -1906,10 +2149,12 @@ var FC = class {
     return new Promise((i) => setTimeout(i, e));
   }
   async _openModelDropdown() {
-    // Find the IDE page target
     let targets = await this.getTargets();
-    let ideTarget = targets.find((t) => t.type === "page" && t.title?.includes("Antigravity IDE"));
-    if (!ideTarget) ideTarget = targets.find((t) => t.type === "page" && t.title?.includes("Project"));
+    let ideTarget =
+      targets.find((t) => t.type === "page" && t.title?.includes("Antigravity IDE")) ||
+      targets.find((t) => t.type === "page" && (t.title?.includes("Antigravity") || t.title?.includes("IDE") || t.url?.includes("vscode-file"))) ||
+      targets.find((t) => t.type === "page" && t.title?.includes("Project")) ||
+      targets.find((t) => t.type === "page");
     if (!ideTarget) throw new Error("No Antigravity IDE window found");
 
     let wsUrl = ideTarget.webSocketDebuggerUrl;
@@ -1958,69 +2203,145 @@ var FC = class {
     });
 
     await call("Runtime.enable", {});
-    await this.sleep(500);
+    await this.sleep(400);
 
-    // Find model selector via aria-haspopup and model keywords
-    let selectorCoords = null;
+    // Find model selector trigger and check if panel is already open
+    let selector = null;
     let modelCtxId = null;
 
     for (const ctx of contexts) {
       try {
         const result = await call("Runtime.evaluate", {
           expression: `(() => {
-                        for (const el of document.querySelectorAll('[aria-haspopup]')) {
-                            const t = (el.textContent || '').trim();
-                            if ((t.includes('Claude') || t.includes('Gemini') || t.includes('GPT')) && t.length < 80 && t.length > 5) {
-                                const rect = el.getBoundingClientRect();
-                                return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, text: t };
-                            }
-                        }
-                        return null;
-                    })()`,
+            const btn = document.querySelector('[data-testid="model-selector-trigger"]') ||
+                        document.querySelector('button[aria-label*="Select model"]') ||
+                        Array.from(document.querySelectorAll('[aria-haspopup]')).find(el => {
+                          const t = (el.textContent || '').trim();
+                          return (t.includes('Claude') || t.includes('Gemini') || t.includes('GPT')) && t.length < 80 && t.length > 3;
+                        });
+            if (btn) {
+              const r = btn.getBoundingClientRect();
+              const panel = document.querySelector('[data-testid="model-selector-panel"], [role="menu"], [role="dialog"]');
+              const isPanelOpen = !!(panel && (panel.offsetHeight > 0 || panel.getBoundingClientRect().height > 0));
+              return {
+                x: r.left + r.width / 2,
+                y: r.top + r.height / 2,
+                text: (btn.textContent || '').trim().replace(/\\s+/g, ' '),
+                isOpen: isPanelOpen || btn.getAttribute('aria-expanded') === 'true'
+              };
+            }
+            return null;
+          })()`,
           returnByValue: true,
           contextId: ctx.id,
         });
         const val = result.result?.result?.value;
         if (val) {
-          selectorCoords = val;
+          selector = val;
           modelCtxId = ctx.id;
           break;
         }
       } catch {}
     }
 
-    if (!selectorCoords) {
-      ws.close();
+    if (!selector) {
+      try { ws.close(); } catch {}
       throw new Error("Could not find model selector in the IDE UI");
     }
 
-    this.log.appendLine("[CDP] Model selector found: " + selectorCoords.text);
+    this.log.appendLine("[CDP] Model selector found: " + selector.text + " (isOpen: " + selector.isOpen + ")");
 
-    // Click using CDP mouse events (React needs native events)
-    await call("Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      x: selectorCoords.x,
-      y: selectorCoords.y,
-      button: "left",
-      clickCount: 1,
-    });
-    await this.sleep(50);
-    await call("Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      x: selectorCoords.x,
-      y: selectorCoords.y,
-      button: "left",
-      clickCount: 1,
-    });
+    if (!selector.isOpen) {
+      // Step 1: Click the trigger button via DOM
+      await call("Runtime.evaluate", {
+        expression: `(() => {
+          const btn = document.querySelector('[data-testid="model-selector-trigger"]') ||
+                      document.querySelector('button[aria-label*="Select model"]') ||
+                      Array.from(document.querySelectorAll('[aria-haspopup]')).find(el => {
+                        const t = (el.textContent || '').trim();
+                        return (t.includes('Claude') || t.includes('Gemini') || t.includes('GPT')) && t.length < 80 && t.length > 3;
+                      });
+          if (btn) btn.click();
+        })()`,
+        returnByValue: true,
+        contextId: modelCtxId,
+      }).catch(() => {});
 
-    // Wait for the dialog to render
-    await this.sleep(1500);
+      // Step 2: Poll to see if panel opened from the DOM click (up to 600ms)
+      let opened = false;
+      for (let i = 0; i < 6; i++) {
+        await this.sleep(100);
+        const checkOpen = await call("Runtime.evaluate", {
+          expression: `(() => {
+            const p = document.querySelector('[data-testid="model-selector-panel"], [role="menu"]');
+            return !!(p && (p.offsetHeight > 0 || p.getBoundingClientRect().height > 0));
+          })()`,
+          returnByValue: true,
+          contextId: modelCtxId,
+        }).catch(() => ({ result: { result: { value: false } } }));
+        if (checkOpen.result?.result?.value) {
+          opened = true;
+          break;
+        }
+      }
 
-    return { ws, call, modelCtxId, currentModel: selectorCoords.text };
+      // Step 3: If still not open, dispatch native CDP mouse click once
+      if (!opened) {
+        await call("Input.dispatchMouseEvent", {
+          type: "mousePressed",
+          x: selector.x,
+          y: selector.y,
+          button: "left",
+          clickCount: 1,
+        });
+        await this.sleep(50);
+        await call("Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          x: selector.x,
+          y: selector.y,
+          button: "left",
+          clickCount: 1,
+        });
+      }
+    }
+
+    // Wait for the panel to be rendered and visible
+    let panelFound = false;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const pCheck = await call("Runtime.evaluate", {
+        expression: `(() => {
+          const p = document.querySelector('[data-testid="model-selector-panel"], [role="menu"], [role="dialog"]');
+          return !!(p && (p.offsetHeight > 0 || p.getBoundingClientRect().height > 0));
+        })()`,
+        returnByValue: true,
+        contextId: modelCtxId,
+      }).catch(() => ({ result: { result: { value: false } } }));
+
+      if (pCheck.result?.result?.value) {
+        panelFound = true;
+        break;
+      }
+      await this.sleep(150);
+    }
+
+    if (!panelFound) {
+      try { ws.close(); } catch {}
+      throw new Error("Model dialog did not open");
+    }
+
+    return { ws, call, modelCtxId, currentModel: selector.text };
   }
 
   async _closeModelDropdown(ws, call) {
     try {
+      await call("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Escape",
+        code: "Escape",
+        windowsVirtualKeyCode: 27,
+      });
+      await call("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+      await this.sleep(100);
       await call("Input.dispatchKeyEvent", {
         type: "keyDown",
         key: "Escape",
@@ -2040,35 +2361,83 @@ var FC = class {
     const { ws, call, modelCtxId, currentModel } = await this._openModelDropdown();
 
     try {
-      // Read models from the dialog
+      // Read models from the panel
       const result = await call("Runtime.evaluate", {
         expression: `(() => {
-                    const dialog = document.querySelector('[role="dialog"]');
-                    if (!dialog || dialog.offsetHeight === 0) return { found: false };
-                    
-                    const models = [];
-                    const buttons = dialog.querySelectorAll('button');
-                    buttons.forEach(btn => {
-                        const nameEl = btn.querySelector('span.text-xs');
-                        const badgeEl = btn.querySelector('.rounded-full');
-                        const name = nameEl?.textContent?.trim() || btn.textContent?.trim() || '';
-                        const speed = badgeEl?.textContent?.trim() || '';
-                        const isSelected = btn.className?.includes('bg-secondary') && btn.className?.includes('font-me');
-                        if (name && name.length > 5 && (name.includes('Gemini') || name.includes('Claude') || name.includes('GPT'))) {
-                            models.push({ name, speed, isSelected: !!isSelected });
-                        }
-                    });
-                    
-                    // Read status bar for usage info
-                    let statusBar = '';
-                    const statusItems = document.querySelectorAll('.statusbar-item-label');
-                    statusItems.forEach(si => {
-                        const t = si.textContent?.trim() || '';
-                        if (t.includes('%')) statusBar = t;
-                    });
-                    
-                    return { found: true, models, statusBar };
-                })()`,
+          const panel = document.querySelector('[data-testid="model-selector-panel"], [role="menu"], [role="dialog"]');
+          if (!panel) return { found: false, error: "Panel element not found" };
+
+          const items = Array.from(panel.querySelectorAll('[role="menuitem"], [data-testid="model-selector-item"], button'));
+          const models = [];
+          const seenNames = new Set();
+          const currentModelText = '${(currentModel || "").replace(/'/g, "\\'")}';
+
+          items.forEach(item => {
+            const effortGroup = item.querySelector('[data-testid="model-selector-effort-group"]');
+            const labelAttr = item.getAttribute('data-model-label');
+            
+            let name = "";
+            let baseName = "";
+            let hasEffort = false;
+
+            if (labelAttr) {
+              name = labelAttr.trim();
+              baseName = name;
+            } else if (effortGroup) {
+              name = (effortGroup.textContent || '').trim().replace(/\\s+/g, ' ');
+              baseName = (effortGroup.getAttribute('data-model-base') || '').trim();
+              hasEffort = true;
+            } else {
+              const nameEl = item.querySelector('span.text-xs') || item.querySelector('.truncate') || item;
+              name = (nameEl?.textContent || '').trim().replace(/\\s+/g, ' ');
+              baseName = name;
+            }
+
+            if (!baseName) {
+              baseName = name.replace(/\\s*\\(?(Low|Medium|High)\\)?$/i, '').trim();
+            }
+
+            if (item.getAttribute('aria-haspopup') === 'menu' || effortGroup) {
+              hasEffort = true;
+            }
+
+            const badgeEl = item.querySelector('.rounded-full');
+            const badgeText = (badgeEl?.textContent || '').trim();
+
+            if (badgeText && name.endsWith(badgeText)) {
+              name = name.slice(0, -badgeText.length).trim();
+            }
+
+            const isSelected = (item.className?.includes('bg-secondary') && !item.className?.includes('hover:bg-secondary')) ||
+                               item.getAttribute('aria-selected') === 'true' ||
+                               (currentModelText && currentModelText.toLowerCase().includes(baseName.toLowerCase()));
+
+            if (baseName && baseName.length > 2) {
+              if (!seenNames.has(baseName)) {
+                seenNames.add(baseName);
+                models.push({
+                  name,
+                  baseName,
+                  hasEffort,
+                  speed: badgeText,
+                  isSelected: !!isSelected
+                });
+              }
+            }
+          });
+
+          // Read status bar for usage info
+          let statusBar = '';
+          const statusItems = document.querySelectorAll('.statusbar-item-label, .statusbar-item');
+          statusItems.forEach(si => {
+            const t = (si.textContent || '').trim();
+            if (t.includes('%') || t.includes('CO5') || t.includes('G3F')) {
+              if (t.length < 80 && !statusBar) statusBar = t;
+            }
+          });
+
+          return { found: true, models, statusBar };
+        })()`,
         returnByValue: true,
         contextId: modelCtxId,
       });
@@ -2076,10 +2445,18 @@ var FC = class {
       await this._closeModelDropdown(ws, call);
 
       const val = result.result?.result?.value;
-      if (!val?.found) throw new Error("Model dialog did not open");
+      if (!val?.found) {
+        throw new Error(val?.error || "Model dialog panel was not found");
+      }
+      if (!val?.models?.length) {
+        throw new Error("No models detected in dialog");
+      }
 
-      this.log.appendLine("[CDP] Found " + val.models.length + " models");
-      return { models: val.models, statusBar: val.statusBar, currentModel };
+      const matchEffort = (currentModel || "").match(/\b(Low|Medium|High)\b/i);
+      const currentEffort = matchEffort ? matchEffort[1] : null;
+
+      this.log.appendLine("[CDP] Found " + val.models.length + " models (currentEffort: " + currentEffort + ")");
+      return { models: val.models, statusBar: val.statusBar, currentModel, currentEffort };
     } catch (e) {
       await this._closeModelDropdown(ws, call);
       throw e;
@@ -2091,82 +2468,139 @@ var FC = class {
     const { ws, call, modelCtxId, currentModel } = await this._openModelDropdown();
 
     try {
-      // Find and click the matching model in the dialog
-      const modelNameLower = modelName.toLowerCase().replace(/['"`]/g, "");
+      const modelNameLower = modelName.toLowerCase().replace(/['"`]/g, "").trim();
+
+      // Check if effort level is specified (high, medium, low)
+      let desiredEffort = null;
+      if (/\bhigh\b/i.test(modelNameLower)) desiredEffort = "High";
+      else if (/\bmedium\b/i.test(modelNameLower)) desiredEffort = "Medium";
+      else if (/\blow\b/i.test(modelNameLower)) desiredEffort = "Low";
+
+      const isOnlyEffort = /^(high|medium|low)$/i.test(modelNameLower);
 
       const result = await call("Runtime.evaluate", {
         expression: `(() => {
-                    const dialog = document.querySelector('[role="dialog"]');
-                    if (!dialog || dialog.offsetHeight === 0) return { found: false, error: 'dialog not open' };
-                    
-                    const buttons = Array.from(dialog.querySelectorAll('button'));
-                    const modelNameLower = '${modelNameLower}';
-                    
-                    // Build a list of all models for matching
-                    const modelButtons = [];
-                    buttons.forEach(btn => {
-                        const nameEl = btn.querySelector('span.text-xs');
-                        const name = nameEl?.textContent?.trim() || btn.textContent?.trim() || '';
-                        if (name && name.length > 5 && (name.includes('Gemini') || name.includes('Claude') || name.includes('GPT'))) {
-                            const rect = btn.getBoundingClientRect();
-                            modelButtons.push({ name, nameLower: name.toLowerCase(), x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-                        }
-                    });
-                    
-                    // Try exact match first
-                    let match = modelButtons.find(m => m.nameLower === modelNameLower);
-                    
-                    // Try includes match
-                    if (!match) match = modelButtons.find(m => m.nameLower.includes(modelNameLower));
-                    
-                    // Try fuzzy: check if ALL words in the query are present in the model name
-                    if (!match) {
-                        const words = modelNameLower.split(/\s+/);
-                        match = modelButtons.find(m => words.every(w => m.nameLower.includes(w)));
-                    }
-                    
-                    // Try alias matching
-                    if (!match) {
-                        const aliases = {
-                            'flash': 'gemini 3.5 flash',
-                            'flash medium': 'gemini 3.5 flash (medium)',
-                            'flash high': 'gemini 3.5 flash (high)',
-                            'flash low': 'gemini 3.5 flash (low)',
-                            'pro': 'gemini 3.1 pro',
-                            'pro high': 'gemini 3.1 pro (high)',
-                            'pro low': 'gemini 3.1 pro (low)',
-                            'opus': 'claude opus',
-                            'sonnet': 'claude sonnet',
-                            'gpt': 'gpt-oss',
-                            'gpt oss': 'gpt-oss',
-                            'gemini': 'gemini 3.1 pro (high)',
-                            'claude': 'claude opus'
-                        };
-                        const aliasTarget = aliases[modelNameLower];
-                        if (aliasTarget) {
-                            match = modelButtons.find(m => m.nameLower.includes(aliasTarget));
-                        }
-                    }
-                    
-                    if (match) {
-                        return { found: true, name: match.name, x: match.x, y: match.y };
-                    }
-                    
-                    // Return all available models for error message
-                    const available = modelButtons.map(m => m.name);
-                    
-                    // Check for ambiguous matches (multiple partial matches)
-                    const partialMatches = modelButtons.filter(m => {
-                        const words = modelNameLower.split(/\s+/);
-                        return words.some(w => w.length > 2 && m.nameLower.includes(w));
-                    });
-                    
-                    if (partialMatches.length > 1) {
-                        return { found: false, ambiguous: true, matches: partialMatches.map(m => m.name), available };
-                    }
-                    
-                    return { found: false, ambiguous: false, available };
-                })()`,
+          const panel = document.querySelector('[data-testid="model-selector-panel"], [role="menu"], [role="dialog"]');
+          if (!panel) return { found: false, error: 'dialog not open' };
+
+          const items = Array.from(panel.querySelectorAll('[role="menuitem"], [data-testid="model-selector-item"], button'));
+          const modelNameLower = '${modelNameLower}';
+          const isOnlyEffort = ${isOnlyEffort};
+          const currentModel = '${(currentModel || "").replace(/'/g, "\\'")}';
+
+          const modelButtons = [];
+          items.forEach(btn => {
+            const effortGroup = btn.querySelector('[data-testid="model-selector-effort-group"]');
+            const labelAttr = btn.getAttribute('data-model-label');
+            let name = "";
+            let baseModel = "";
+            if (labelAttr) {
+              name = labelAttr.trim();
+              baseModel = name;
+            } else if (effortGroup) {
+              name = (effortGroup.textContent || '').trim().replace(/\\s+/g, ' ');
+              baseModel = (effortGroup.getAttribute('data-model-base') || '').trim();
+            } else {
+              const nameEl = btn.querySelector('span.text-xs') || btn.querySelector('.truncate') || btn;
+              name = (nameEl?.textContent || '').trim().replace(/\\s+/g, ' ');
+              baseModel = name;
+            }
+
+            if (!baseModel) {
+              baseModel = name.replace(/\\s*\\(?(Low|Medium|High)\\)?$/i, '').trim();
+            }
+
+            const badgeEl = btn.querySelector('.rounded-full');
+            const badgeText = (badgeEl?.textContent || '').trim();
+            if (badgeText && name.endsWith(badgeText)) {
+              name = name.slice(0, -badgeText.length).trim();
+            }
+
+            const isSelected = (btn.className?.includes('bg-secondary') && !btn.className?.includes('hover:bg-secondary')) ||
+                               btn.getAttribute('aria-selected') === 'true' ||
+                               (currentModel && currentModel.toLowerCase().includes(baseModel.toLowerCase()));
+
+            if (name && name.length > 2) {
+              const rect = btn.getBoundingClientRect();
+              modelButtons.push({
+                id: btn.id,
+                name,
+                nameLower: name.toLowerCase(),
+                baseModel: baseModel.toLowerCase(),
+                hasEffort: !!effortGroup || btn.getAttribute('aria-haspopup') === 'menu',
+                isSelected: !!isSelected,
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+              });
+            }
+          });
+
+          if (isOnlyEffort) {
+            const activeMatch = modelButtons.find(m => m.isSelected) ||
+                                modelButtons.find(m => currentModel.toLowerCase().includes(m.baseModel));
+            if (activeMatch) {
+              return { found: true, id: activeMatch.id, name: activeMatch.name, baseModel: activeMatch.baseModel, hasEffort: activeMatch.hasEffort, x: activeMatch.x, y: activeMatch.y };
+            }
+          }
+
+          // 1. Exact match on name or baseModel
+          let match = modelButtons.find(m => m.nameLower === modelNameLower || m.baseModel === modelNameLower);
+
+          // 2. Includes match
+          if (!match) match = modelButtons.find(m => m.nameLower.includes(modelNameLower) || m.baseModel.includes(modelNameLower));
+
+          // 3. Fuzzy match: all words present
+          if (!match) {
+            const words = modelNameLower.split(/\\s+/).filter(Boolean);
+            match = modelButtons.find(m => words.every(w => m.nameLower.includes(w) || m.baseModel.includes(w)));
+          }
+
+          // 4. Match base model if effort was stripped
+          if (!match) {
+            const baseQuery = modelNameLower.replace(/\\b(high|medium|low)\\b/g, '').replace(/[()]/g, '').trim();
+            if (baseQuery) {
+              match = modelButtons.find(m => m.nameLower.includes(baseQuery) || m.baseModel.includes(baseQuery));
+            }
+          }
+
+          // 5. Aliases
+          if (!match) {
+            const aliases = {
+              'flash': 'flash',
+              'pro': 'pro',
+              'opus': 'opus',
+              'sonnet': 'sonnet',
+              'gpt': 'gpt',
+              'gpt oss': 'gpt-oss',
+              'gemini': 'gemini',
+              'claude': 'claude'
+            };
+            for (const [k, v] of Object.entries(aliases)) {
+              if (modelNameLower.includes(k)) {
+                match = modelButtons.find(m => m.nameLower.includes(v) || m.baseModel.includes(v));
+                if (match) break;
+              }
+            }
+          }
+
+          const available = modelButtons.map(m => m.name);
+
+          if (match) {
+            return { found: true, id: match.id, name: match.name, baseModel: match.baseModel, hasEffort: match.hasEffort, x: match.x, y: match.y, available };
+          }
+
+          // Check for ambiguous matches
+          const partialMatches = modelButtons.filter(m => {
+            const words = modelNameLower.split(/\\s+/).filter(w => w.length > 2);
+            return words.some(w => m.nameLower.includes(w) || m.baseModel.includes(w));
+          });
+
+          if (partialMatches.length > 1) {
+            return { found: false, ambiguous: true, matches: partialMatches.map(m => m.name), available };
+          }
+
+          return { found: false, ambiguous: false, available };
+        })()`,
         returnByValue: true,
         contextId: modelCtxId,
       });
@@ -2191,7 +2625,55 @@ var FC = class {
         throw err;
       }
 
-      // Click the matched model button using CDP mouse events
+      // If specific effort requested and item has effort submenu
+      if (desiredEffort && val.hasEffort) {
+        this.log.appendLine(`[CDP] Selecting effort "${desiredEffort}" for ${val.name}`);
+        // Dispatch mouseMoved to trigger hover submenu
+        await call("Input.dispatchMouseEvent", { type: "mouseMoved", x: val.x, y: val.y });
+        if (val.id) {
+          await call("Runtime.evaluate", {
+            expression: `(() => {
+              const el = document.getElementById('${val.id}');
+              if (el) {
+                el.focus();
+                el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+              }
+            })()`,
+            returnByValue: true,
+            contextId: modelCtxId,
+          }).catch(() => {});
+        }
+        // Send ArrowRight to open submenu
+        await call("Input.dispatchKeyEvent", { type: "keyDown", key: "ArrowRight", code: "ArrowRight", windowsVirtualKeyCode: 39 });
+        await call("Input.dispatchKeyEvent", { type: "keyUp", key: "ArrowRight", code: "ArrowRight", windowsVirtualKeyCode: 39 });
+        await this.sleep(400);
+
+        const effortClick = await call("Runtime.evaluate", {
+          expression: `(() => {
+            const opt = document.querySelector('[data-effort="${desiredEffort.toLowerCase()}"]') ||
+                        Array.from(document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]')).find(i => (i.textContent || '').trim().toLowerCase() === '${desiredEffort.toLowerCase()}');
+            if (opt) {
+              const itemRadio = opt.closest('[role="menuitemradio"]') || opt;
+              itemRadio.click();
+              return { clicked: true };
+            }
+            return { clicked: false };
+          })()`,
+          returnByValue: true,
+          contextId: modelCtxId,
+        }).catch(() => ({ result: { result: { value: { clicked: false } } } }));
+
+        if (effortClick.result?.result?.value?.clicked) {
+          await this.sleep(400);
+          await this._closeModelDropdown(ws, call);
+          const finalName = `${(val.baseModel || val.name).replace(/\b(High|Medium|Low)\b/i, '').trim()} (${desiredEffort})`;
+          this.log.appendLine(`[CDP] Model switched to: ${finalName}`);
+          return finalName;
+        }
+      }
+
+      // Default: click the model row
       this.log.appendLine("[CDP] Clicking model: " + val.name + " at (" + val.x + ", " + val.y + ")");
       await call("Input.dispatchMouseEvent", {
         type: "mousePressed",
@@ -2210,14 +2692,12 @@ var FC = class {
       });
 
       await this.sleep(500);
-      ws.close();
+      await this._closeModelDropdown(ws, call);
 
       this.log.appendLine("[CDP] Model switched to: " + val.name);
       return val.name;
     } catch (e) {
-      try {
-        ws.close();
-      } catch {}
+      await this._closeModelDropdown(ws, call);
       throw e;
     }
   }
@@ -2454,9 +2934,15 @@ var oU = class {
         }
 
         let latestMd = "";
-        try {
-          latestMd = await this.cdp.extractLastResponseMarkdown();
-        } catch {}
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            latestMd = await this.cdp.extractLastResponseMarkdown();
+            if (latestMd && latestMd.trim().length > 0) break;
+          } catch (err) {
+            this.log.appendLine(`[Extension] Background markdown extraction error: ${err}`);
+          }
+          await new Promise((p) => setTimeout(p, 500));
+        }
 
         if (latestMd) {
           latestMd = this.cleanResponse(latestMd);
@@ -2518,8 +3004,264 @@ var oU = class {
     }
     async handleInteraction(interaction) {
       try {
+        if (interaction.isChatInputCommand()) {
+          const cmd = interaction.commandName;
+          this.log.appendLine(`[Extension] Chat input command: /${cmd} from ${interaction.user?.displayName || interaction.user?.username}`);
+          
+          if (cmd === "plan" || cmd === "goal" || cmd === "grill") {
+            const prompt = interaction.options.getString("prompt") || "";
+            const prefix = cmd === "plan" ? "/plan " : cmd === "goal" ? "/goal " : "/grill-me ";
+            const icon = cmd === "plan" ? "🧠" : cmd === "goal" ? "🎯" : "🔥";
+            const modeName = cmd === "plan" ? "Planning Mode" : cmd === "goal" ? "Goal Mode" : "Alignment Interview";
+            
+            await interaction.reply({
+              content: `${icon} **Initiating ${modeName}...**\n> ${prompt.substring(0, 500)}`
+            }).catch(() => {});
+            
+            await this.processMessage({
+              author: interaction.user?.displayName || interaction.user?.username || "Discord User",
+              content: prefix + prompt,
+              timestamp: new Date(),
+              attachments: [],
+              messageId: interaction.id,
+              threadId: interaction.channel?.isThread() ? interaction.channelId : void 0,
+              isMainChannel: interaction.channelId === this.discord.channelId,
+            });
+            return;
+          }
+
+          if (cmd === "stop") {
+            await interaction.deferReply().catch(() => {});
+            const res = await this.cdp?.cancelAgent();
+            if (res?.ok) {
+              this.state = "idle";
+              this.lastBusyState = false;
+              this.discord?.setPresence("online", "Waiting for commands");
+              this.pushStatus();
+              await interaction.editReply("🛑 **Agent generation cancelled in Antigravity IDE.**").catch(() => {});
+            } else {
+              await interaction.editReply("ℹ️ **No active agent generation is currently running.**").catch(() => {});
+            }
+            return;
+          }
+
+          if (cmd === "status") {
+            await interaction.deferReply().catch(() => {});
+            const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
+            const cdpConnected = !!this.cdp?.isConnected();
+            let currentModel = "Unknown";
+            let currentEffort = null;
+            let usage = "N/A";
+            try {
+              const modelList = await this.cdp?.listModels();
+              if (modelList?.currentModel) currentModel = modelList.currentModel;
+              if (modelList?.currentEffort) currentEffort = modelList.currentEffort;
+              if (modelList?.statusBar) usage = modelList.statusBar;
+            } catch {}
+
+            let statusMsg = "📊 **Antigravity IDE & Dis-Gravity Status**\n\n";
+            statusMsg += `• **CDP Bridge:** ${cdpConnected ? "🟢 Connected (Port 9000)" : "🔴 Disconnected"}\n`;
+            statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
+            statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
+            statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
+            statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
+
+            const actionRow = this.discord?.buildStatusActionRow(isBusy);
+            const effortRow = this.discord?.buildEffortActionRow(currentEffort);
+            const components = [];
+            if (actionRow) components.push(actionRow);
+            if (effortRow) components.push(effortRow);
+
+            await interaction.editReply({
+              content: statusMsg,
+              components
+            }).catch(() => {});
+            return;
+          }
+
+          if (cmd === "models") {
+            await interaction.deferReply().catch(() => {});
+            try {
+              const result = await this.cdp.listModels();
+              let msg = "📋 **Available Models in Antigravity IDE**\n\n";
+              result.models.forEach((m, i) => {
+                const selected = m.isSelected ? " ✅" : "";
+                const speed = m.speed ? " ⚡" + m.speed : "";
+                const effortNote = m.hasEffort ? " *(Low / Medium / High)*" : "";
+                msg += `${i + 1}. **${m.name}**${speed}${effortNote}${selected}\n`;
+              });
+              msg += "\n📊 **Usage:** " + (result.statusBar || "N/A");
+              if (result.currentEffort) {
+                msg += `\n⚙️ **Active Effort:** **${result.currentEffort}**`;
+              }
+              msg += "\n\n💡 *Select model & effort from the dropdown or tap an effort button:*";
+
+              const selectRow = this.discord?.buildModelSelectRow(result.models, result.currentEffort, result.currentModel);
+              const effortRow = this.discord?.buildEffortActionRow(result.currentEffort);
+              const components = [];
+              if (selectRow) components.push(selectRow);
+              if (effortRow) components.push(effortRow);
+
+              await interaction.editReply({
+                content: msg,
+                components
+              }).catch(() => {});
+            } catch (err) {
+              await interaction.editReply("⚠️ **Failed to list models:** " + err.message).catch(() => {});
+            }
+            return;
+          }
+
+          if (cmd === "effort") {
+            const level = interaction.options.getString("level") || "";
+            if (!level) {
+              await interaction.reply({ content: "⚠️ Please specify an effort level (Low, Medium, High).", ephemeral: true }).catch(() => {});
+              return;
+            }
+            await interaction.deferReply().catch(() => {});
+            try {
+              const switchedTo = await this.cdp.switchModel(level);
+              await interaction.editReply(`✅ Active model effort switched to **${switchedTo}**`).catch(() => {});
+            } catch (err) {
+              await interaction.editReply(`⚠️ Failed to switch effort: ${err.message}`).catch(() => {});
+            }
+            return;
+          }
+
+          if (cmd === "model") {
+            let modelName = interaction.options.getString("name") || "";
+            const effort = interaction.options.getString("effort") || "";
+            if (!modelName) {
+              await interaction.reply({ content: "⚠️ Please specify a model name or effort level.", ephemeral: true }).catch(() => {});
+              return;
+            }
+            if (effort) {
+              modelName = `${modelName} ${effort}`;
+            }
+            await interaction.deferReply().catch(() => {});
+            try {
+              const switchedTo = await this.cdp.switchModel(modelName);
+              await interaction.editReply(`✅ Model switched to **${switchedTo}**`).catch(() => {});
+            } catch (err) {
+              if (err.message === "AMBIGUOUS") {
+                let msg = `🤔 Multiple models match "${modelName}":\n\n`;
+                (err.matches || []).forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
+                msg += `\nPlease be more specific, e.g. \`/model ${err.matches?.[0] || ""}\``;
+                await interaction.editReply(msg).catch(() => {});
+              } else if (err.message === "NOT_FOUND") {
+                let msg = `❌ Model "${modelName}" not found.\n\n📋 Available models:\n`;
+                (err.available || []).forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
+                msg += "\n💡 Try: `/model opus`, `/model flash high`, `/model gemini low`, `/effort high`";
+                await interaction.editReply(msg).catch(() => {});
+              } else {
+                await interaction.editReply("⚠️ Failed to switch model: " + err.message).catch(() => {});
+              }
+            }
+            return;
+          }
+
+          if (cmd === "new") {
+            await interaction.deferReply().catch(() => {});
+            try {
+              const convTitle = await this.cdp.createNewConversation();
+              await interaction.editReply(`🔄 **Started new Antigravity conversation:** "${convTitle}"`).catch(() => {});
+            } catch (err) {
+              await interaction.editReply("⚠️ Failed to start new conversation: " + err.message).catch(() => {});
+            }
+            return;
+          }
+
+          if (cmd === "help") {
+            let helpMsg = "🤖 **Dis-Gravity Commands & Actions**\n\n";
+            helpMsg += "• `/plan <prompt>` — Run task in Planning Mode (deep research + plan artifact)\n";
+            helpMsg += "• `/goal <prompt>` — Run task in Goal Mode (autonomous execution until completed)\n";
+            helpMsg += "• `/grill <prompt>` — Start an alignment interview to clarify design decisions\n";
+            helpMsg += "• `/stop` — Immediately halt/cancel the active agent in the IDE\n";
+            helpMsg += "• `/status` — View bridge health, active model, effort, and quick controls\n";
+            helpMsg += "• `/models` — Interactive dropdown to switch AI models & effort levels\n";
+            helpMsg += "• `/effort <level>` — Switch reasoning effort (Low, Medium, High)\n";
+            helpMsg += "• `/model <name>` — Switch active model and effort (e.g. `/model flash high`)\n";
+            helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
+            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!effort high`, `!low`, `!models`, etc.)*";
+            await interaction.reply({ content: helpMsg, ephemeral: true }).catch(() => {});
+            return;
+          }
+          return;
+        }
+
+        if (interaction.isStringSelectMenu() && interaction.customId === "action:select_model") {
+          const selectedModel = interaction.values?.[0];
+          if (!selectedModel) return;
+          await interaction.deferReply({ ephemeral: true }).catch(() => {});
+          try {
+            const switchedTo = await this.cdp.switchModel(selectedModel);
+            await interaction.editReply(`✅ Switched model to **${switchedTo}**`).catch(() => {});
+          } catch (err) {
+            await interaction.editReply(`⚠️ Failed to switch model: ${err.message}`).catch(() => {});
+          }
+          return;
+        }
+
         let customId = interaction.customId || "";
         let parts = customId.split(":");
+
+        if (interaction.isButton() && parts[0] === "action") {
+          const actionType = parts[1];
+          if (actionType === "set_effort") {
+            const effortLevel = parts[2];
+            await interaction.deferReply({ ephemeral: true }).catch(() => {});
+            try {
+              const switchedTo = await this.cdp.switchModel(effortLevel);
+              await interaction.editReply(`✅ Active model effort switched to **${switchedTo}**`).catch(() => {});
+            } catch (err) {
+              await interaction.editReply(`⚠️ Failed to switch effort: ${err.message}`).catch(() => {});
+            }
+            return;
+          }
+          if (actionType === "stop") {
+            const res = await this.cdp?.cancelAgent();
+            if (res?.ok) {
+              this.state = "idle";
+              this.lastBusyState = false;
+              this.discord?.setPresence("online", "Waiting for commands");
+              this.pushStatus();
+              await interaction.reply({ content: "🛑 **Agent generation cancelled in Antigravity IDE.**", ephemeral: true }).catch(() => {});
+            } else {
+              await interaction.reply({ content: "ℹ️ **No active agent was running.**", ephemeral: true }).catch(() => {});
+            }
+            return;
+          }
+          if (actionType === "new_chat") {
+            await interaction.deferReply().catch(() => {});
+            try {
+              const d = await this.cdp.createNewConversation();
+              await interaction.editReply(`🔄 **Started new conversation: "${d}"**`).catch(() => {});
+            } catch (err) {
+              await interaction.editReply(`⚠️ Failed: ${err.message}`).catch(() => {});
+            }
+            return;
+          }
+          if (actionType === "show_models") {
+            await interaction.deferReply({ ephemeral: true }).catch(() => {});
+            try {
+              const result = await this.cdp.listModels();
+              const selectRow = this.discord?.buildModelSelectRow(result.models, result.currentEffort, result.currentModel);
+              const effortRow = this.discord?.buildEffortActionRow(result.currentEffort);
+              const components = [];
+              if (selectRow) components.push(selectRow);
+              if (effortRow) components.push(effortRow);
+              await interaction.editReply({
+                content: "⚡ **Select a model or effort level to switch:**",
+                components
+              }).catch(() => {});
+            } catch (err) {
+              await interaction.editReply(`⚠️ Failed to fetch models: ${err.message}`).catch(() => {});
+            }
+            return;
+          }
+          return;
+        }
+
         if (parts[0] !== "prompt") return;
         let promptKey = parts[1];
         let action = parts[2];
@@ -2612,7 +3354,137 @@ var oU = class {
       }
     }
     async handleMessage(e) {
-      let msgContent = e.content || "";
+      let msgContent = (e.content || "").trim();
+
+      // Help
+      if (msgContent === "!help" || msgContent === "/help") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        let helpMsg = "🤖 **Dis-Gravity Commands & Actions**\n\n";
+        helpMsg += "• `/plan <prompt>` — Run task in Planning Mode (deep research + plan artifact)\n";
+        helpMsg += "• `/goal <prompt>` — Run task in Goal Mode (autonomous execution until completed)\n";
+        helpMsg += "• `/grill <prompt>` — Start an alignment interview to clarify design decisions\n";
+        helpMsg += "• `/stop` — Immediately halt/cancel the active agent in the IDE\n";
+        helpMsg += "• `/status` — View bridge health, active model, and quick control buttons\n";
+        helpMsg += "• `/models` — Interactive dropdown to switch AI models with 1 tap\n";
+        helpMsg += "• `/model <name>` — Switch active model by name\n";
+        helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
+        helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!plan`, `!models`, etc.)*";
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, helpMsg);
+            else await this.discord.sendMessage(helpMsg);
+          } else {
+            await this.discord.sendMessage(helpMsg);
+          }
+        }
+        return;
+      }
+
+      // Stop / Cancel
+      if (msgContent === "!stop" || msgContent === "/stop" || msgContent.toLowerCase() === "cancel") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        this.log.appendLine("[Extension] Text command: stop");
+        const res = await this.cdp?.cancelAgent();
+        if (res?.ok) {
+          this.state = "idle";
+          this.lastBusyState = false;
+          this.discord?.setPresence("online", "Waiting for commands");
+          this.pushStatus();
+          if (this.discord?.isConnected()) {
+            const stopMsg = "🛑 **Agent generation cancelled in Antigravity IDE.**";
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, stopMsg);
+              else await this.discord.sendMessage(stopMsg);
+            } else {
+              await this.discord.sendMessage(stopMsg);
+            }
+          }
+        } else {
+          if (this.discord?.isConnected()) {
+            const noRunMsg = "ℹ️ **No active agent generation is currently running.**";
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, noRunMsg);
+              else await this.discord.sendMessage(noRunMsg);
+            } else {
+              await this.discord.sendMessage(noRunMsg);
+            }
+          }
+        }
+        return;
+      }
+
+      // Status
+      if (msgContent === "!status" || msgContent === "/status") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
+        const cdpConnected = !!this.cdp?.isConnected();
+        let currentModel = "Unknown";
+        let currentEffort = null;
+        let usage = "N/A";
+        try {
+          const modelList = await this.cdp?.listModels();
+          if (modelList?.currentModel) currentModel = modelList.currentModel;
+          if (modelList?.currentEffort) currentEffort = modelList.currentEffort;
+          if (modelList?.statusBar) usage = modelList.statusBar;
+        } catch {}
+        let statusMsg = "📊 **Antigravity IDE & Dis-Gravity Status**\n\n";
+        statusMsg += `• **CDP Bridge:** ${cdpConnected ? "🟢 Connected (Port 9000)" : "🔴 Disconnected"}\n`;
+        statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
+        statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
+        statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
+        statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
+        const actionRow = this.discord?.buildStatusActionRow(isBusy);
+        const effortRow = this.discord?.buildEffortActionRow(currentEffort);
+        const components = [];
+        if (actionRow) components.push(actionRow);
+        if (effortRow) components.push(effortRow);
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, statusMsg, components.length > 0 ? components : null);
+            else await this.discord.sendMessage(statusMsg, components.length > 0 ? components : null);
+          } else {
+            await this.discord.sendMessage(statusMsg, components.length > 0 ? components : null);
+          }
+        }
+        return;
+      }
+
+      // New conversation
+      if (msgContent === "!new" || msgContent === "/new" || msgContent === "!clear" || msgContent === "/clear") {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        try {
+          const convTitle = await this.cdp.createNewConversation();
+          if (this.discord?.isConnected()) {
+            const newMsg = `🔄 **Started new Antigravity conversation:** "${convTitle}"`;
+            await this.discord.sendMessage(newMsg);
+          }
+        } catch (err) {
+          if (this.discord?.isConnected()) await this.discord.sendMessage("⚠️ Failed to start new conversation: " + err.message);
+        }
+        return;
+      }
+
+      // Normalize !plan, !goal, !grill text commands to IDE slash commands
+      if (msgContent.startsWith("!plan ")) {
+        e.content = "/plan " + msgContent.substring(6).trim();
+      } else if (msgContent.startsWith("!goal ")) {
+        e.content = "/goal " + msgContent.substring(6).trim();
+      } else if (msgContent.startsWith("!grill ") || msgContent.startsWith("/grill ")) {
+        e.content = "/grill-me " + msgContent.substring(7).trim();
+      }
+
       if (msgContent === "!models" || msgContent === "/models") {
         if (this.processedIds.has(e.messageId)) return;
         this.processedIds.add(e.messageId);
@@ -2620,20 +3492,74 @@ var oU = class {
         this.log.appendLine("[Extension] Discord command: !models");
         try {
           const result = await this.cdp.listModels();
-          let msg = "\u{1F4CB} **Available Models**\n\n";
+          let msg = "\u{1F4CB} **Available Models in Antigravity IDE**\n\n";
           result.models.forEach((m, i) => {
             const selected = m.isSelected ? " \u2705" : "";
             const speed = m.speed ? " \u26A1" + m.speed : "";
-            msg += `${i + 1}. **${m.name}**${speed}${selected}\n`;
+            const effortNote = m.hasEffort ? " *(Low / Medium / High)*" : "";
+            msg += `${i + 1}. **${m.name}**${speed}${effortNote}${selected}\n`;
           });
           msg += "\n\u{1F4CA} **Usage:** " + (result.statusBar || "N/A");
-          msg += "\n\n\u{1F4A1} Switch with: `!model <name>`";
-          msg += "\n\u{1F50D} Examples: `!model opus`, `!model flash high`, `!model gemini pro`";
-          if (this.discord?.isConnected()) await this.discord.sendMessage(msg);
+          if (result.currentEffort) {
+            msg += `\n⚙️ **Active Effort:** **${result.currentEffort}**`;
+          }
+          msg += "\n\n\u{1F4A1} Switch model: `!model <name>` (e.g. `!model opus`, `!model flash high`)";
+          msg += "\n\u{2699}\u{FE0F} Switch effort: `!effort high`, `!low`, `!medium`, `!high`";
+          const selectRow = this.discord?.buildModelSelectRow(result.models, result.currentEffort, result.currentModel);
+          const effortRow = this.discord?.buildEffortActionRow(result.currentEffort);
+          const components = [];
+          if (selectRow) components.push(selectRow);
+          if (effortRow) components.push(effortRow);
+          if (this.discord?.isConnected()) {
+            if (e.threadId) {
+              let thread = await this.discord.getThread(e.threadId);
+              if (thread) await this.discord.sendToThread(thread, msg, components.length > 0 ? components : null);
+              else await this.discord.sendMessage(msg, components.length > 0 ? components : null);
+            } else {
+              await this.discord.sendMessage(msg, components.length > 0 ? components : null);
+            }
+          }
         } catch (err) {
           this.log.appendLine("[Extension] Error listing models: " + err);
           if (this.discord?.isConnected())
             await this.discord.sendMessage("\u26A0\uFE0F Failed to list models: " + err.message);
+        }
+        return;
+      }
+      if (msgContent.startsWith("!effort ") || msgContent.startsWith("/effort ")) {
+        let effLevel = msgContent.substring(8).trim();
+        if (!effLevel) return;
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        this.log.appendLine("[Extension] Discord command to switch effort: " + effLevel);
+        if (this.discord?.isConnected())
+          await this.discord.sendMessage("\u23F3 Switching model effort to: " + effLevel + "...");
+        try {
+          const switchedTo = await this.cdp.switchModel(effLevel);
+          if (this.discord?.isConnected())
+            await this.discord.sendMessage("\u2705 Model effort switched to **" + switchedTo + "**");
+        } catch (err) {
+          if (this.discord?.isConnected())
+            await this.discord.sendMessage("\u26A0\uFE0F Failed to switch effort: " + err.message);
+        }
+        return;
+      }
+      if (msgContent === "!low" || msgContent === "!medium" || msgContent === "!high") {
+        let effLevel = msgContent.substring(1).trim();
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        this.log.appendLine("[Extension] Discord shortcut to switch effort: " + effLevel);
+        if (this.discord?.isConnected())
+          await this.discord.sendMessage("\u23F3 Switching model effort to: " + effLevel + "...");
+        try {
+          const switchedTo = await this.cdp.switchModel(effLevel);
+          if (this.discord?.isConnected())
+            await this.discord.sendMessage("\u2705 Model effort switched to **" + switchedTo + "**");
+        } catch (err) {
+          if (this.discord?.isConnected())
+            await this.discord.sendMessage("\u26A0\uFE0F Failed to switch effort: " + err.message);
         }
         return;
       }
@@ -2684,13 +3610,13 @@ var oU = class {
         if (this.queue.length >= this.MAX_QUEUE) {
           (this.log.appendLine(`[Extension] Queue full, dropping from ${e.author}`),
             this.discord?.isConnected() &&
-              (await this.discord.sendMessage(`\u26A0\uFE0F Coda piena (${this.MAX_QUEUE}). Riprova pi\xF9 tardi.`)));
+              (await this.discord.sendMessage(`\u26A0\uFE0F Queue full (${this.MAX_QUEUE}). Please try again later.`)));
           return;
         }
         this.queue.push({ msg: e, enqueueTime: Date.now() });
         let i = this.queue.length;
         (this.log.appendLine(`[Extension] Queued from ${e.author} (pos ${i})`),
-          this.discord?.isConnected() && (await this.discord.sendMessage(`\u23F3 In coda (pos ${i}).`)));
+          this.discord?.isConnected() && (await this.discord.sendMessage(`\u23F3 Queued (pos ${i}).`)));
         return;
       }
       await this.processMessage(e);
@@ -2704,7 +3630,7 @@ var oU = class {
         if (!this.cdp?.isConnected()) {
           this.discord?.isConnected() &&
             (await this.discord.sendMessage(
-              "\u26A0\uFE0F Bridge non connesso. Avvia Antigravity con --remote-debugging-port=9000",
+              "\u26A0\uFE0F Bridge not connected. Start Antigravity with --remote-debugging-port=9000",
             ),
             this.discord.setPresence("idle", "\u26A0\uFE0F CDP not connected"));
           return;
@@ -2777,12 +3703,12 @@ var oU = class {
             let d = `${Date.now()}${Math.floor(Math.random() * 1e5)
               .toString()
               .padStart(5, "0")}`;
-            n = await i.send({ content: "\u23F3 Elaborazione in corso...", nonce: d, enforceNonce: !0 });
+            n = await i.send({ content: "\u23F3 Analyzing...", nonce: d, enforceNonce: !0 });
           } catch {}
         s = setInterval(async () => {
           if (((o += 2), n))
             try {
-              await n.edit(`\u23F3 Elaborazione in corso... (${o}s)`);
+              await n.edit(`\u23F3 Analyzing... (${o}s)`);
             } catch {}
         }, 2e3);
         let u = await this.cdp.waitForResponse(a, e.content);
@@ -2793,13 +3719,25 @@ var oU = class {
           n)
         )
           try {
-            await n.edit(`\u2705 Completato (${o}s)`);
+            await n.edit(`\u2705 Completed (${o}s)`);
           } catch {}
         let h = u;
-        try {
-          let d = await this.cdp.extractLastResponseMarkdown();
-          d.length > 0 && ((h = d), this.log.appendLine(`[Extension] Using markdown (${d.length} chars)`));
-        } catch {}
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            let d = await this.cdp.extractLastResponseMarkdown();
+            if (d && d.trim().length > 0) {
+              h = d.trim();
+              this.log.appendLine(`[Extension] Using markdown (${h.length} chars)`);
+              break;
+            }
+          } catch (err) {
+            this.log.appendLine(`[Extension] Markdown attempt ${attempt + 1} error: ${err}`);
+          }
+          await new Promise((p) => setTimeout(p, 600));
+        }
+        if (h === u) {
+          this.log.appendLine("[Extension] ⚠️ Markdown extraction not available, using text snapshot");
+        }
         h = this.cleanResponse(h, e.content);
         let promptComponents = null;
         try {
@@ -2853,7 +3791,7 @@ var oU = class {
             this.lastSentResponse = h.replace(/\r\n/g, "\n").trim();
             this.log.appendLine(`[Extension] \u2705 Sent to thread (${h.length} chars)`);
           } else if (h.length === 0) {
-            await this.discord.sendToThread(i, "\u26A0\uFE0F Nessuna risposta rilevata");
+            await this.discord.sendToThread(i, "\u26A0\uFE0F No response detected");
           }
         } else if (this.discord?.isConnected() && h.length > 0 && !nU(h)) {
           let sentMsg = await this.discord.sendMessage(h, promptComponents);
@@ -2875,7 +3813,7 @@ var oU = class {
               (this.conversationMap.set(i.id, d),
               this.log.appendLine(`[Extension] Conversation renamed: "${p}" \u2192 "${d}"`));
           } catch {}
-        vr.window.setStatusBarMessage(`\u2705 Discord: risposta inviata a ${e.author}`, 5e3);
+        vr.window.setStatusBarMessage(`\u2705 Discord: response sent to ${e.author}`, 5e3);
       } catch (a) {
         let c = a instanceof Error ? a.message : String(a);
         (this.log.appendLine(`[Extension] Error: ${c}`),
@@ -2883,9 +3821,9 @@ var oU = class {
           r && clearInterval(r),
           s && clearInterval(s),
           i && this.discord?.isConnected()
-            ? await this.discord.sendToThread(i, `\u26A0\uFE0F Errore: ${c}`).catch(() => {})
+            ? await this.discord.sendToThread(i, `\u26A0\uFE0F Error: ${c}`).catch(() => {})
             : this.discord?.isConnected() &&
-              (await this.discord.sendMessage(`\u26A0\uFE0F Errore: ${c}`).catch(() => {})));
+              (await this.discord.sendMessage(`\u26A0\uFE0F Error: ${c}`).catch(() => {})));
       } finally {
         if (
           ((this.state = "idle"),
@@ -2903,6 +3841,14 @@ var oU = class {
       }
     }
     cleanResponse(e, i) {
+      const promptLines = i
+        ? new Set(
+            i
+              .split("\n")
+              .map((l) => l.trim())
+              .filter((l) => l.length > 2),
+          )
+        : new Set();
       return e
         .split(
           `
@@ -2910,7 +3856,11 @@ var oU = class {
         )
         .filter((r) => {
           let n = r.trim();
-          return n.length === 0 ? !0 : !(RC(n) || (i && n === i.trim()) || /^Simple request/i.test(n));
+          if (n.length === 0) return true;
+          if (/^[-*•]\s/.test(n) || /^\d+\.\s/.test(n) || /^#{1,6}\s/.test(n) || /^```/.test(n) || /^>/.test(n) || /^─{5,}/.test(n)) {
+            return true;
+          }
+          return !(RC(n) || promptLines.has(n) || (i && n === i.trim()) || /^Simple request/i.test(n));
         })
         .join(
           `
