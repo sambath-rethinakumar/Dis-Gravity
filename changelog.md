@@ -7,6 +7,8 @@
 - 📋 Interactive prompt support: forward selection and confirmation prompts to Discord and submit choices back to IDE
 
 ### Fixed
+- 🔄 Added background task & autonomous watchdog: automatically captures and delivers completion responses and follow-up turns (e.g. after background terminal tasks or reactive agent wakeups) to the active Discord thread.
+- 📋 Added idle prompt detection: automatically discovers and forwards interactive question prompts to Discord even when triggered outside direct Discord message turns.
 - 🐛 Fixed prompt question text missing in Discord by properly stripping style, script, and SVG noise and correctly targeting rich-text question containers.
 - 🐛 Fixed missing file paths, directory chips, and symbol links in Discord responses caused by dropping `<button>` elements during HTML-to-Markdown conversion.
 - 🎨 Added table markdown parsing and preserved code block syntax highlighting language.

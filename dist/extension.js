@@ -2268,6 +2268,9 @@ var oU = class {
     activePromptMessage = null;
     activePromptData = null;
     activePromptKey = null;
+    lastActiveThread = null;
+    lastSentResponse = "";
+    lastPromptSignature = null;
     constructor(e) {
       ((this.ctx = e),
         (this.log = vr.window.createOutputChannel("Antigravity Discord")),
@@ -2363,15 +2366,155 @@ var oU = class {
     startBusyPoller() {
       this.busyPollInterval ||
         (this.busyPollInterval = setInterval(async () => {
-          if (!(!this.cdp?.isConnected() || !this.discord?.isConnected()) && this.state === "idle")
-            try {
-              let e = await this.cdp.isBusy();
-              if (this.state !== "idle") return;
-              e !== this.lastBusyState &&
-                ((this.lastBusyState = e),
-                this.discord.setPresence(e ? "dnd" : "online", e ? "Writing code" : "Waiting for commands"));
-            } catch {}
+          if (!this.cdp?.isConnected() || !this.discord?.isConnected()) return;
+          try {
+            let isBusy = await this.cdp.isBusy();
+
+            if (isBusy) {
+              if (!this.lastBusyState) {
+                this.lastBusyState = true;
+                this.discord.setPresence("dnd", "Writing code");
+              }
+              return;
+            }
+
+            let wasBusy = this.lastBusyState;
+            if (wasBusy) {
+              this.lastBusyState = false;
+              this.discord.setPresence("online", "Waiting for commands");
+            }
+
+            if (this.state !== "idle") return;
+
+            if (wasBusy) {
+              await new Promise((r) => setTimeout(r, 1500));
+              await this.checkForNewResponsesOrPrompts();
+            } else {
+              await this.checkUnhandledPrompt();
+            }
+          } catch {}
         }, 2e3));
+    }
+    async checkForNewResponsesOrPrompts() {
+      if (!this.discord?.isConnected() || !this.cdp?.isConnected()) return;
+      try {
+        let targetThread = this.lastActiveThread;
+        if (!targetThread) {
+          try {
+            let currentConv = await this.cdp.getCurrentConversationName();
+            if (currentConv) {
+              for (const [threadId, convName] of this.conversationMap.entries()) {
+                if (convName === currentConv) {
+                  targetThread = await this.discord.getThread(threadId);
+                  if (targetThread) {
+                    this.lastActiveThread = targetThread;
+                    break;
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
+
+        let promptComponents = null;
+        let promptMsg = "";
+        try {
+          let pendingPrompt = await this.cdp.getActivePrompt();
+          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
+            let sig = (pendingPrompt.question || "") + ":" + pendingPrompt.options.map((opt) => opt.id + ":" + opt.text).join("|");
+            if (this.lastPromptSignature !== sig) {
+              this.lastPromptSignature = sig;
+              let promptKey = Date.now().toString(36);
+              this.activePromptKey = promptKey;
+              this.activePromptData = pendingPrompt;
+              if (this.discord) {
+                promptComponents = this.discord.buildPromptComponents(pendingPrompt, promptKey);
+              }
+              promptMsg = "\n\n\u{1F4CB} **Selection Required:**\n";
+              if (pendingPrompt.question) {
+                promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+              }
+              pendingPrompt.options.forEach((opt) => {
+                promptMsg += "• **[" + opt.id + "]** " + opt.text + "\n";
+              });
+              if (pendingPrompt.hasWriteIn && pendingPrompt.writeInLabel) {
+                promptMsg += "• **[Other]** " + pendingPrompt.writeInLabel + "\n";
+              }
+              if (pendingPrompt.hasSkip) {
+                promptMsg += "• _Reply `skip` or tap Skip to skip_\n";
+              }
+              promptMsg += "\n\u{1F4AC} *Tap an option below, or reply in chat.*";
+              this.log.appendLine("[Extension] Background poller detected prompt (" + pendingPrompt.options.length + " options)");
+            }
+          } else {
+            this.lastPromptSignature = null;
+          }
+        } catch (err) {
+          this.log.appendLine("[Extension] Error in background prompt check: " + err);
+        }
+
+        let latestMd = "";
+        try {
+          latestMd = await this.cdp.extractLastResponseMarkdown();
+        } catch {}
+
+        if (latestMd) {
+          latestMd = this.cleanResponse(latestMd);
+        }
+
+        let toSend = "";
+        if (latestMd) {
+          const normLatest = latestMd.replace(/\r\n/g, "\n").trim();
+          const normLast = (this.lastSentResponse || "").replace(/\r\n/g, "\n").trim();
+
+          if (normLast && normLatest.startsWith(normLast)) {
+            toSend = normLatest.substring(normLast.length).trim();
+          } else if (normLatest !== normLast) {
+            if (normLast && normLatest.includes(normLast)) {
+              const idx = normLatest.indexOf(normLast);
+              toSend = normLatest.substring(idx + normLast.length).trim();
+            } else {
+              toSend = normLatest;
+            }
+          }
+        }
+
+        if (promptMsg) {
+          toSend = (toSend ? toSend + "\n" : "") + promptMsg;
+        }
+
+        if (toSend && toSend.length > 0 && !nU(toSend)) {
+          this.log.appendLine(`[Extension] Background poller sending follow-up response (${toSend.length} chars)`);
+          let sentMsg = null;
+          if (targetThread) {
+            sentMsg = await this.discord.sendToThread(targetThread, toSend, promptComponents);
+          } else {
+            sentMsg = await this.discord.sendMessage(toSend, promptComponents);
+          }
+          if (promptComponents && sentMsg) {
+            this.activePromptMessage = sentMsg;
+          }
+          if (latestMd) {
+            this.lastSentResponse = latestMd.replace(/\r\n/g, "\n").trim();
+          }
+          this.panel.addMessage("assistant", "Antigravity", toSend);
+        }
+      } catch (err) {
+        this.log.appendLine("[Extension] Error in checkForNewResponsesOrPrompts: " + err);
+      }
+    }
+    async checkUnhandledPrompt() {
+      try {
+        let pendingPrompt = await this.cdp.getActivePrompt();
+        if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
+          let sig = (pendingPrompt.question || "") + ":" + pendingPrompt.options.map((opt) => opt.id + ":" + opt.text).join("|");
+          if (this.lastPromptSignature !== sig) {
+            await this.checkForNewResponsesOrPrompts();
+          }
+        } else if (!pendingPrompt && this.lastPromptSignature) {
+          this.lastPromptSignature = null;
+        }
+      } catch {}
     }
     async handleInteraction(interaction) {
       try {
@@ -2603,6 +2746,9 @@ var oU = class {
           (d && (await this.cdp.switchConversation(d)),
             this.discord?.isConnected() && (i = await this.discord.getThread(e.threadId)));
         }
+        if (i) {
+          this.lastActiveThread = i;
+        }
         ((r = setInterval(() => {
           i && this.discord?.isConnected() && this.discord.setTypingInThread(i).catch(() => {});
         }, 5e3)),
@@ -2704,6 +2850,7 @@ var oU = class {
             if (promptComponents && sentMsg) {
               this.activePromptMessage = sentMsg;
             }
+            this.lastSentResponse = h.replace(/\r\n/g, "\n").trim();
             this.log.appendLine(`[Extension] \u2705 Sent to thread (${h.length} chars)`);
           } else if (h.length === 0) {
             await this.discord.sendToThread(i, "\u26A0\uFE0F Nessuna risposta rilevata");
@@ -2713,6 +2860,7 @@ var oU = class {
           if (promptComponents && sentMsg) {
             this.activePromptMessage = sentMsg;
           }
+          this.lastSentResponse = h.replace(/\r\n/g, "\n").trim();
         }
         if (
           (this.panel.setTyping("assistant", !1),
@@ -2762,7 +2910,7 @@ var oU = class {
         )
         .filter((r) => {
           let n = r.trim();
-          return n.length === 0 ? !0 : !(RC(n) || n === i.trim() || /^Simple request/i.test(n));
+          return n.length === 0 ? !0 : !(RC(n) || (i && n === i.trim()) || /^Simple request/i.test(n));
         })
         .join(
           `
