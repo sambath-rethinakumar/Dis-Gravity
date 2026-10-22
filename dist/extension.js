@@ -633,6 +633,30 @@ var TC = class {
           ]
         },
         {
+          name: "artifact",
+          description: "List or download AI-generated artifacts (plans, walkthroughs, patches)",
+          options: [
+            {
+              name: "name",
+              description: "Optional artifact name or keyword (e.g. walkthrough, plan.md)",
+              type: 3,
+              required: false
+            }
+          ]
+        },
+        {
+          name: "get",
+          description: "Download any workspace file or asset directly as an attachment",
+          options: [
+            {
+              name: "path",
+              description: "Relative file path in workspace",
+              type: 3,
+              required: true
+            }
+          ]
+        },
+        {
           name: "help",
           description: "Show quick reference guide for Dis-Gravity commands"
         }
@@ -937,7 +961,7 @@ var TC = class {
       }
       let rawText = opt.text || opt.id || "Option";
       let label = rawText.length > 70 ? rawText.substring(0, 67) + "..." : rawText;
-      let btnLabel = `[${opt.id}] ${label}`;
+      let btnLabel = promptData.isApproval ? label : `[${opt.id}] ${label}`;
       if (btnLabel.length > 80) btnLabel = btnLabel.substring(0, 77) + "...";
       let btn = new ri.ButtonBuilder()
         .setCustomId(`prompt:${promptKey}:opt:${opt.id}`)
@@ -1730,18 +1754,96 @@ var FC = class {
       )) || { ok: false, error: "eval_failed" }
     );
   }
+  async getActiveStepStatus() {
+    if (!this.isConnected()) return null;
+    const script = `(() => {
+      try {
+        // 1. In-progress spinner or animated elements
+        const spinners = Array.from(document.querySelectorAll('.animate-spin, svg.lucide-loader-2, svg.lucide-loader, svg.lucide-circle-dashed'));
+        for (const spin of spinners) {
+          if (spin.offsetParent === null) continue;
+          const container = spin.closest('.isolate, [class*="border"], [class*="rounded"], div.flex.items-center, div.flex.gap-x-2');
+          if (container) {
+            const text = (container.innerText || container.textContent || '').replace(/\\s+/g, ' ').trim();
+            if (text && text.length > 2 && text.length < 140) return text;
+          }
+        }
+
+        // 2. Task blocks inside last conversation turn
+        const convArea = document.querySelector('.relative.flex.flex-col.gap-y-3');
+        const turns = convArea ? Array.from(convArea.children) : Array.from(document.querySelectorAll('div[role="article"]'));
+        const lastTurn = turns[turns.length - 1];
+        if (lastTurn) {
+          const taskBlocks = Array.from(lastTurn.querySelectorAll('.isolate.mb-2, [class*="overflow-hidden"][class*="rounded"], [data-testid*="tool"], [data-testid*="task"]'));
+          if (taskBlocks.length > 0) {
+            const lastBlock = taskBlocks[taskBlocks.length - 1];
+            const header = lastBlock.querySelector('.font-medium, .font-semibold, .text-xs.font-mono, [class*="title"], div.flex.items-center span');
+            if (header) {
+              const hText = (header.innerText || header.textContent || '').replace(/\\s+/g, ' ').trim();
+              if (hText && hText.length > 2) return hText;
+            }
+            const blockText = (lastBlock.innerText || lastBlock.textContent || '').split('\\n').map(s => s.trim()).filter(Boolean)[0];
+            if (blockText && blockText.length > 2 && blockText.length < 120) return blockText;
+          }
+
+          // 3. Thinking block in last turn
+          const thinkingEl = lastTurn.querySelector('[class*="max-h-["], [data-testid*="thinking"], [data-testid*="thought"]');
+          if (thinkingEl && thinkingEl.offsetParent !== null) {
+            const summary = thinkingEl.closest('details')?.querySelector('summary') || thinkingEl.querySelector('summary, button, span');
+            const tText = (summary?.innerText || summary?.textContent || '').replace(/\\s+/g, ' ').trim();
+            if (tText) return tText;
+            return "Thinking...";
+          }
+        }
+
+        const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
+        if (cancel && cancel.offsetParent !== null) {
+          return "Generating response...";
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    })()`;
+    try {
+      const res = await this.evaluate(script, this.contextId);
+      if (res && typeof res === "string" && res.trim().length > 0) return res.trim();
+    } catch {}
+    for (const ctxId of this.allContextIds || []) {
+      if (ctxId !== this.contextId) {
+        try {
+          const res = await this.evaluate(script, ctxId);
+          if (res && typeof res === "string" && res.trim().length > 0) return res.trim();
+        } catch {}
+      }
+    }
+    return null;
+  }
+
   async getActivePrompt() {
     if (!this.isConnected()) return null;
     const evalScript = `(() => {
       const continueBtn = document.querySelector('[data-testid="interaction-continue-button"]');
       const skipBtn = document.querySelector('[data-testid="interaction-skip-button"]');
       const radios = Array.from(document.querySelectorAll('input[name^="ask-question-"]'));
-      if (!continueBtn && !skipBtn && radios.length === 0) return null;
 
-      const anchor = radios[0] || continueBtn || skipBtn;
+      // Check for approval / confirmation buttons
+      const allActionButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter((btn) => {
+        if (btn.offsetParent === null || btn.disabled) return false;
+        const txt = (btn.innerText || btn.textContent || '').trim().toLowerCase();
+        return /^(allow|always allow|deny|proceed|reject|approve|confirm|cancel|run command|run in terminal|don't run|continue|accept)$/i.test(txt) ||
+               btn.getAttribute('data-testid')?.includes('confirm') ||
+               btn.getAttribute('data-testid')?.includes('allow') ||
+               btn.getAttribute('data-testid')?.includes('approve') ||
+               btn.getAttribute('data-testid')?.includes('proceed');
+      });
+
+      if (!continueBtn && !skipBtn && radios.length === 0 && allActionButtons.length === 0) return null;
+
+      const anchor = radios[0] || continueBtn || skipBtn || allActionButtons[0];
       let card = anchor ? (anchor.closest('[class*="border"], [class*="rounded"], [role="dialog"]') || anchor.parentElement) : document;
       while (card && card !== document.body && card !== document) {
-        if (card.querySelector('[data-testid="interaction-continue-button"]') || card.querySelector('[data-testid="interaction-skip-button"]')) {
+        if (card.querySelector('[data-testid="interaction-continue-button"]') || card.querySelector('[data-testid="interaction-skip-button"]') || card.getAttribute('role') === 'dialog') {
           break;
         }
         card = card.parentElement;
@@ -1767,27 +1869,21 @@ var FC = class {
 
       let question = '';
       if (card && card !== document) {
-        // 1. Look for explicit question/title element inside card
         const explicitHeading = card.querySelector('[data-testid*="question"], [data-testid*="title"], legend, [role="heading"], h2, h3, h4');
         if (explicitHeading && !explicitHeading.closest('button') && !explicitHeading.closest('label')) {
           question = cleanQuestionText(explicitHeading);
         }
-
-        // 2. Look for .flex.min-w-0.text-sm or leading-relaxed inside card
         if (!question) {
           const qContainer = card.querySelector('.flex.min-w-0.text-sm, div.leading-relaxed, [class*="leading-relaxed"], .select-text, p');
           if (qContainer && !qContainer.closest('button') && !qContainer.closest('label')) {
             question = cleanQuestionText(qContainer);
           }
         }
-
-        // 3. Fallback to card itself
         if (!question) {
           question = cleanQuestionText(card);
         }
       }
 
-      // 4. Global fallback
       if (!question) {
         const fallbackEl = Array.from(document.querySelectorAll('.flex.min-w-0.text-sm, .leading-relaxed.font-medium, div.leading-relaxed.select-text, .text-sm.font-medium, [class*="font-medium"]'))
           .filter((el) => !el.closest('button') && !el.closest('label') && !el.closest('[role="log"]'))
@@ -1798,17 +1894,33 @@ var FC = class {
       }
       question = question.replace(/\\s+/g, ' ').trim();
 
+      let isApproval = false;
       const options = [];
-      radios.forEach((r) => {
-        if (r.value === '__write_in__') return;
-        const label = document.querySelector('label[for="' + r.id + '"]') || r.closest('label');
-        const idSpan = label ? label.querySelector('span.font-mono') : null;
-        const optId = idSpan ? (idSpan.textContent || '').trim() : r.value;
-        const spans = label ? Array.from(label.querySelectorAll('span')) : [];
-        const textSpan = spans.find((s) => s !== idSpan && (s.textContent || '').trim() !== optId);
-        const text = textSpan ? (textSpan.textContent || '').trim() : (label ? label.textContent || '' : '').trim();
-        options.push({ id: optId, text, value: r.value });
-      });
+
+      if (radios.length > 0) {
+        radios.forEach((r) => {
+          if (r.value === '__write_in__') return;
+          const label = document.querySelector('label[for="' + r.id + '"]') || r.closest('label');
+          const idSpan = label ? label.querySelector('span.font-mono') : null;
+          const optId = idSpan ? (idSpan.textContent || '').trim() : r.value;
+          const spans = label ? Array.from(label.querySelectorAll('span')) : [];
+          const textSpan = spans.find((s) => s !== idSpan && (s.textContent || '').trim() !== optId);
+          const text = textSpan ? (textSpan.textContent || '').trim() : (label ? label.textContent || '' : '').trim();
+          options.push({ id: optId, text, value: r.value });
+        });
+      } else if (allActionButtons.length > 0 || continueBtn) {
+        isApproval = true;
+        const seenTexts = new Set();
+        const candidateButtons = continueBtn ? [continueBtn, ...allActionButtons.filter(b => b !== continueBtn)] : allActionButtons;
+        candidateButtons.forEach((btn, idx) => {
+          const raw = (btn.innerText || btn.textContent || '').trim();
+          const cleanText = raw.split('\\n')[0].replace(/\\s+/g, ' ').trim();
+          if (!cleanText || seenTexts.has(cleanText.toLowerCase())) return;
+          seenTexts.add(cleanText.toLowerCase());
+          const optId = (idx + 1).toString();
+          options.push({ id: optId, text: cleanText, value: cleanText.toLowerCase(), isActionBtn: true });
+        });
+      }
 
       const writeInRadio = document.querySelector('input[value="__write_in__"]');
       let writeInLabel = null;
@@ -1824,7 +1936,8 @@ var FC = class {
       }
 
       return {
-        question,
+        isApproval,
+        question: question || (isApproval ? "Action approval requested:" : "Selection Required:"),
         options,
         hasWriteIn: !!writeInRadio,
         writeInLabel,
@@ -1834,7 +1947,7 @@ var FC = class {
 
     try {
       let res = await this.evaluate(evalScript, this.contextId);
-      if (res && (res.options?.length > 0 || res.hasWriteIn || res.hasSkip)) return res;
+      if (res && (res.options?.length > 0 || res.isApproval || res.hasWriteIn || res.hasSkip)) return res;
     } catch (err) {
       this.log?.appendLine('[CDP] getActivePrompt error on ctx ' + this.contextId + ': ' + (err?.message || err));
     }
@@ -1842,7 +1955,7 @@ var FC = class {
       if (ctxId !== this.contextId) {
         try {
           let res = await this.evaluate(evalScript, ctxId);
-          if (res && (res.options?.length > 0 || res.hasWriteIn || res.hasSkip)) {
+          if (res && (res.options?.length > 0 || res.isApproval || res.hasWriteIn || res.hasSkip)) {
             this.contextId = ctxId;
             return res;
           }
@@ -1869,7 +1982,48 @@ var FC = class {
         }
       }
 
-      // 2. Collect options
+      // 2. Action / Approval button check
+      const allActionButtons = Array.from(document.querySelectorAll('button, [role="button"], [data-testid="interaction-continue-button"]')).filter((btn) => {
+        return btn.offsetParent !== null && !btn.disabled;
+      });
+
+      const isPositive = /^(1|allow|proceed|approve|continue|confirm|run|accept|yes|y)\b/i.test(lower);
+      const isNegative = /^(2|no|n|cancel|deny|reject|abort|stop|disallow)\b/i.test(lower);
+      const isAlways = /^(always|always allow)\b/i.test(lower);
+
+      if (isAlways) {
+        const alwaysBtn = allActionButtons.find(b => (b.innerText || b.textContent || '').toLowerCase().includes('always'));
+        if (alwaysBtn) {
+          alwaysBtn.click();
+          return { ok: true, action: 'always_allow', label: (alwaysBtn.innerText || alwaysBtn.textContent || '').trim() };
+        }
+      }
+
+      if (isPositive) {
+        const targetBtn = allActionButtons.find(b => {
+          const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+          return /^(proceed|allow|approve|confirm|run command|run in terminal|continue|yes|ok)$/i.test(txt) ||
+                 b.getAttribute('data-testid') === 'interaction-continue-button';
+        });
+        if (targetBtn) {
+          targetBtn.click();
+          return { ok: true, action: 'approval_allow', label: (targetBtn.innerText || targetBtn.textContent || '').trim() };
+        }
+      }
+
+      if (isNegative) {
+        const targetBtn = allActionButtons.find(b => {
+          const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+          return /^(deny|cancel|reject|don't run|stop|no|skip)$/i.test(txt) ||
+                 b.getAttribute('data-testid') === 'interaction-skip-button';
+        });
+        if (targetBtn) {
+          targetBtn.click();
+          return { ok: true, action: 'approval_deny', label: (targetBtn.innerText || targetBtn.textContent || '').trim() };
+        }
+      }
+
+      // 3. Radio options check
       const radios = Array.from(document.querySelectorAll('input[name^="ask-question-"]'));
       const options = [];
       radios.forEach((r) => {
@@ -1883,21 +2037,12 @@ var FC = class {
         options.push({ id: optId, text, label, radio: r });
       });
 
-      // Match by ID (exact, e.g. "1", "2")
+      // Match by ID
       let match = options.find((o) => o.id.toLowerCase() === lower);
-
-      // Match by exact text (e.g. "yes", "no")
       if (!match) match = options.find((o) => o.text.toLowerCase() === lower);
+      if (!match) match = options.find((o) => o.text.toLowerCase().startsWith(lower) || lower.startsWith(o.text.toLowerCase()));
+      if (!match) match = options.find((o) => o.text.toLowerCase().includes(lower) || lower.includes(o.text.toLowerCase()));
 
-      // Match by prefix or includes
-      if (!match) {
-        match = options.find((o) => o.text.toLowerCase().startsWith(lower) || lower.startsWith(o.text.toLowerCase()));
-      }
-      if (!match) {
-        match = options.find((o) => o.text.toLowerCase().includes(lower) || lower.includes(o.text.toLowerCase()));
-      }
-
-      // Check write-in for "No" or negative response (common in permission prompt)
       const writeInRadio = document.querySelector('input[value="__write_in__"]');
       const writeInTextarea = document.querySelector('[data-testid="ask-question-writein"]');
       const writeInLabelEl = writeInRadio
@@ -1929,6 +2074,13 @@ var FC = class {
           }, 150);
         }
         return { ok: true, action: 'select_option', label: match.id + '. ' + match.text };
+      }
+
+      // Check text match against any action button
+      const matchedBtn = allActionButtons.find(b => (b.innerText || b.textContent || '').trim().toLowerCase() === lower);
+      if (matchedBtn) {
+        matchedBtn.click();
+        return { ok: true, action: 'button_click', label: (matchedBtn.innerText || matchedBtn.textContent || '').trim() };
       }
 
       if (writeInTextarea) {
@@ -3373,6 +3525,9 @@ class BaseAgentProvider {
   async switchModel(name) {
     return name;
   }
+  async getActiveStepStatus() {
+    return null;
+  }
 }
 
 class AntigravityAgentProvider extends FC {
@@ -3582,8 +3737,12 @@ class CliAgentProvider extends BaseAgentProvider {
   disconnect() {
     this.connected = false;
   }
+  currentCommand = null;
   async isBusy() {
-    return false;
+    return !!this.currentCommand;
+  }
+  async getActiveStepStatus() {
+    return this.currentCommand ? `Executing terminal command: ${this.currentCommand.substring(0, 60)}` : null;
   }
   async cancelAgent() {
     return { ok: true, method: "cli_noop" };
@@ -3592,10 +3751,15 @@ class CliAgentProvider extends BaseAgentProvider {
     return { ok: true, method: "cli_execution" };
   }
   async waitForResponse(prevSnapshot, promptText) {
-    const cwd = this.extension.getWorkspaceRoot();
-    const res = await this.extension.executeShellCommand(promptText, cwd);
-    const combined = (res.stdout + (res.stderr ? (res.stdout ? "\n" : "") + res.stderr : "")).trim();
-    return `💻 **Terminal Agent Output (${res.duration}s):**\n\`\`\`text\n${combined || "Command executed with no output."}\n\`\`\``;
+    this.currentCommand = promptText;
+    try {
+      const cwd = this.extension.getWorkspaceRoot();
+      const res = await this.extension.executeShellCommand(promptText, cwd);
+      const combined = (res.stdout + (res.stderr ? (res.stdout ? "\n" : "") + res.stderr : "")).trim();
+      return `💻 **Terminal Agent Output (${res.duration}s):**\n\`\`\`text\n${combined || "Command executed with no output."}\n\`\`\``;
+    } finally {
+      this.currentCommand = null;
+    }
   }
   async listModels() {
     return {
@@ -4214,6 +4378,226 @@ var oU = class {
       }
       return savedFiles;
     }
+    formatStepStatus(stepText, seconds) {
+      if (!stepText || !stepText.trim()) return `⏳ Analyzing... (${seconds}s)`;
+      let clean = stepText.trim().replace(/\s+/g, " ");
+      if (clean.length > 90) clean = clean.substring(0, 87) + "...";
+      let icon = "⚙️";
+      const lower = clean.toLowerCase();
+      if (lower.includes("read") || lower.includes("view") || lower.includes("cat")) icon = "🔍";
+      else if (lower.includes("edit") || lower.includes("write") || lower.includes("replace")) icon = "✏️";
+      else if (lower.includes("run") || lower.includes("exec") || lower.includes("terminal") || lower.includes("shell") || lower.includes("bash")) icon = "⚡";
+      else if (lower.includes("search") || lower.includes("grep") || lower.includes("find")) icon = "🔎";
+      else if (lower.includes("think")) icon = "💭";
+      else if (lower.includes("plan")) icon = "🧠";
+      else if (lower.includes("git")) icon = "🌿";
+      else if (lower.includes("test")) icon = "🧪";
+      return `⏳ Working (${seconds}s): ${icon} ${clean}`;
+    }
+    getBrainDir() {
+      const path = require("path");
+      const userProfile = process.env.USERPROFILE || process.env.HOME || "";
+      return path.join(userProfile, ".gemini", "antigravity-ide", "brain");
+    }
+    listRecentArtifacts(maxCount = 10) {
+      const fs = require("fs");
+      const path = require("path");
+      const brainDir = this.getBrainDir();
+      const artifacts = [];
+      const validExts = new Set([".md", ".patch", ".txt", ".json", ".png", ".jpg", ".jpeg", ".pdf", ".log"]);
+
+      if (fs.existsSync(brainDir)) {
+        try {
+          const convDirs = fs.readdirSync(brainDir)
+            .map((name) => {
+              const full = path.join(brainDir, name);
+              try { return { name, full, stat: fs.statSync(full) }; } catch { return null; }
+            })
+            .filter((d) => d && d.stat.isDirectory())
+            .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
+            .slice(0, 6);
+
+          for (const cDir of convDirs) {
+            try {
+              const files = fs.readdirSync(cDir.full);
+              for (const f of files) {
+                if (f.endsWith(".metadata.json") || f.startsWith(".")) continue;
+                const ext = path.extname(f).toLowerCase();
+                if (!validExts.has(ext)) continue;
+                const fPath = path.join(cDir.full, f);
+                try {
+                  const stat = fs.statSync(fPath);
+                  if (stat.isFile()) {
+                    artifacts.push({
+                      name: f,
+                      path: fPath,
+                      size: stat.size,
+                      mtimeMs: stat.mtimeMs,
+                      source: "brain",
+                      convId: cDir.name.substring(0, 8)
+                    });
+                  }
+                } catch {}
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+
+      const root = this.getWorkspaceRoot();
+      const searchDirs = [root, path.join(root, "scratch"), path.join(root, ".disgravity")];
+      for (const sDir of searchDirs) {
+        if (fs.existsSync(sDir)) {
+          try {
+            const files = fs.readdirSync(sDir);
+            for (const f of files) {
+              if (f.startsWith(".") || f === "node_modules" || f === "dist") continue;
+              const ext = path.extname(f).toLowerCase();
+              if (!validExts.has(ext)) continue;
+              const fPath = path.join(sDir, f);
+              try {
+                const stat = fs.statSync(fPath);
+                if (stat.isFile()) {
+                  artifacts.push({
+                    name: f,
+                    path: fPath,
+                    size: stat.size,
+                    mtimeMs: stat.mtimeMs,
+                    source: "workspace",
+                    convId: path.relative(root, sDir) || "root"
+                  });
+                }
+              } catch {}
+            }
+          } catch {}
+        }
+      }
+
+      artifacts.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      const seenPaths = new Set();
+      const unique = [];
+      for (const a of artifacts) {
+        if (!seenPaths.has(a.path)) {
+          seenPaths.add(a.path);
+          unique.push(a);
+        }
+      }
+      return unique.slice(0, maxCount);
+    }
+    findRecentlyModifiedArtifacts(sinceMs) {
+      const artifacts = this.listRecentArtifacts(8);
+      return artifacts.filter((a) => a.mtimeMs >= sinceMs && a.size <= 25 * 1024 * 1024);
+    }
+    async handleArtifactCommand(query = null) {
+      const path = require("path");
+      const artifacts = this.listRecentArtifacts(15);
+
+      if (artifacts.length === 0) {
+        return {
+          content: "ℹ️ **No recent artifacts found.** Artifacts like plans, walkthroughs, and patches will appear here once generated by the agent."
+        };
+      }
+
+      if (query && query.trim()) {
+        const qLower = query.trim().toLowerCase();
+        const matched = artifacts.find((a) => a.name.toLowerCase().includes(qLower) || a.path.toLowerCase().includes(qLower));
+        if (matched) {
+          if (matched.size > 25 * 1024 * 1024) {
+            return {
+              content: `⚠️ **Artifact too large for Discord attachment:** \`${matched.name}\` (${(matched.size / (1024 * 1024)).toFixed(1)} MB exceeds the 25MB Discord limit).`
+            };
+          }
+          return {
+            content: `📦 **Artifact Download:** \`${matched.name}\` (${(matched.size / 1024).toFixed(1)} KB | Source: \`${matched.source}\`)\n\`${matched.path}\``,
+            files: [{ attachment: matched.path, name: matched.name }]
+          };
+        }
+        let notFoundMsg = `❌ **No artifact matching \`${query}\` found.**\n\n📋 **Available Recent Artifacts:**\n`;
+        artifacts.slice(0, 8).forEach((a, i) => {
+          notFoundMsg += `${i + 1}. \`${a.name}\` (${(a.size / 1024).toFixed(1)} KB | ${a.source})\n`;
+        });
+        notFoundMsg += `\n💡 Use \`/artifact\` or tap a button below to view available artifacts.`;
+        return { content: notFoundMsg };
+      }
+
+      let msg = `📦 **Recent Generated Artifacts (${artifacts.length}):**\n\n`;
+      artifacts.slice(0, 8).forEach((a, idx) => {
+        const timeAgo = Math.max(1, Math.round((Date.now() - a.mtimeMs) / 60000));
+        const timeStr = timeAgo < 60 ? `${timeAgo}m ago` : `${Math.round(timeAgo / 60)}h ago`;
+        msg += `**${idx + 1}.** \`${a.name}\` (${(a.size / 1024).toFixed(1)} KB, ${timeStr})\n`;
+      });
+      msg += `\n📥 *Select an artifact below to download directly to Discord:*`;
+
+      const select = new ri.StringSelectMenuBuilder()
+        .setCustomId("action:get_artifact")
+        .setPlaceholder("📥 Select an artifact to download...")
+        .setMaxValues(1)
+        .setMinValues(1);
+
+      artifacts.slice(0, 10).forEach((a) => {
+        select.addOptions({
+          label: a.name.length > 50 ? a.name.substring(0, 47) + "..." : a.name,
+          description: `${(a.size / 1024).toFixed(1)} KB • ${a.source} (${a.convId})`.substring(0, 100),
+          value: a.name
+        });
+      });
+
+      const row = new ri.ActionRowBuilder().addComponents(select);
+      const latestBtn = new ri.ButtonBuilder()
+        .setCustomId(`action:dl_artifact:${artifacts[0].name}`)
+        .setLabel(`📥 Download Latest (${artifacts[0].name.substring(0, 40)})`)
+        .setStyle(ri.ButtonStyle.Primary);
+      const btnRow = new ri.ActionRowBuilder().addComponents(latestBtn);
+
+      return {
+        content: msg,
+        components: [row, btnRow]
+      };
+    }
+    async handleGetFile(targetPath) {
+      const fs = require("fs");
+      const path = require("path");
+      if (!targetPath || !targetPath.trim()) {
+        return { content: "⚠️ Please specify a file path to download." };
+      }
+      const root = this.getWorkspaceRoot();
+      const brainDir = this.getBrainDir();
+      const rawPath = targetPath.trim();
+      const resolved = path.isAbsolute(rawPath) ? path.resolve(rawPath) : path.resolve(root, rawPath);
+
+      const isInsideRoot = resolved.toLowerCase().startsWith(path.resolve(root).toLowerCase());
+      const isInsideBrain = resolved.toLowerCase().startsWith(path.resolve(brainDir).toLowerCase());
+      if (!isInsideRoot && !isInsideBrain) {
+        return {
+          content: `⛔ **Access Denied:** Path must be within the workspace or Antigravity artifact directory.\nRequested: \`${rawPath}\``
+        };
+      }
+
+      if (!fs.existsSync(resolved)) {
+        return { content: `❌ **File not found:** \`${rawPath}\`` };
+      }
+
+      let stat;
+      try { stat = fs.statSync(resolved); } catch (err) {
+        return { content: `⚠️ **Error accessing file:** ${err.message}` };
+      }
+
+      if (stat.isDirectory()) {
+        return { content: `📁 **\`${rawPath}\` is a directory.** Use \`/tree\` to inspect directory contents or specify a file.` };
+      }
+
+      if (stat.size > 25 * 1024 * 1024) {
+        return {
+          content: `⚠️ **File too large for Discord attachment:** \`${path.basename(resolved)}\` (${(stat.size / (1024 * 1024)).toFixed(1)} MB exceeds the 25MB Discord limit).`
+        };
+      }
+
+      const rel = path.relative(root, resolved).replace(/\\/g, "/");
+      return {
+        content: `📥 **File Download:** \`${rel || path.basename(resolved)}\` (${(stat.size / 1024).toFixed(1)} KB)`,
+        files: [{ attachment: resolved, name: path.basename(resolved) }]
+      };
+    }
     async start() {
       (this.log.appendLine(`[Extension] [PID=${process.pid}] Antigravity Discord Bridge activated`),
         this.log.show(!0),
@@ -4335,7 +4719,7 @@ var oU = class {
         let promptMsg = "";
         try {
           let pendingPrompt = await this.cdp.getActivePrompt();
-          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
+          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.isApproval || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
             let sig = (pendingPrompt.question || "") + ":" + pendingPrompt.options.map((opt) => opt.id + ":" + opt.text).join("|");
             if (this.lastPromptSignature !== sig) {
               this.lastPromptSignature = sig;
@@ -4345,20 +4729,32 @@ var oU = class {
               if (this.discord) {
                 promptComponents = this.discord.buildPromptComponents(pendingPrompt, promptKey);
               }
-              promptMsg = "\n\n\u{1F4CB} **Selection Required:**\n";
-              if (pendingPrompt.question) {
-                promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+              if (pendingPrompt.isApproval) {
+                promptMsg = "\n\n\u{1F6E1}\uFE0F **Action Approval Required:**\n";
+                if (pendingPrompt.question) {
+                  promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+                }
+                pendingPrompt.options.forEach((opt) => {
+                  const icon = /^(allow|proceed|run|yes|approve|continue)/i.test(opt.text) ? "\u{1F7E2}" : (/^(deny|reject|cancel|no)/i.test(opt.text) ? "\u{1F534}" : "\u{1F6E1}\uFE0F");
+                  promptMsg += `• ${icon} **${opt.text}**\n`;
+                });
+                promptMsg += "\n\u26A1 *Tap an action button below, or reply in chat.*";
+              } else {
+                promptMsg = "\n\n\u{1F4CB} **Selection Required:**\n";
+                if (pendingPrompt.question) {
+                  promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+                }
+                pendingPrompt.options.forEach((opt) => {
+                  promptMsg += "• **[" + opt.id + "]** " + opt.text + "\n";
+                });
+                if (pendingPrompt.hasWriteIn && pendingPrompt.writeInLabel) {
+                  promptMsg += "• **[Other]** " + pendingPrompt.writeInLabel + "\n";
+                }
+                if (pendingPrompt.hasSkip) {
+                  promptMsg += "• _Reply `skip` or tap Skip to skip_\n";
+                }
+                promptMsg += "\n\u{1F4AC} *Tap an option below, or reply in chat.*";
               }
-              pendingPrompt.options.forEach((opt) => {
-                promptMsg += "• **[" + opt.id + "]** " + opt.text + "\n";
-              });
-              if (pendingPrompt.hasWriteIn && pendingPrompt.writeInLabel) {
-                promptMsg += "• **[Other]** " + pendingPrompt.writeInLabel + "\n";
-              }
-              if (pendingPrompt.hasSkip) {
-                promptMsg += "• _Reply `skip` or tap Skip to skip_\n";
-              }
-              promptMsg += "\n\u{1F4AC} *Tap an option below, or reply in chat.*";
               this.log.appendLine("[Extension] Background poller detected prompt (" + pendingPrompt.options.length + " options)");
             }
           } else {
@@ -4427,7 +4823,7 @@ var oU = class {
     async checkUnhandledPrompt() {
       try {
         let pendingPrompt = await this.cdp.getActivePrompt();
-        if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
+        if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.isApproval || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
           let sig = (pendingPrompt.question || "") + ":" + pendingPrompt.options.map((opt) => opt.id + ":" + opt.text).join("|");
           if (this.lastPromptSignature !== sig) {
             await this.checkForNewResponsesOrPrompts();
@@ -4574,6 +4970,28 @@ var oU = class {
             this.log.appendLine(`[File] Executing /open ${filePath} from ${interaction.user?.displayName || interaction.user?.username}`);
             const openRes = await this.handleOpenFile(filePath);
             await this.safeReply(interaction, { content: openRes });
+            return;
+          }
+
+          if (cmd === "artifact") {
+            const name = interaction.options.getString("name");
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[Artifact] Executing /artifact ${name || ""} from ${interaction.user?.displayName || interaction.user?.username}`);
+            const res = await this.handleArtifactCommand(name);
+            await this.safeReply(interaction, res);
+            return;
+          }
+
+          if (cmd === "get") {
+            const filePath = interaction.options.getString("path") || "";
+            if (!filePath) {
+              await interaction.reply({ content: "⚠️ Please specify a file path to download.", ephemeral: true }).catch(() => {});
+              return;
+            }
+            await interaction.deferReply().catch(() => {});
+            this.log.appendLine(`[File] Executing /get ${filePath} from ${interaction.user?.displayName || interaction.user?.username}`);
+            const getRes = await this.handleGetFile(filePath);
+            await this.safeReply(interaction, getRes);
             return;
           }
 
@@ -4781,11 +5199,22 @@ var oU = class {
             helpMsg += "• `/cat <path> [start] [end]` — Read remote files with line numbers and syntax highlighting (`!cat`)\n";
             helpMsg += "• `/tree [dir] [depth]` — View visual project directory tree (`!tree`)\n";
             helpMsg += "• `/open <path>` — Open a file in an active editor tab in the IDE (`!open`)\n";
+            helpMsg += "• `/artifact [name]` — List or download AI artifacts (plans, walkthroughs, patches) (`!artifact`)\n";
+            helpMsg += "• `/get <path>` — Download workspace file or asset as Discord attachment (`!get`, `!download`)\n";
             helpMsg += "• `/new` — Start a fresh conversation in the IDE\n";
-            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, etc.)*";
+            helpMsg += "\n💡 *You can type these as Discord slash commands (`/`) or plain text (`!palette`, `!reload`, `!sh`, `!git`, `!diff`, `!cat`, `!tree`, `!open`, `!artifact`, `!get`, etc.)*";
             await this.safeReply(interaction, { content: helpMsg, ephemeral: true });
             return;
           }
+          return;
+        }
+
+        if (interaction.isStringSelectMenu() && interaction.customId === "action:get_artifact") {
+          const selectedArtifact = interaction.values?.[0];
+          if (!selectedArtifact) return;
+          await interaction.deferReply().catch(() => {});
+          const res = await this.handleArtifactCommand(selectedArtifact);
+          await this.safeReply(interaction, res);
           return;
         }
 
@@ -4936,6 +5365,13 @@ var oU = class {
             const combined = (res.stdout + (res.stderr ? (res.stdout ? "\n" : "") + res.stderr : "")).trim();
             const formatted = `${statusIcon} **Git Push (${res.code === 0 ? "Success" : "Failed"})** in \`${res.duration}s\`\n\`\`\`text\n${combined || "Completed with no output."}\n\`\`\``;
             await this.safeReply(interaction, formatted);
+            return;
+          }
+          if (actionType === "dl_artifact") {
+            const artifactName = parts.slice(2).join(":");
+            await interaction.deferReply().catch(() => {});
+            const res = await this.handleArtifactCommand(artifactName);
+            await this.safeReply(interaction, res);
             return;
           }
           return;
@@ -5332,6 +5768,47 @@ var oU = class {
             else await this.discord.sendMessage(openRes);
           } else {
             await this.discord.sendMessage(openRes);
+          }
+        }
+        return;
+      }
+
+      // Artifact command (!artifact [name] or /artifact [name])
+      if (msgContent === "!artifact" || msgContent.startsWith("!artifact ") || msgContent === "/artifact" || msgContent.startsWith("/artifact ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const q = msgContent.startsWith("!artifact") ? msgContent.substring(9).trim() : msgContent.substring(9).trim();
+        this.log.appendLine(`[Artifact] Executing !artifact ${q} from ${e.author}`);
+        const artData = await this.handleArtifactCommand(q || null);
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, artData.content, artData.components || null, artData.files || null);
+            else await this.discord.sendMessage(artData.content, artData.components || null, artData.files || null);
+          } else {
+            await this.discord.sendMessage(artData.content, artData.components || null, artData.files || null);
+          }
+        }
+        return;
+      }
+
+      // Get file command (!get <path> or !download <path>)
+      if (msgContent.startsWith("!get ") || msgContent.startsWith("/get ") || msgContent.startsWith("!download ") || msgContent.startsWith("/download ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const p = msgContent.replace(/^(!get|\/get|!download|\/download)\s+/, "").trim();
+        if (!p) return;
+        this.log.appendLine(`[File] Executing !get ${p} from ${e.author}`);
+        const getData = await this.handleGetFile(p);
+        if (this.discord?.isConnected()) {
+          if (e.threadId) {
+            let thread = await this.discord.getThread(e.threadId);
+            if (thread) await this.discord.sendToThread(thread, getData.content, null, getData.files || null);
+            else await this.discord.sendMessage(getData.content, null, getData.files || null);
+          } else {
+            await this.discord.sendMessage(getData.content, null, getData.files || null);
           }
         }
         return;
@@ -5779,6 +6256,7 @@ var oU = class {
             await this.discord.sendToThread(i, `\u2705 Selected: **${c.details?.label || e.content}**`).catch(() => {});
           }
         }
+        const promptStartTime = Date.now();
         let l = !1;
         for (let d = 0; d < 6 && !l; d++) (await new Promise((p) => setTimeout(p, 500)), (l = await this.cdp.isBusy()));
         if (
@@ -5793,12 +6271,24 @@ var oU = class {
               .padStart(5, "0")}`;
             n = await i.send({ content: "\u23F3 Analyzing...", nonce: d, enforceNonce: !0 });
           } catch {}
+        let lastStatusEdit = "";
         s = setInterval(async () => {
-          if (((o += 2), n))
-            try {
-              await n.edit(`\u23F3 Analyzing... (${o}s)`);
-            } catch {}
-        }, 2e3);
+          o += 2;
+          if (!n) return;
+          try {
+            let step = null;
+            if (this.agentProvider && typeof this.agentProvider.getActiveStepStatus === "function") {
+              step = await this.agentProvider.getActiveStepStatus();
+            } else if (this.cdp && typeof this.cdp.getActiveStepStatus === "function") {
+              step = await this.cdp.getActiveStepStatus();
+            }
+            let formatted = this.formatStepStatus(step, o);
+            if (formatted !== lastStatusEdit) {
+              lastStatusEdit = formatted;
+              await n.edit(formatted).catch(() => {});
+            }
+          } catch {}
+        }, 2500);
         let u = await this.cdp.waitForResponse(a, e.content);
         if (
           (r && clearInterval(r),
@@ -5830,27 +6320,40 @@ var oU = class {
         let promptComponents = null;
         try {
           let pendingPrompt = await this.cdp.getActivePrompt();
-          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
+          if (pendingPrompt && (pendingPrompt.options.length > 0 || pendingPrompt.isApproval || pendingPrompt.hasWriteIn || pendingPrompt.hasSkip)) {
             let promptKey = Date.now().toString(36);
             this.activePromptKey = promptKey;
             this.activePromptData = pendingPrompt;
             if (this.discord) {
               promptComponents = this.discord.buildPromptComponents(pendingPrompt, promptKey);
             }
-            let promptMsg = "\n\n\u{1F4CB} **Selection Required:**\n";
-            if (pendingPrompt.question) {
-              promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+            let promptMsg = "";
+            if (pendingPrompt.isApproval) {
+              promptMsg = "\n\n\u{1F6E1}\uFE0F **Action Approval Required:**\n";
+              if (pendingPrompt.question) {
+                promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+              }
+              pendingPrompt.options.forEach((opt) => {
+                const icon = /^(allow|proceed|run|yes|approve|continue)/i.test(opt.text) ? "\u{1F7E2}" : (/^(deny|reject|cancel|no)/i.test(opt.text) ? "\u{1F534}" : "\u{1F6E1}\uFE0F");
+                promptMsg += `• ${icon} **${opt.text}**\n`;
+              });
+              promptMsg += "\n\u26A1 *Tap an action button below, or reply in chat.*";
+            } else {
+              promptMsg = "\n\n\u{1F4CB} **Selection Required:**\n";
+              if (pendingPrompt.question) {
+                promptMsg += "> **" + pendingPrompt.question + "**\n\n";
+              }
+              pendingPrompt.options.forEach((opt) => {
+                promptMsg += "• **[" + opt.id + "]** " + opt.text + "\n";
+              });
+              if (pendingPrompt.hasWriteIn && pendingPrompt.writeInLabel) {
+                promptMsg += "• **[Other]** " + pendingPrompt.writeInLabel + "\n";
+              }
+              if (pendingPrompt.hasSkip) {
+                promptMsg += "• _Reply `skip` or tap Skip to skip_\n";
+              }
+              promptMsg += "\n\u{1F4AC} *Tap an option below, or reply in chat.*";
             }
-            pendingPrompt.options.forEach((opt) => {
-              promptMsg += "• **[" + opt.id + "]** " + opt.text + "\n";
-            });
-            if (pendingPrompt.hasWriteIn && pendingPrompt.writeInLabel) {
-              promptMsg += "• **[Other]** " + pendingPrompt.writeInLabel + "\n";
-            }
-            if (pendingPrompt.hasSkip) {
-              promptMsg += "• _Reply `skip` or tap Skip to skip_\n";
-            }
-            promptMsg += "\n\u{1F4AC} *Tap an option below, or reply in chat.*";
             h = (h ? h + "\n" : "") + promptMsg;
             this.log.appendLine("[Extension] Appended prompt to response (" + pendingPrompt.options.length + " options, " + (promptComponents?.length || 0) + " action rows)");
           } else {
@@ -5861,6 +6364,13 @@ var oU = class {
         } catch (promptErr) {
           this.log.appendLine("[Extension] Error checking pending prompt: " + promptErr);
         }
+
+        const recentArtifacts = this.findRecentlyModifiedArtifacts(promptStartTime - 1000);
+        const autoFiles = recentArtifacts.map((a) => ({ attachment: a.path, name: a.name }));
+        if (autoFiles.length > 0) {
+          this.log.appendLine(`[Extension] Auto-attaching ${autoFiles.length} newly modified artifacts: ${autoFiles.map((f) => f.name).join(", ")}`);
+        }
+
         if (
           (this.log.appendLine(`[Extension] Cleaned: ${h.length} chars`),
           i && this.discord?.isConnected())
@@ -5872,17 +6382,17 @@ var oU = class {
                 await this.discord.sendToThread(i, `\u{1F4AD} ||${d.substring(m, m + 1990)}||`);
           } catch {}
           if (h.length > 0 && !nU(h)) {
-            let sentMsg = await this.discord.sendToThread(i, h, promptComponents);
+            let sentMsg = await this.discord.sendToThread(i, h, promptComponents, autoFiles.length > 0 ? autoFiles : null);
             if (promptComponents && sentMsg) {
               this.activePromptMessage = sentMsg;
             }
             this.lastSentResponse = h.replace(/\r\n/g, "\n").trim();
             this.log.appendLine(`[Extension] \u2705 Sent to thread (${h.length} chars)`);
           } else if (h.length === 0) {
-            await this.discord.sendToThread(i, "\u26A0\uFE0F No response detected");
+            await this.discord.sendToThread(i, "\u26A0\uFE0F No response detected", null, autoFiles.length > 0 ? autoFiles : null);
           }
         } else if (this.discord?.isConnected() && h.length > 0 && !nU(h)) {
-          let sentMsg = await this.discord.sendMessage(h, promptComponents);
+          let sentMsg = await this.discord.sendMessage(h, promptComponents, autoFiles.length > 0 ? autoFiles : null);
           if (promptComponents && sentMsg) {
             this.activePromptMessage = sentMsg;
           }
