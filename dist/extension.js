@@ -1074,8 +1074,15 @@ async function renderTableHeadlessFallback(tableData) {
     const width = Math.min(1200, Math.max(450, colCount * 180));
     const height = Math.min(1000, Math.max(200, (rowCount + 2) * 45 + 80));
 
-    const cmd = `"${browserPath}" --headless --disable-gpu --hide-scrollbars --screenshot="${tempPng}" --window-size=${width},${height} "file:///${tempHtml.replace(/\\/g, '/')}"`;
-    cp.execSync(cmd, { timeout: 6000, stdio: 'ignore' });
+    const args = [
+      '--headless',
+      '--disable-gpu',
+      '--hide-scrollbars',
+      `--screenshot=${tempPng}`,
+      `--window-size=${width},${height}`,
+      `file:///${tempHtml.replace(/\\/g, '/')}`
+    ];
+    cp.execFileSync(browserPath, args, { timeout: 6000, stdio: 'ignore' });
 
     if (fs.existsSync(tempPng)) {
       const buf = fs.readFileSync(tempPng);
@@ -1698,9 +1705,13 @@ var TC = class {
     }
     row.addComponents(
       new ri.ButtonBuilder()
-        .setCustomId("action:new_chat")
-        .setLabel("🔄 New Chat")
+        .setCustomId("action:refresh_status")
+        .setLabel("🔄 Refresh")
         .setStyle(ri.ButtonStyle.Primary),
+      new ri.ButtonBuilder()
+        .setCustomId("action:new_chat")
+        .setLabel("💬 New Chat")
+        .setStyle(ri.ButtonStyle.Secondary),
       new ri.ButtonBuilder()
         .setCustomId("action:show_models")
         .setLabel("⚡ Models")
@@ -2226,6 +2237,7 @@ var ol = Xn(require("vscode")),
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' var(--vscode-*); script-src 'unsafe-inline';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
     * {
@@ -5368,9 +5380,14 @@ Final Answer: <your full markdown response to the user>`
               let observation = "";
               try {
                 if (toolName === "view_file") {
-                  const filePath = path.resolve(root, toolArgs.path || toolArgs.file || "");
-                  if (!fs.existsSync(filePath)) {
-                    observation = `Error: File not found: ${toolArgs.path}`;
+                  const target = toolArgs.path || toolArgs.file || "";
+                  const filePath = path.resolve(root, target);
+                  const rel = path.relative(path.resolve(root).toLowerCase(), filePath.toLowerCase());
+                  const isInside = rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+                  if (!isInside) {
+                    observation = `Error: Access Denied. Path must be inside workspace root: ${target}`;
+                  } else if (!fs.existsSync(filePath)) {
+                    observation = `Error: File not found: ${target}`;
                   } else {
                     const lines = fs.readFileSync(filePath, "utf8").split("\n");
                     const start = Math.max(1, toolArgs.start_line || 1);
@@ -5379,11 +5396,18 @@ Final Answer: <your full markdown response to the user>`
                     if (observation.length > 3000) observation = observation.substring(0, 3000) + "\n... (truncated)";
                   }
                 } else if (toolName === "edit_file") {
-                  const filePath = path.resolve(root, toolArgs.path || toolArgs.file || "");
-                  const content = toolArgs.content || "";
-                  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-                  fs.writeFileSync(filePath, content, "utf8");
-                  observation = `File ${toolArgs.path} updated successfully (${content.length} bytes written).`;
+                  const target = toolArgs.path || toolArgs.file || "";
+                  const filePath = path.resolve(root, target);
+                  const rel = path.relative(path.resolve(root).toLowerCase(), filePath.toLowerCase());
+                  const isInside = rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+                  if (!isInside) {
+                    observation = `Error: Access Denied. Path must be inside workspace root: ${target}`;
+                  } else {
+                    const content = toolArgs.content || "";
+                    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+                    fs.writeFileSync(filePath, content, "utf8");
+                    observation = `File ${target} updated successfully (${content.length} bytes written).`;
+                  }
                 } else if (toolName === "run_command") {
                   const cmdStr = toolArgs.command || toolArgs.cmd || "";
                   const cmdRes = await this.extension.executeShell(cmdStr, 30000);
@@ -5395,9 +5419,14 @@ Final Answer: <your full markdown response to the user>`
                   observation = diffRes.stdout.trim() || "No git diff changes detected.";
                   if (observation.length > 3000) observation = observation.substring(0, 3000) + "\n... (truncated)";
                 } else if (toolName === "list_dir") {
-                  const targetDir = path.resolve(root, toolArgs.path || ".");
-                  if (!fs.existsSync(targetDir)) {
-                    observation = `Error: Directory not found: ${toolArgs.path}`;
+                  const target = toolArgs.path || ".";
+                  const targetDir = path.resolve(root, target);
+                  const rel = path.relative(path.resolve(root).toLowerCase(), targetDir.toLowerCase());
+                  const isInside = rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+                  if (!isInside) {
+                    observation = `Error: Access Denied. Directory must be inside workspace root: ${target}`;
+                  } else if (!fs.existsSync(targetDir)) {
+                    observation = `Error: Directory not found: ${target}`;
                   } else {
                     const entries = fs.readdirSync(targetDir, { withFileTypes: true });
                     observation = entries.slice(0, 50).map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`).join("\n");
@@ -5753,6 +5782,8 @@ var oU = class {
     lastActiveThread = null;
     lastSentResponse = "";
     lastPromptSignature = null;
+    isStartingUp = !1;
+    lastStatusNotifyTime = 0;
     constructor(e) {
       ((this.ctx = e),
         (this.log = vr.window.createOutputChannel("Antigravity Discord")),
@@ -5910,12 +5941,27 @@ var oU = class {
     }
     resolvePath(targetPath) {
       const path = require("path");
-      const root = this.getWorkspaceRoot();
-      const resolved = path.isAbsolute(targetPath) ? path.resolve(targetPath) : path.resolve(root, targetPath);
+      const root = path.resolve(this.getWorkspaceRoot());
+      const brainDir = typeof this.getBrainDir === "function" ? path.resolve(this.getBrainDir()) : null;
+      const rawResolved = path.isAbsolute(targetPath) ? path.resolve(targetPath) : path.resolve(root, targetPath);
+
+      const relRoot = path.relative(root.toLowerCase(), rawResolved.toLowerCase());
+      const isInsideRoot = relRoot === "" || (!relRoot.startsWith("..") && !path.isAbsolute(relRoot));
+
+      let isInsideBrain = false;
+      if (brainDir) {
+        const relBrain = path.relative(brainDir.toLowerCase(), rawResolved.toLowerCase());
+        isInsideBrain = relBrain === "" || (!relBrain.startsWith("..") && !path.isAbsolute(relBrain));
+      }
+
+      const isAllowed = isInsideRoot || isInsideBrain;
+
       return {
         root,
-        resolved,
-        relative: path.relative(root, resolved).replace(/\\/g, "/")
+        resolved: isAllowed ? rawResolved : null,
+        rawResolved,
+        isAllowed,
+        relative: path.relative(root, rawResolved).replace(/\\/g, "/")
       };
     }
     async safeReply(interaction, payload) {
@@ -6072,7 +6118,11 @@ var oU = class {
     async handleCatFile(filePath, startLine = null, endLine = null) {
       const fs = require("fs");
       const path = require("path");
-      const { root, resolved, relative } = this.resolvePath(filePath);
+      const { root, resolved, relative, isAllowed } = this.resolvePath(filePath);
+
+      if (!isAllowed || !resolved) {
+        return { content: clampDiscordContent(`⛔ **Access Denied:** Path must be within the active workspace.\nRequested: \`${filePath}\``, 1900) };
+      }
 
       if (!fs.existsSync(resolved)) {
         return { content: clampDiscordContent(`❌ **File not found:** \`${filePath}\``, 1900) };
@@ -6153,7 +6203,11 @@ var oU = class {
     async handleTree(dirPath = ".", maxDepth = 2) {
       const fs = require("fs");
       const path = require("path");
-      const { root, resolved, relative } = this.resolvePath(dirPath || ".");
+      const { root, resolved, relative, isAllowed } = this.resolvePath(dirPath || ".");
+
+      if (!isAllowed || !resolved) {
+        return clampDiscordContent(`⛔ **Access Denied:** Directory must be within the active workspace.\nRequested: \`${dirPath}\``, 1900);
+      }
 
       if (!fs.existsSync(resolved)) {
         return clampDiscordContent(`❌ **Directory not found:** \`${dirPath}\``, 1900);
@@ -6238,7 +6292,12 @@ var oU = class {
     }
     async handleOpenFile(filePath) {
       const fs = require("fs");
-      const { root, resolved, relative } = this.resolvePath(filePath);
+      const { root, resolved, relative, isAllowed } = this.resolvePath(filePath);
+
+      if (!isAllowed || !resolved) {
+        return `⛔ **Access Denied:** Path must be within the active workspace.\nRequested: \`${filePath}\``;
+      }
+
       if (!fs.existsSync(resolved)) {
         return `❌ **Cannot open file:** \`${filePath}\` not found.`;
       }
@@ -6357,13 +6416,33 @@ var oU = class {
       }
 
       const savedFiles = [];
+      const allowedHosts = ["cdn.discordapp.com", "media.discordapp.net"];
       for (const att of attachments) {
         try {
           const url = typeof att === "string" ? att : att.url;
           if (!url) continue;
+
+          let parsedUrl;
+          try {
+            parsedUrl = new URL(url);
+          } catch {
+            this.log.appendLine(`[Attachments] Invalid attachment URL: ${url}`);
+            continue;
+          }
+
+          if (parsedUrl.protocol !== "https:") {
+            this.log.appendLine(`[Attachments] Insecure attachment protocol rejected: ${parsedUrl.protocol}`);
+            continue;
+          }
+
+          if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
+            this.log.appendLine(`[Attachments] Untrusted host rejected (SSRF protection): ${parsedUrl.hostname}`);
+            continue;
+          }
+
           const rawName = (typeof att === "object" && att.name) 
             ? att.name 
-            : path.basename(new URL(url).pathname) || "attachment";
+            : path.basename(parsedUrl.pathname) || "attachment";
           const safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, "_");
           const timestamp = Date.now();
           const fileName = `${timestamp}_${safeName}`;
@@ -6577,14 +6656,10 @@ var oU = class {
       if (!targetPath || !targetPath.trim()) {
         return { content: "⚠️ Please specify a file path to download." };
       }
-      const root = this.getWorkspaceRoot();
-      const brainDir = this.getBrainDir();
       const rawPath = targetPath.trim();
-      const resolved = path.isAbsolute(rawPath) ? path.resolve(rawPath) : path.resolve(root, rawPath);
+      const { root, resolved, isAllowed } = this.resolvePath(rawPath);
 
-      const isInsideRoot = resolved.toLowerCase().startsWith(path.resolve(root).toLowerCase());
-      const isInsideBrain = resolved.toLowerCase().startsWith(path.resolve(brainDir).toLowerCase());
-      if (!isInsideRoot && !isInsideBrain) {
+      if (!isAllowed || !resolved) {
         return {
           content: `⛔ **Access Denied:** Path must be within the workspace or Antigravity artifact directory.\nRequested: \`${rawPath}\``
         };
@@ -6615,12 +6690,108 @@ var oU = class {
         files: [{ attachment: resolved, name: path.basename(resolved) }]
       };
     }
+    async getStatusPayload(customHeader = null) {
+      const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
+      const providerConnected = !!this.cdp?.isConnected();
+      const hostApp = vr.env?.appName || "Antigravity IDE";
+      const providerName = this.cdp?.displayName || "Google Antigravity (CDP :9000)";
+      let currentModel = "Unknown";
+      let currentEffort = null;
+      let usage = "N/A";
+      try {
+        const modelList = await this.cdp?.listModels();
+        if (modelList?.currentModel) currentModel = modelList.currentModel;
+        if (modelList?.currentEffort) currentEffort = modelList.currentEffort;
+        if (modelList?.statusBar) usage = modelList.statusBar;
+      } catch {}
+
+      let statusMsg = "";
+      if (customHeader) {
+        statusMsg += `${customHeader}\n\n`;
+      }
+      statusMsg += "📊 **Dis-Gravity Bridge & Agent Status**\n\n";
+      statusMsg += `• **Host IDE:** 💻 **${hostApp}**\n`;
+      statusMsg += `• **Agent Provider:** 🤖 **${providerName}**\n`;
+      statusMsg += `• **Bridge Status:** ${providerConnected ? "🟢 Connected" : "🔴 Disconnected"}\n`;
+      statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
+      statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
+      statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
+      const tableStyle = vr.workspace.getConfiguration("antigravity-discord").get("tableStyle", "rounded");
+      statusMsg += `• **Table Style:** 📐 **${tableStyle}**\n`;
+      statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
+      if (!providerConnected) {
+        statusMsg += `\n> 💡 *Agent bridge disconnected. Launch your IDE with \`--remote-debugging-port=9000\` (Antigravity/Cursor/Windsurf) or switch \`agentProvider\` to \`copilot\` (requires no port).*`;
+      }
+      const rawAllowedUsers = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
+      if (!rawAllowedUsers || rawAllowedUsers.trim().length === 0) {
+        statusMsg += `\n> ⚠️ *Security notice: No \`allowedUsers\` configured. Add your Discord User ID in settings to restrict access.*`;
+      }
+
+      const actionRow = this.discord?.buildStatusActionRow(isBusy);
+      const effortRow = this.discord?.buildEffortActionRow(currentEffort);
+      const components = [];
+      if (actionRow) components.push(actionRow);
+      if (effortRow) components.push(effortRow);
+
+      return { content: clampDiscordContent(statusMsg, 1900), components };
+    }
+    async notifyCurrentStatus(customHeader = null) {
+      if (!this.discord?.isConnected()) {
+        this.log.appendLine("[Status Notification] Discord not connected, skipping status notification");
+        return;
+      }
+
+      const now = Date.now();
+      if (this.lastStatusNotifyTime && (now - this.lastStatusNotifyTime < 3000)) {
+        this.log.appendLine("[Status Notification] Debounced duplicate status notification");
+        return;
+      }
+      this.lastStatusNotifyTime = now;
+
+      try {
+        const payload = await this.getStatusPayload(customHeader);
+        await this.discord.sendMessage(payload.content, payload.components?.length > 0 ? payload.components : null);
+        this.log.appendLine(`[Status Notification] Sent automatic status notification to #${this.discord.channel?.name || this.discord.channelId}`);
+      } catch (err) {
+        this.log.appendLine(`[Status Notification] Failed to send automatic status notification: ${err.message}`);
+      }
+    }
     async start() {
+      this.isStartingUp = true;
       (this.log.appendLine(`[Extension] [PID=${process.pid}] Antigravity Discord Bridge activated`),
         this.log.show(!0),
         await Promise.allSettled([this.connectDiscord(), this.connectCdp()]));
+      this.isStartingUp = false;
+
+      let wasReload = false;
+      let wasRestart = false;
+      try {
+        const storedReload = this.ctx.workspaceState.get("antigravity-discord.wasReloaded", false);
+        const storedRestart = this.ctx.workspaceState.get("antigravity-discord.wasRestarted", false);
+        const stopTime = this.ctx.workspaceState.get("antigravity-discord.stopTime", 0);
+        if (storedRestart && (Date.now() - stopTime < 120000)) {
+          wasRestart = true;
+        } else if (storedReload && (Date.now() - stopTime < 120000)) {
+          wasReload = true;
+        }
+        await this.ctx.workspaceState.update("antigravity-discord.wasReloaded", false);
+        await this.ctx.workspaceState.update("antigravity-discord.wasRestarted", false);
+      } catch {}
+
+      if (this.discord?.isConnected()) {
+        const header = wasRestart
+          ? "🛠️ **Extension Host Restart Complete — Dis-Gravity Online**"
+          : wasReload 
+            ? "🔄 **Window Reload Complete — Dis-Gravity Online**" 
+            : "🚀 **Dis-Gravity Connected & Ready**";
+        await this.notifyCurrentStatus(header);
+      }
     }
     async stop() {
+      try {
+        await this.ctx.workspaceState.update("antigravity-discord.wasReloaded", true);
+        await this.ctx.workspaceState.update("antigravity-discord.stopTime", Date.now());
+      } catch {}
       (this.busyPollInterval && clearInterval(this.busyPollInterval),
         this.heartbeatInterval && clearInterval(this.heartbeatInterval),
         this.discord && (await this.discord.disconnect().catch(() => {}), (this.discord = null)),
@@ -6659,6 +6830,9 @@ var oU = class {
         } else {
           this.log.appendLine(`[Security] User authorization whitelist active: ${rawAllowed}`);
         }
+        if (!this.isStartingUp && this.discord?.isConnected()) {
+          await this.notifyCurrentStatus("🚀 **Dis-Gravity Reconnected to Discord**");
+        }
       } catch (n) {
         let s = n instanceof Error ? n.message : String(n);
         (this.log.appendLine(`[Extension] Discord failed: ${s}`),
@@ -6680,6 +6854,9 @@ var oU = class {
         this.startBusyPoller();
         if (this.discord?.isConnected()) {
           this.discord.setPresence("online", "Waiting for commands");
+          if (!this.isStartingUp) {
+            await this.notifyCurrentStatus("🤖 **Agent Provider Connected to Discord**");
+          }
         }
       } catch (r) {
         let n = r instanceof Error ? r.message : String(r);
@@ -7082,48 +7259,8 @@ var oU = class {
 
           if (cmd === "status") {
             await interaction.deferReply().catch(() => {});
-            const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
-            const providerConnected = !!this.cdp?.isConnected();
-            const hostApp = vr.env?.appName || "Antigravity IDE";
-            const providerName = this.cdp?.displayName || "Google Antigravity (CDP :9000)";
-            let currentModel = "Unknown";
-            let currentEffort = null;
-            let usage = "N/A";
-            try {
-              const modelList = await this.cdp?.listModels();
-              if (modelList?.currentModel) currentModel = modelList.currentModel;
-              if (modelList?.currentEffort) currentEffort = modelList.currentEffort;
-              if (modelList?.statusBar) usage = modelList.statusBar;
-            } catch {}
-
-            let statusMsg = "📊 **Dis-Gravity Bridge & Agent Status**\n\n";
-            statusMsg += `• **Host IDE:** 💻 **${hostApp}**\n`;
-            statusMsg += `• **Agent Provider:** 🤖 **${providerName}**\n`;
-            statusMsg += `• **Bridge Status:** ${providerConnected ? "🟢 Connected" : "🔴 Disconnected"}\n`;
-            statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
-            statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
-            statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
-            const tableStyle = vr.workspace.getConfiguration("antigravity-discord").get("tableStyle", "rounded");
-            statusMsg += `• **Table Style:** 📐 **${tableStyle}**\n`;
-            statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
-            if (!providerConnected) {
-              statusMsg += `\n> 💡 *Agent bridge disconnected. Launch your IDE with \`--remote-debugging-port=9000\` (Antigravity/Cursor/Windsurf) or switch \`agentProvider\` to \`copilot\` (requires no port).*`;
-            }
-            const rawAllowedUsers = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
-            if (!rawAllowedUsers || rawAllowedUsers.trim().length === 0) {
-              statusMsg += `\n> ⚠️ *Security notice: No \`allowedUsers\` configured. Add your Discord User ID in settings to restrict access.*`;
-            }
-
-            const actionRow = this.discord?.buildStatusActionRow(isBusy);
-            const effortRow = this.discord?.buildEffortActionRow(currentEffort);
-            const components = [];
-            if (actionRow) components.push(actionRow);
-            if (effortRow) components.push(effortRow);
-
-            await this.safeReply(interaction, {
-              content: statusMsg,
-              components
-            });
+            const payload = await this.getStatusPayload();
+            await this.safeReply(interaction, payload);
             return;
           }
 
@@ -7371,6 +7508,16 @@ var oU = class {
 
         if (interaction.isButton() && parts[0] === "action") {
           const actionType = parts[1];
+          if (actionType === "workbench.action.reloadWindow" || actionType === "workbench.action.restartExtensionHost" || actionType.startsWith("workbench.")) {
+            await this.executePaletteCommand(interaction, actionType);
+            return;
+          }
+          if (actionType === "refresh_status") {
+            await interaction.deferUpdate().catch(() => {});
+            const payload = await this.getStatusPayload();
+            await interaction.editReply(payload).catch(() => {});
+            return;
+          }
           if (actionType === "set_effort") {
             const effortLevel = parts[2];
             await interaction.deferReply({ ephemeral: true }).catch(() => {});
@@ -7976,24 +8123,36 @@ var oU = class {
         return;
       }
 
-      // Direct Reload Window
-      if (msgContent === "!reload" || msgContent === "!restart") {
+      // Direct Reload Window or Restart Extension Host
+      if (msgContent === "!reload" || msgContent === "!restart" || msgContent === "!restarthost") {
         if (this.processedIds.has(e.messageId)) return;
         this.processedIds.add(e.messageId);
         setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
-        const reloadNotice = "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
+        const isRestartHost = msgContent === "!restarthost";
+        const cmdId = isRestartHost ? "workbench.action.restartExtensionHost" : "workbench.action.reloadWindow";
+        const notice = isRestartHost
+          ? "🛠️ **Restarting Antigravity IDE Extension Host...**\nDis-Gravity will briefly reconnect once the host restarts."
+          : "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
         if (this.discord?.isConnected()) {
           if (e.threadId) {
             let thread = await this.discord.getThread(e.threadId);
-            if (thread) await this.discord.sendToThread(thread, reloadNotice);
-            else await this.discord.sendMessage(reloadNotice);
+            if (thread) await this.discord.sendToThread(thread, notice);
+            else await this.discord.sendMessage(notice);
           } else {
-            await this.discord.sendMessage(reloadNotice);
+            await this.discord.sendMessage(notice);
           }
         }
+        try {
+          if (isRestartHost) {
+            this.ctx.workspaceState.update("antigravity-discord.wasRestarted", true);
+          } else {
+            this.ctx.workspaceState.update("antigravity-discord.wasReloaded", true);
+          }
+          this.ctx.workspaceState.update("antigravity-discord.stopTime", Date.now());
+        } catch {}
         setTimeout(() => {
-          vr.commands.executeCommand("workbench.action.reloadWindow").then(null, (err) => {
-            this.log.appendLine(`[Palette] Reload error: ${err}`);
+          vr.commands.executeCommand(cmdId).then(null, (err) => {
+            this.log.appendLine(`[Palette] ${isRestartHost ? "Restart host" : "Reload"} error: ${err}`);
           });
         }, 500);
         return;
@@ -8045,20 +8204,31 @@ var oU = class {
         const cmdId = msgContent.substring(5).trim();
         let reply = "";
         try {
-          if (cmdId === "workbench.action.reloadWindow") {
-            const reloadNotice = "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
+          if (cmdId === "workbench.action.reloadWindow" || cmdId === "workbench.action.restartExtensionHost") {
+            const isRestart = cmdId === "workbench.action.restartExtensionHost";
+            const notice = isRestart
+              ? "🛠️ **Restarting Antigravity IDE Extension Host...**\nDis-Gravity will briefly reconnect once the host restarts."
+              : "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
             if (this.discord?.isConnected()) {
               if (e.threadId) {
                 let thread = await this.discord.getThread(e.threadId);
-                if (thread) await this.discord.sendToThread(thread, reloadNotice);
-                else await this.discord.sendMessage(reloadNotice);
+                if (thread) await this.discord.sendToThread(thread, notice);
+                else await this.discord.sendMessage(notice);
               } else {
-                await this.discord.sendMessage(reloadNotice);
+                await this.discord.sendMessage(notice);
               }
             }
+            try {
+              if (isRestart) {
+                this.ctx.workspaceState.update("antigravity-discord.wasRestarted", true);
+              } else {
+                this.ctx.workspaceState.update("antigravity-discord.wasReloaded", true);
+              }
+              this.ctx.workspaceState.update("antigravity-discord.stopTime", Date.now());
+            } catch {}
             setTimeout(() => {
-              vr.commands.executeCommand("workbench.action.reloadWindow").then(null, (err) => {
-                this.log.appendLine(`[Palette] Reload error: ${err}`);
+              vr.commands.executeCommand(cmdId).then(null, (err) => {
+                this.log.appendLine(`[Palette] ${isRestart ? "Restart host" : "Reload"} error: ${err}`);
               });
             }, 500);
             return;
@@ -8069,7 +8239,12 @@ var oU = class {
             reply += `\n> Result: \`${res}\``;
           }
         } catch (err) {
-          reply = `⚠️ **Failed to execute \`${cmdId}\`:** ${err.message || String(err)}`;
+          const errMsg = err.message || String(err);
+          if (errMsg === "Canceled" || errMsg === "Cancelled") {
+            reply = `ℹ️ **Command dismissed/canceled in IDE:** \`${cmdId}\``;
+          } else {
+            reply = `⚠️ **Failed to execute \`${cmdId}\`:** ${errMsg}`;
+          }
         }
         if (this.discord?.isConnected()) {
           if (e.threadId) {
@@ -8125,41 +8300,14 @@ var oU = class {
         if (this.processedIds.has(e.messageId)) return;
         this.processedIds.add(e.messageId);
         setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
-        const isBusy = (await this.cdp?.isBusy()) || this.state === "processing";
-        const providerConnected = !!this.cdp?.isConnected();
-        const hostApp = vr.env?.appName || "Antigravity IDE";
-        const providerName = this.cdp?.displayName || "Google Antigravity (CDP :9000)";
-        let currentModel = "Unknown";
-        let currentEffort = null;
-        let usage = "N/A";
-        try {
-          const modelList = await this.cdp?.listModels();
-          if (modelList?.currentModel) currentModel = modelList.currentModel;
-          if (modelList?.currentEffort) currentEffort = modelList.currentEffort;
-          if (modelList?.statusBar) usage = modelList.statusBar;
-        } catch {}
-        let statusMsg = "📊 **Dis-Gravity Bridge & Agent Status**\n\n";
-        statusMsg += `• **Host IDE:** 💻 **${hostApp}**\n`;
-        statusMsg += `• **Agent Provider:** 🤖 **${providerName}**\n`;
-        statusMsg += `• **Bridge Status:** ${providerConnected ? "🟢 Connected" : "🔴 Disconnected"}\n`;
-        statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
-        statusMsg += `• **Active Model:** ⚡ **${currentModel}**${currentEffort ? ` (Effort: **${currentEffort}**)` : ""}\n`;
-        statusMsg += `• **Model Usage:** 📈 ${usage}\n`;
-        const tableStyle = vr.workspace.getConfiguration("antigravity-discord").get("tableStyle", "rounded");
-        statusMsg += `• **Table Style:** 📐 **${tableStyle}**\n`;
-        statusMsg += `• **Queue:** ${this.queue.length} pending\n`;
-        const actionRow = this.discord?.buildStatusActionRow(isBusy);
-        const effortRow = this.discord?.buildEffortActionRow(currentEffort);
-        const components = [];
-        if (actionRow) components.push(actionRow);
-        if (effortRow) components.push(effortRow);
+        const payload = await this.getStatusPayload();
         if (this.discord?.isConnected()) {
           if (e.threadId) {
             let thread = await this.discord.getThread(e.threadId);
-            if (thread) await this.discord.sendToThread(thread, statusMsg, components.length > 0 ? components : null);
-            else await this.discord.sendMessage(statusMsg, components.length > 0 ? components : null);
+            if (thread) await this.discord.sendToThread(thread, payload.content, payload.components?.length > 0 ? payload.components : null);
+            else await this.discord.sendMessage(payload.content, payload.components?.length > 0 ? payload.components : null);
           } else {
-            await this.discord.sendMessage(statusMsg, components.length > 0 ? components : null);
+            await this.discord.sendMessage(payload.content, payload.components?.length > 0 ? payload.components : null);
           }
         }
         return;
@@ -8726,19 +8874,29 @@ var oU = class {
       const catalogItem = COMMAND_PALETTE_CATALOG.find(c => c.id === cmdId);
       const displayName = catalogItem ? catalogItem.title || catalogItem.label : cmdId;
       const isReload = cmdId === "workbench.action.reloadWindow";
+      const isRestartHost = cmdId === "workbench.action.restartExtensionHost";
 
       this.log.appendLine(`[Palette] Executing: ${cmdId} (${displayName}) from ${interaction.user?.displayName || interaction.user?.username}`);
 
-      if (isReload) {
-        const reloadNotice = "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
-        if (interaction.isButton() || interaction.isStringSelectMenu()) {
-          await interaction.reply({ content: reloadNotice, ephemeral: false }).catch(() => {});
-        } else {
-          await interaction.reply({ content: reloadNotice }).catch(() => {});
-        }
+      if (isReload || isRestartHost) {
+        const notice = isRestartHost
+          ? "🛠️ **Restarting Antigravity IDE Extension Host...**\nDis-Gravity will briefly reconnect once the host restarts."
+          : "🔄 **Reloading Antigravity IDE Window...**\nDis-Gravity will briefly reconnect once the window restarts.";
+
+        await this.safeReply(interaction, { content: notice, ephemeral: false });
+
+        try {
+          if (isRestartHost) {
+            this.ctx.workspaceState.update("antigravity-discord.wasRestarted", true);
+          } else {
+            this.ctx.workspaceState.update("antigravity-discord.wasReloaded", true);
+          }
+          this.ctx.workspaceState.update("antigravity-discord.stopTime", Date.now());
+        } catch {}
+
         setTimeout(() => {
           vr.commands.executeCommand(cmdId).then(null, (err) => {
-            this.log.appendLine(`[Palette] Reload command error: ${err}`);
+            this.log.appendLine(`[Palette] ${isRestartHost ? "Restart host" : "Reload"} command error: ${err}`);
           });
         }, 500);
         return;
@@ -8758,7 +8916,11 @@ var oU = class {
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         this.log.appendLine(`[Palette] Execution error for ${cmdId}: ${errMsg}`);
-        await this.safeReply(interaction, { content: `⚠️ **Failed to execute:** \`${displayName}\`\n> Error: ${errMsg}`, ephemeral: true });
+        if (errMsg === "Canceled" || errMsg === "Cancelled") {
+          await this.safeReply(interaction, { content: `ℹ️ **Command dismissed/canceled in IDE:** \`${displayName}\``, ephemeral: true });
+        } else {
+          await this.safeReply(interaction, { content: `⚠️ **Failed to execute:** \`${displayName}\`\n> Error: ${errMsg}`, ephemeral: true });
+        }
       }
     }
   },

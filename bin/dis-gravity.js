@@ -181,8 +181,15 @@ async function renderTableToPng(headers, rows, alignments) {
     const width = Math.min(1200, Math.max(450, colCount * 180));
     const height = Math.min(1000, Math.max(200, (rowCount + 2) * 45 + 80));
 
-    const cmd = `"${browserPath}" --headless --disable-gpu --hide-scrollbars --screenshot="${tempPng}" --window-size=${width},${height} "file:///${tempHtml.replace(/\\/g, '/')}"`;
-    cp.execSync(cmd, { timeout: 6000, stdio: 'ignore' });
+    const args = [
+      '--headless',
+      '--disable-gpu',
+      '--hide-scrollbars',
+      `--screenshot=${tempPng}`,
+      `--window-size=${width},${height}`,
+      `file:///${tempHtml.replace(/\\/g, '/')}`
+    ];
+    cp.execFileSync(browserPath, args, { timeout: 6000, stdio: 'ignore' });
 
     if (fs.existsSync(tempPng)) {
       const buf = fs.readFileSync(tempPng);
@@ -202,12 +209,15 @@ async function renderTableToPng(headers, rows, alignments) {
 async function startDaemon() {
   const config = parseArgs();
 
-  let Client, GatewayIntentBits, Partials;
+  let Client, GatewayIntentBits, Partials, ActionRowBuilder, ButtonBuilder, ButtonStyle;
   try {
     const djs = require('discord.js');
     Client = djs.Client;
     GatewayIntentBits = djs.GatewayIntentBits;
     Partials = djs.Partials;
+    ActionRowBuilder = djs.ActionRowBuilder;
+    ButtonBuilder = djs.ButtonBuilder;
+    ButtonStyle = djs.ButtonStyle;
   } catch (err) {
     console.error('❌ Error: discord.js is required to run the standalone daemon.');
     console.error('   Please install it with: npm install discord.js');
@@ -373,6 +383,58 @@ async function startDaemon() {
     });
   }
 
+  async function getDaemonStatusPayload(customHeader = null) {
+    const cpus = os.cpus();
+    const cpuModel = cpus && cpus[0] ? cpus[0].model.trim() : 'CPU';
+    const freeGB = (os.freemem() / (1024 ** 3)).toFixed(1);
+    const totalGB = (os.totalmem() / (1024 ** 3)).toFixed(1);
+    const st = await executeShellCommand('git rev-parse --abbrev-ref HEAD', config.workspace);
+    const branch = st.stdout.trim() || 'unknown';
+
+    let msg = "";
+    if (customHeader) {
+      msg += `${customHeader}\n\n`;
+    }
+    msg += `📊 **Dis-Gravity Standalone Daemon Status**\n\n`;
+    msg += `• **Project:** 📁 \`${path.basename(config.workspace)}\`\n`;
+    msg += `• **Workspace:** \`${config.workspace}\`\n`;
+    msg += `• **Git Branch:** 🌿 \`${branch}\`\n`;
+    msg += `• **Provider:** 🤖 🟢 **Standalone Daemon (${config.provider.toUpperCase()})**\n`;
+    msg += `• **Daemon State:** ${activeProcess ? '⏳ Busy (Process active)' : '🟢 Idle (Waiting for commands)'}\n`;
+    msg += `• **Host System:** 💻 ${os.platform()} (${os.release()}, ${os.arch()})\n`;
+    msg += `• **Memory:** 📈 ${freeGB} GB free / ${totalGB} GB total\n`;
+    if (!config.allowedUsers || config.allowedUsers.length === 0) {
+      msg += `\n> ⚠️ *Security notice: No \`allowedUsers\` whitelist configured. Add your Discord User ID to restrict access.*`;
+    }
+
+    const actionRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("daemon:status")
+        .setLabel("🔄 Refresh")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId("daemon:diff")
+        .setLabel("🌿 Git Diff")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId("daemon:info")
+        .setLabel("🖥️ System Info")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    return { content: msg.substring(0, 1900), components: [actionRow] };
+  }
+
+  async function sendDaemonStatusNotification(channel, header = "🚀 **Dis-Gravity Daemon Connected & Ready**") {
+    try {
+      const payload = await getDaemonStatusPayload(header);
+      await channel.send(payload);
+      log.appendLine(`Sent automatic status notification to #${channel.name || channel.id}`);
+    } catch (err) {
+      log.appendLine(`Failed to send daemon status notification: ${err.message}`);
+    }
+  }
+
   client.once('ready', async () => {
     log.appendLine(`🚀 Dis-Gravity Daemon logged in as ${client.user.tag}`);
     const channel = await client.channels.fetch(config.channelId).catch(() => null);
@@ -380,6 +442,7 @@ async function startDaemon() {
       log.appendLine(`⚠️ Warning: Could not find channel with ID ${config.channelId}`);
     } else {
       log.appendLine(`Connected to Discord Channel: #${channel.name || config.channelId}`);
+      await sendDaemonStatusNotification(channel, "🚀 **Dis-Gravity Daemon Connected & Ready**");
     }
 
     // Register slash commands
@@ -418,9 +481,40 @@ async function startDaemon() {
         }
         return;
       }
-
       if (interaction.isButton()) {
         const id = interaction.customId;
+        if (id === 'daemon:status') {
+          await interaction.deferUpdate().catch(() => {});
+          const statusPayload = await getDaemonStatusPayload();
+          await interaction.editReply(statusPayload).catch(() => {});
+          return;
+        }
+        if (id === 'daemon:diff') {
+          await interaction.deferReply({ ephemeral: true }).catch(() => {});
+          const st = await executeShellCommand('git status --short', config.workspace);
+          const df = await executeShellCommand('git diff --stat', config.workspace);
+          let reply = `🌿 **Git Status & Diff Preview**\n\n\`\`\`diff\n${st.stdout || 'Clean working tree'}\n\`\`\`\n`;
+          if (df.stdout) reply += `**Diff Stat:**\n\`\`\`text\n${df.stdout}\n\`\`\``;
+          await interaction.editReply(reply).catch(() => {});
+          return;
+        }
+        if (id === 'daemon:info') {
+          await interaction.deferReply({ ephemeral: true }).catch(() => {});
+          const cpus = os.cpus();
+          const cpuModel = cpus && cpus[0] ? cpus[0].model.trim() : 'CPU';
+          const freeGB = (os.freemem() / (1024 ** 3)).toFixed(1);
+          const totalGB = (os.totalmem() / (1024 ** 3)).toFixed(1);
+          const st = await executeShellCommand('git rev-parse --abbrev-ref HEAD', config.workspace);
+          let msg = `🖥️ **Host & System Info**\n\n`;
+          msg += `• **Project:** \`${path.basename(config.workspace)}\`\n`;
+          msg += `• **Workspace:** \`${config.workspace}\`\n`;
+          msg += `• **Branch:** \`${st.stdout.trim() || 'unknown'}\`\n`;
+          msg += `• **System:** ${os.platform()} (${os.release()}, ${os.arch()})\n`;
+          msg += `• **CPU:** ${cpuModel} (${cpus ? cpus.length : 1} cores)\n`;
+          msg += `• **Memory:** ${freeGB} GB free / ${totalGB} GB total\n`;
+          await interaction.editReply(msg).catch(() => {});
+          return;
+        }
         if (id.startsWith('approve_') && approvalResolver) {
           const choice = id.replace('approve_', '');
           approvalResolver(choice);
@@ -479,6 +573,13 @@ async function startDaemon() {
           return;
         }
 
+        if (cmd === 'status') {
+          await interaction.deferReply().catch(() => {});
+          const statusPayload = await getDaemonStatusPayload();
+          await interaction.editReply(statusPayload).catch(() => {});
+          return;
+        }
+
         if (cmd === 'stop') {
           await cancelActiveAgent();
           await interaction.reply('🛑 **Agent generation / command cancelled.**');
@@ -520,6 +621,13 @@ async function startDaemon() {
       const badge = res.code === 0 ? `✅ **Exit 0 (${res.duration}s)**` : `❌ **Exit ${res.code} (${res.duration}s)**`;
       const out = res.stdout || res.stderr || '(No output)';
       await statusMsg.edit(`${badge}\n\`\`\`text\n${out.substring(0, 1800)}\n\`\`\``);
+      return;
+    }
+
+    // Status
+    if (text === '!status' || text === '/status') {
+      const statusPayload = await getDaemonStatusPayload();
+      await message.reply(statusPayload).catch(() => {});
       return;
     }
 
