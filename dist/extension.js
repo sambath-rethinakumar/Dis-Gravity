@@ -1210,6 +1210,9 @@ var COMMAND_PALETTE_CATALOG = [
   { id: "workbench.action.terminal.scrollDown", label: "⬇️ Scroll Down", title: "Terminal: Scroll Down", category: "terminal", style: 2 },
 
   // Files & Editors
+  { id: "workbench.action.openWorkspace", label: "📂 Open Workspace", title: "File: Open Workspace / Recent Folders", category: "files", style: 1 },
+  { id: "workbench.action.openRecent", label: "🕒 Open Recent", title: "File: Open Recent Workspace", category: "files", style: 2 },
+  { id: "antigravity-discord.openWorkspace", label: "🔀 Switch Workspace", title: "Dis-Gravity: Switch / Open Workspace", category: "files", style: 1 },
   { id: "workbench.action.files.saveAll", label: "💾 Save All", title: "File: Save All", category: "files", style: 3 },
   { id: "workbench.action.closeAllEditors", label: "📂 Close All", title: "View: Close All Editors", category: "files", style: 4 },
   { id: "workbench.action.reopenClosedEditor", label: "📑 Reopen Closed", title: "View: Reopen Closed Editor", category: "files", style: 2 },
@@ -1753,6 +1756,10 @@ var TC = class {
     const row = new ri.ActionRowBuilder();
     row.addComponents(
       new ri.ButtonBuilder()
+        .setCustomId("action:select_workspace_picker")
+        .setLabel("📂 Switch Workspace")
+        .setStyle(ri.ButtonStyle.Primary),
+      new ri.ButtonBuilder()
         .setCustomId("action:workbench.action.reloadWindow")
         .setLabel("🔄 Reload Window")
         .setStyle(ri.ButtonStyle.Secondary),
@@ -1804,11 +1811,11 @@ var TC = class {
       // Row 3: Files & Workspace (5 buttons)
       const r3 = new ri.ActionRowBuilder();
       const fileCmds = [
+        { id: "workbench.action.openWorkspace", label: "📂 Open Workspace", style: ri.ButtonStyle.Primary },
         { id: "workbench.action.files.saveAll", label: "💾 Save All", style: ri.ButtonStyle.Success },
         { id: "workbench.action.closeAllEditors", label: "📂 Close All", style: ri.ButtonStyle.Danger },
-        { id: "workbench.action.reopenClosedEditor", label: "📑 Reopen Closed", style: ri.ButtonStyle.Secondary },
-        { id: "workbench.action.files.newUntitledFile", label: "📄 New File", style: ri.ButtonStyle.Secondary },
-        { id: "workbench.action.files.save", label: "📁 Save File", style: ri.ButtonStyle.Secondary }
+        { id: "workbench.action.reopenClosedEditor", label: "📑 Reopen", style: ri.ButtonStyle.Secondary },
+        { id: "workbench.action.files.save", label: "📁 Save", style: ri.ButtonStyle.Secondary }
       ];
       fileCmds.forEach(c => r3.addComponents(new ri.ButtonBuilder().setCustomId(`palette:exec:${c.id}`).setLabel(c.label).setStyle(c.style)));
       rows.push(r3);
@@ -6711,6 +6718,9 @@ var oU = class {
       }
       statusMsg += "📊 **Dis-Gravity Bridge & Agent Status**\n\n";
       statusMsg += `• **Host IDE:** 💻 **${hostApp}**\n`;
+      const currentWs = vr.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+      const wsName = currentWs ? require("path").basename(currentWs) : "None";
+      statusMsg += `• **Workspace:** 📂 **${wsName}** (${currentWs || "No folder"})\n`;
       statusMsg += `• **Agent Provider:** 🤖 **${providerName}**\n`;
       statusMsg += `• **Bridge Status:** ${providerConnected ? "🟢 Connected" : "🔴 Disconnected"}\n`;
       statusMsg += `• **Agent State:** ${isBusy ? "⏳ Busy (Analyzing / Writing code)" : "🟢 Idle (Waiting for commands)"}\n`;
@@ -6765,6 +6775,8 @@ var oU = class {
 
       let wasReload = false;
       let wasRestart = false;
+      let wasSwitch = false;
+      let switchedWsName = "";
       try {
         const storedReload = this.ctx.workspaceState.get("antigravity-discord.wasReloaded", false);
         const storedRestart = this.ctx.workspaceState.get("antigravity-discord.wasRestarted", false);
@@ -6776,14 +6788,25 @@ var oU = class {
         }
         await this.ctx.workspaceState.update("antigravity-discord.wasReloaded", false);
         await this.ctx.workspaceState.update("antigravity-discord.wasRestarted", false);
+
+        const storedSwitch = this.ctx.globalState.get("antigravity-discord.wasWorkspaceSwitch", false);
+        const switchTime = this.ctx.globalState.get("antigravity-discord.switchTime", 0);
+        const targetWs = this.ctx.globalState.get("antigravity-discord.targetWorkspace", "");
+        if (storedSwitch && (Date.now() - switchTime < 120000)) {
+          wasSwitch = true;
+          switchedWsName = targetWs ? require("path").basename(targetWs) : "";
+          await this.ctx.globalState.update("antigravity-discord.wasWorkspaceSwitch", false);
+        }
       } catch {}
 
       if (this.discord?.isConnected()) {
-        const header = wasRestart
-          ? "🛠️ **Extension Host Restart Complete — Dis-Gravity Online**"
-          : wasReload 
-            ? "🔄 **Window Reload Complete — Dis-Gravity Online**" 
-            : "🚀 **Dis-Gravity Connected & Ready**";
+        const header = wasSwitch
+          ? `📂 **Workspace Switched to \`${switchedWsName || "New Workspace"}\` — Dis-Gravity Online**`
+          : wasRestart
+            ? "🛠️ **Extension Host Restart Complete — Dis-Gravity Online**"
+            : wasReload 
+              ? "🔄 **Window Reload Complete — Dis-Gravity Online**" 
+              : "🚀 **Dis-Gravity Connected & Ready**";
         await this.notifyCurrentStatus(header);
       }
     }
@@ -7453,6 +7476,23 @@ var oU = class {
         let customId = interaction.customId || "";
         let parts = customId.split(":");
 
+        if (interaction.isStringSelectMenu() && customId === "action:select_workspace") {
+          const selectedPath = interaction.values?.[0];
+          if (!selectedPath) return;
+          await this.openWorkspacePath(interaction, selectedPath);
+          return;
+        }
+
+        if (interaction.isButton() && (customId.startsWith("action:open_ws:") || customId === "action:select_workspace_picker")) {
+          if (customId === "action:select_workspace_picker") {
+            await this.showWorkspacePicker(interaction);
+            return;
+          }
+          const targetPath = customId.slice("action:open_ws:".length);
+          await this.openWorkspacePath(interaction, targetPath);
+          return;
+        }
+
         if (interaction.isButton() && parts[0] === "palette") {
           const sub = parts[1];
           if (sub === "exec") {
@@ -8119,6 +8159,23 @@ var oU = class {
           } else {
             await this.discord.sendMessage(view.content, view.components);
           }
+        }
+        return;
+      }
+
+      // Workspace Switcher / Picker
+      if (msgContent === "!openws" || msgContent === "!workspace open" || msgContent === "!switchws" || msgContent.startsWith("!workspace open ") || msgContent.startsWith("!openws ")) {
+        if (this.processedIds.has(e.messageId)) return;
+        this.processedIds.add(e.messageId);
+        setTimeout(() => this.processedIds.delete(e.messageId), this.DEDUP_TTL);
+        const wsQuery = msgContent.replace(/^!(openws|workspace open|switchws)\s*/i, "").trim();
+        if (wsQuery) {
+          const recents = this.getRecentWorkspacesList();
+          const matched = recents.find(w => w.exists && (w.label.toLowerCase() === wsQuery.toLowerCase() || w.path.toLowerCase() === wsQuery.toLowerCase()));
+          const targetPath = matched ? matched.path : wsQuery;
+          await this.openWorkspacePath(null, targetPath, e);
+        } else {
+          await this.showWorkspacePicker(null, e);
         }
         return;
       }
@@ -8800,6 +8857,26 @@ var oU = class {
       const results = [];
       const seen = new Set();
 
+      // Prioritize recent workspaces if query relates to workspace, folder, open, or matches a workspace name/path
+      const isWorkspaceSearch = !q || q.includes("work") || q.includes("open") || q.includes("recent") || q.includes("switch") || q.includes("folder") || q.includes("proj");
+      try {
+        const recents = this.getRecentWorkspacesList();
+        for (const ws of recents) {
+          if (!ws.exists) continue;
+          const matchesWs = !q || ws.label.toLowerCase().includes(q) || ws.path.toLowerCase().includes(q) || isWorkspaceSearch;
+          if (matchesWs) {
+            const choiceVal = `action:open_workspace:${ws.path}`;
+            if (!seen.has(choiceVal)) {
+              seen.add(choiceVal);
+              let name = `📂 Open Workspace: ${ws.label} (${ws.path})`;
+              if (name.length > 100) name = name.substring(0, 97) + "...";
+              results.push({ name, value: choiceVal.substring(0, 100) });
+            }
+          }
+          if (results.length >= 8) break;
+        }
+      } catch {}
+
       for (const item of COMMAND_PALETTE_CATALOG) {
         if (!q || item.id.toLowerCase().includes(q) || item.title.toLowerCase().includes(q) || item.label.toLowerCase().includes(q)) {
           seen.add(item.id);
@@ -8870,7 +8947,308 @@ var oU = class {
 
       return matches;
     }
+    getRecentWorkspacesList() {
+      const path = require("path");
+      const fs = require("fs");
+      const list = [];
+      const seen = new Set();
+
+      let globalStorageDir = "";
+      try {
+        if (this.ctx?.globalStorageUri?.fsPath) {
+          globalStorageDir = path.dirname(this.ctx.globalStorageUri.fsPath);
+        }
+      } catch {}
+
+      if (!globalStorageDir) {
+        const appData = process.env.APPDATA || (process.platform === "darwin" ? path.join(process.env.HOME || "", "Library/Application Support") : path.join(process.env.HOME || "", ".config"));
+        globalStorageDir = path.join(appData, "Antigravity IDE", "User", "globalStorage");
+      }
+
+      // 1. Query state.vscdb via node:sqlite
+      try {
+        const { DatabaseSync } = require("node:sqlite");
+        const dbPath = path.join(globalStorageDir, "state.vscdb");
+        if (fs.existsSync(dbPath)) {
+          const db = new DatabaseSync(dbPath, { readOnly: true });
+          const row = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("history.recentlyOpenedPathsList");
+          if (row && row.value) {
+            const data = JSON.parse(row.value);
+            for (const entry of (data.entries || [])) {
+              const rawUri = entry.folderUri || (entry.workspace && entry.workspace.configPath) || entry.fileUri;
+              if (!rawUri) continue;
+              let p = decodeURIComponent(rawUri.replace(/^file:\/\/\/?/, ""));
+              if (/^[a-zA-Z]:/.test(p)) {
+                p = p.charAt(0).toUpperCase() + p.slice(1);
+              }
+              p = path.normalize(p);
+              if (!seen.has(p.toLowerCase())) {
+                seen.add(p.toLowerCase());
+                const label = entry.label || path.basename(p);
+                const exists = fs.existsSync(p);
+                list.push({ path: p, label, isFile: !!entry.fileUri, exists });
+              }
+            }
+          }
+        }
+      } catch {}
+
+      // 2. Fallback to storage.json
+      try {
+        const storagePath = path.join(globalStorageDir, "storage.json");
+        if (fs.existsSync(storagePath)) {
+          const data = JSON.parse(fs.readFileSync(storagePath, "utf8"));
+          const wsObj = (data.profileAssociations && data.profileAssociations.workspaces) || {};
+          for (const rawUri of Object.keys(wsObj)) {
+            let p = decodeURIComponent(rawUri.replace(/^file:\/\/\/?/, ""));
+            if (/^[a-zA-Z]:/.test(p)) {
+              p = p.charAt(0).toUpperCase() + p.slice(1);
+            }
+            p = path.normalize(p);
+            if (!seen.has(p.toLowerCase())) {
+              seen.add(p.toLowerCase());
+              const label = path.basename(p);
+              const exists = fs.existsSync(p);
+              list.push({ path: p, label, isFile: false, exists });
+            }
+          }
+          for (const f of ((data.backupWorkspaces && data.backupWorkspaces.folders) || [])) {
+            if (!f.folderUri) continue;
+            let p = decodeURIComponent(f.folderUri.replace(/^file:\/\/\/?/, ""));
+            if (/^[a-zA-Z]:/.test(p)) {
+              p = p.charAt(0).toUpperCase() + p.slice(1);
+            }
+            p = path.normalize(p);
+            if (!seen.has(p.toLowerCase())) {
+              seen.add(p.toLowerCase());
+              const label = path.basename(p);
+              const exists = fs.existsSync(p);
+              list.push({ path: p, label, isFile: false, exists });
+            }
+          }
+        }
+      } catch {}
+
+      return list;
+    }
+
+    async showWorkspacePicker(interaction = null, textMessage = null) {
+      const path = require("path");
+      const fs = require("fs");
+      const workspaces = this.getRecentWorkspacesList();
+
+      const currentWs = vr.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+      let normalizedCurrent = currentWs ? path.normalize(currentWs) : "";
+      if (/^[a-zA-Z]:/.test(normalizedCurrent)) {
+        normalizedCurrent = normalizedCurrent.charAt(0).toUpperCase() + normalizedCurrent.slice(1);
+      }
+      const currentName = normalizedCurrent ? path.basename(normalizedCurrent) : "None";
+
+      if (!workspaces || workspaces.length === 0) {
+        const payload = {
+          content: `📂 **Workspace Switcher**\n\n• **Current Workspace:** \`${currentName}\` (${normalizedCurrent || "None"})\n\n⚠️ No recently opened workspaces were found in IDE history.\n💡 You can switch by typing: \`/action command:<full_folder_path>\``
+        };
+        if (interaction) await this.safeReply(interaction, payload);
+        else if (textMessage && this.discord?.isConnected()) {
+          if (textMessage.threadId) {
+            const thread = await this.discord.getThread(textMessage.threadId);
+            if (thread) await this.discord.sendToThread(thread, payload.content);
+            else await this.discord.sendMessage(payload.content);
+          } else {
+            await this.discord.sendMessage(payload.content);
+          }
+        }
+        return;
+      }
+
+      let content = `📂 **Antigravity IDE Workspace Switcher**\n\n`;
+      content += `• **Current Workspace:** 🟢 **${currentName}** (\`${normalizedCurrent}\`)\n\n`;
+      content += `Select a workspace below to switch the IDE to that project:\n`;
+
+      const rows = [];
+
+      // StringSelectMenu with recent workspaces
+      const selectMenu = new ri.StringSelectMenuBuilder()
+        .setCustomId("action:select_workspace")
+        .setPlaceholder("📂 Select a workspace to switch to...")
+        .setMinValues(1)
+        .setMaxValues(1);
+
+      const validWs = workspaces.filter(w => w.exists).slice(0, 25);
+      for (const ws of validWs) {
+        const isCurrent = normalizedCurrent && normalizedCurrent.toLowerCase() === ws.path.toLowerCase();
+        const label = ws.label.length > 50 ? ws.label.slice(0, 47) + "..." : ws.label;
+        let desc = (isCurrent ? "🟢 Active Workspace • " : "") + ws.path;
+        if (desc.length > 100) desc = "..." + desc.slice(-95);
+        selectMenu.addOptions({
+          label: isCurrent ? `🟢 ${label}` : label,
+          description: desc,
+          value: ws.path.slice(0, 100),
+          emoji: isCurrent ? "🟢" : (ws.isFile ? "📄" : "📁")
+        });
+      }
+      rows.push(new ri.ActionRowBuilder().addComponents(selectMenu));
+
+      // Quick-action buttons for top 3-4 other workspaces
+      const quickRow = new ri.ActionRowBuilder();
+      const topTargets = validWs.filter(w => !normalizedCurrent || normalizedCurrent.toLowerCase() !== w.path.toLowerCase()).slice(0, 4);
+      for (const ws of topTargets) {
+        let btnLabel = `📂 ${ws.label}`;
+        if (btnLabel.length > 30) btnLabel = btnLabel.slice(0, 27) + "...";
+        quickRow.addComponents(
+          new ri.ButtonBuilder()
+            .setCustomId(`action:open_ws:${ws.path}`)
+            .setLabel(btnLabel)
+            .setStyle(ri.ButtonStyle.Primary)
+        );
+      }
+      if (quickRow.components.length > 0) {
+        rows.push(quickRow);
+      }
+
+      // Action row with reload and status
+      const utilRow = new ri.ActionRowBuilder().addComponents(
+        new ri.ButtonBuilder()
+          .setCustomId("palette:exec:workbench.action.reloadWindow")
+          .setLabel("🔄 Reload Window")
+          .setStyle(ri.ButtonStyle.Secondary),
+        new ri.ButtonBuilder()
+          .setCustomId("action:refresh_status")
+          .setLabel("📊 Status")
+          .setStyle(ri.ButtonStyle.Secondary)
+      );
+      rows.push(utilRow);
+
+      if (interaction) {
+        await this.safeReply(interaction, { content, components: rows });
+      } else if (textMessage && this.discord?.isConnected()) {
+        if (textMessage.threadId) {
+          const thread = await this.discord.getThread(textMessage.threadId);
+          if (thread) await this.discord.sendToThread(thread, content, rows);
+          else await this.discord.sendMessage(content, rows);
+        } else {
+          await this.discord.sendMessage(content, rows);
+        }
+      }
+    }
+
+    async openWorkspacePath(interaction = null, targetPath, textMessage = null) {
+      const path = require("path");
+      const fs = require("fs");
+
+      let normalized = path.normalize(targetPath);
+      if (/^[a-zA-Z]:/.test(normalized)) {
+        normalized = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+      }
+
+      if (!fs.existsSync(normalized)) {
+        const errMsg = `❌ **Workspace path does not exist on host machine:**\n> \`${normalized}\``;
+        if (interaction) await this.safeReply(interaction, { content: errMsg, ephemeral: true });
+        else if (textMessage && this.discord?.isConnected()) await this.discord.sendMessage(errMsg);
+        return;
+      }
+
+      const currentWs = vr.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+      let normalizedCurrent = currentWs ? path.normalize(currentWs) : "";
+      if (/^[a-zA-Z]:/.test(normalizedCurrent)) {
+        normalizedCurrent = normalizedCurrent.charAt(0).toUpperCase() + normalizedCurrent.slice(1);
+      }
+
+      const wsName = path.basename(normalized);
+
+      if (normalizedCurrent && normalizedCurrent.toLowerCase() === normalized.toLowerCase()) {
+        const sameMsg = `ℹ️ **Antigravity IDE is already open in workspace:** \`${wsName}\`\n> Path: \`${normalized}\``;
+        if (interaction) await this.safeReply(interaction, { content: sameMsg });
+        else if (textMessage && this.discord?.isConnected()) await this.discord.sendMessage(sameMsg);
+        return;
+      }
+
+      const notice = `📂 **Switching Antigravity IDE workspace to \`${wsName}\`...**\n> Path: \`${normalized}\`\n\nDis-Gravity will briefly reconnect once the workspace loads.`;
+
+      if (interaction) {
+        await this.safeReply(interaction, { content: notice, ephemeral: false });
+      } else if (textMessage && this.discord?.isConnected()) {
+        if (textMessage.threadId) {
+          const thread = await this.discord.getThread(textMessage.threadId);
+          if (thread) await this.discord.sendToThread(thread, notice);
+          else await this.discord.sendMessage(notice);
+        } else {
+          await this.discord.sendMessage(notice);
+        }
+      }
+
+      try {
+        this.ctx.globalState.update("antigravity-discord.wasWorkspaceSwitch", true);
+        this.ctx.globalState.update("antigravity-discord.targetWorkspace", normalized);
+        this.ctx.globalState.update("antigravity-discord.switchTime", Date.now());
+      } catch {}
+
+      setTimeout(async () => {
+        try {
+          this.log.appendLine(`[Workspace] Opening workspace folder: ${normalized}`);
+          const uri = vr.Uri.file(normalized);
+          await vr.commands.executeCommand("vscode.openFolder", uri, { forceReuseWindow: true, forceNewWindow: false });
+        } catch (err) {
+          this.log.appendLine(`[Workspace] Error via vscode.openFolder: ${err}. Attempting CLI fallback...`);
+          try {
+            const cp = require("child_process");
+            const appData = process.env.LOCALAPPDATA || "";
+            const ideCmd = path.join(appData, "Programs", "Antigravity IDE", "bin", "antigravity-ide.cmd");
+            if (fs.existsSync(ideCmd)) {
+              cp.spawn(ideCmd, ["-r", normalized], { detached: true, stdio: "ignore" }).unref();
+            } else {
+              cp.spawn(process.execPath, ["-r", normalized], { detached: true, stdio: "ignore" }).unref();
+            }
+          } catch (cliErr) {
+            this.log.appendLine(`[Workspace] CLI fallback failed: ${cliErr}`);
+          }
+        }
+      }, 500);
+    }
+
     async executePaletteCommand(interaction, cmdId) {
+      // 1. Direct workspace open choice from autocomplete
+      if (cmdId.startsWith("action:open_workspace:")) {
+        const targetPath = cmdId.slice("action:open_workspace:".length);
+        await this.openWorkspacePath(interaction, targetPath);
+        return;
+      }
+
+      // 2. Interactive workspace picker triggers
+      const isWorkspaceCmd = cmdId === "workbench.action.openWorkspace" ||
+                             cmdId === "workbench.action.openRecent" ||
+                             cmdId === "workbench.action.openFolder" ||
+                             cmdId === "vscode.openFolder" ||
+                             cmdId === "antigravity-discord.openWorkspace" ||
+                             cmdId.toLowerCase() === "open workspace" ||
+                             cmdId.toLowerCase() === "open recent" ||
+                             cmdId.toLowerCase() === "switch workspace";
+
+      if (isWorkspaceCmd) {
+        await this.showWorkspacePicker(interaction);
+        return;
+      }
+
+      // 3. Direct folder path or workspace label
+      try {
+        const recents = this.getRecentWorkspacesList();
+        const matchedWs = recents.find(w => w.exists && (
+          w.path.toLowerCase() === cmdId.toLowerCase() ||
+          w.label.toLowerCase() === cmdId.toLowerCase()
+        ));
+        if (matchedWs) {
+          await this.openWorkspacePath(interaction, matchedWs.path);
+          return;
+        }
+        const fs = require("fs");
+        if (fs.existsSync(cmdId)) {
+          if (fs.statSync(cmdId).isDirectory()) {
+            await this.openWorkspacePath(interaction, cmdId);
+            return;
+          }
+        }
+      } catch {}
+
       const catalogItem = COMMAND_PALETTE_CATALOG.find(c => c.id === cmdId);
       const displayName = catalogItem ? catalogItem.title || catalogItem.label : cmdId;
       const isReload = cmdId === "workbench.action.reloadWindow";

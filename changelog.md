@@ -19,6 +19,7 @@
 - 📖 **Comprehensive 3-Minute Quickstart Guide**: Detailed Discord Bot setup with Privileged Gateway Intents (Message Content Intent) troubleshooting and platform-specific shortcut launch guides.
 
 ### Fixed
+- 📂 **Fixed Workspace Opening via /action & Added Interactive Workspace Switcher**: Fixed failure where selecting workbench.action.openWorkspace via /action opened a desktop modal dialog on the host PC and failed with Error: Canceled. Added a high-performance recent workspace discovery engine (state.vscdb & storage.json), direct workspace autocomplete options in /action (📂 Open Workspace: <Name>), an interactive Discord Select Menu & 1-click button picker (ction:select_workspace, ction:open_ws:<path>), and chat shortcut commands (!workspace open, !openws, !switchws).
 - 🖼️ **Fixed Missing Visual Table Images in Discord**: Resolved premature table string replacement before image extraction and relaxed CDP target evaluation requirements.
 - 🧠 **Fixed `/plan`, `/goal`, and `/grill` Not Activating IDE Modes**: Automatically selects and inserts native Lexical `contextScopeItemMention` command chips into the editor before prompt submission.
 
