@@ -5742,31 +5742,190 @@ function resolveAgentProvider(choice, port, extension, log) {
 }
 var _g = "antigravity-discord.leaderId",
   Du = "antigravity-discord.leaderHeartbeat",
+  _desiredWsKey = "antigravity-discord.desiredLeaderWorkspace",
+  _targetWsKey = "antigravity-discord.targetWorkspace",
+  _wasSwitchKey = "antigravity-discord.wasWorkspaceSwitch",
+  _switchTimeKey = "antigravity-discord.switchTime",
   KJe = 5e3,
   ZJe = 15e3;
+
+function normalizeWorkspacePath(p) {
+  if (!p || typeof p !== "string") return "";
+  const path = require("path");
+  let norm = path.normalize(p);
+  if (/^[a-zA-Z]:/.test(norm)) {
+    norm = norm.charAt(0).toUpperCase() + norm.slice(1);
+  }
+  return norm;
+}
+
+function getLeaderFilePath() {
+  const path = require("path");
+  const appData = process.env.APPDATA || "";
+  return path.join(appData, "Antigravity IDE", "User", "globalStorage", "dis-gravity-leader.json");
+}
+
+function readSharedLeaderState(context) {
+  const fs = require("fs");
+  let fileState = {};
+  try {
+    const leaderFile = getLeaderFilePath();
+    if (fs.existsSync(leaderFile)) {
+      fileState = JSON.parse(fs.readFileSync(leaderFile, "utf8")) || {};
+    }
+  } catch {}
+
+  let globalId = context ? context.globalState.get(_g) : void 0;
+  let globalHeartbeat = context ? context.globalState.get(Du) : void 0;
+  let globalDesired = context ? context.globalState.get(_desiredWsKey) : void 0;
+  let globalSwitch = context ? context.globalState.get(_wasSwitchKey) : void 0;
+  let globalTarget = context ? context.globalState.get(_targetWsKey) : void 0;
+  let globalSwitchTime = context ? context.globalState.get(_switchTimeKey) : void 0;
+
+  let leaderPid = fileState.leaderPid;
+  if (!leaderPid && globalId) {
+    const p = parseInt(globalId.split("-")[0], 10);
+    if (!isNaN(p)) leaderPid = p;
+  }
+
+  let heartbeat = Math.max(fileState.heartbeat || 0, globalHeartbeat || 0);
+  let desiredWs = normalizeWorkspacePath(fileState.desiredWs || globalDesired || "");
+  let leaderWs = normalizeWorkspacePath(fileState.leaderWs || "");
+  let wasSwitch = fileState.wasWorkspaceSwitch ?? globalSwitch ?? false;
+  let targetWs = normalizeWorkspacePath(fileState.targetWorkspace || globalTarget || "");
+  let switchTime = Math.max(fileState.switchTime || 0, globalSwitchTime || 0);
+
+  return {
+    leaderPid,
+    leaderWs,
+    heartbeat,
+    desiredWs,
+    wasWorkspaceSwitch: wasSwitch,
+    targetWorkspace: targetWs,
+    switchTime
+  };
+}
+
+function writeSharedLeaderState(context, updates) {
+  const fs = require("fs");
+  const path = require("path");
+  const leaderFile = getLeaderFilePath();
+
+  let current = {};
+  try {
+    if (fs.existsSync(leaderFile)) {
+      current = JSON.parse(fs.readFileSync(leaderFile, "utf8")) || {};
+    }
+  } catch {}
+
+  const merged = { ...current, ...updates };
+
+  try {
+    const dir = path.dirname(leaderFile);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(leaderFile, JSON.stringify(merged, null, 2), "utf8");
+  } catch {}
+
+  if (context) {
+    try {
+      if (updates.leaderPid !== undefined) {
+        context.globalState.update(_g, updates.leaderPid ? `${updates.leaderPid}-${Date.now()}` : void 0);
+      }
+      if (updates.heartbeat !== undefined) {
+        context.globalState.update(Du, updates.heartbeat || void 0);
+      }
+      if (updates.desiredWs !== undefined) {
+        context.globalState.update(_desiredWsKey, updates.desiredWs || void 0);
+      }
+      if (updates.wasWorkspaceSwitch !== undefined) {
+        context.globalState.update(_wasSwitchKey, updates.wasWorkspaceSwitch ?? void 0);
+      }
+      if (updates.targetWorkspace !== undefined) {
+        context.globalState.update(_targetWsKey, updates.targetWorkspace || void 0);
+      }
+      if (updates.switchTime !== undefined) {
+        context.globalState.update(_switchTimeKey, updates.switchTime || void 0);
+      }
+    } catch {}
+  }
+}
+
 function XJe(t) {
+  if (!t || isNaN(t)) return !1;
   try {
     return (process.kill(t, 0), !0);
   } catch {
     return !1;
   }
 }
-function e$e(t) {
-  let e = `${process.pid}-${Date.now()}`,
-    i = t.globalState.get(_g),
-    r = t.globalState.get(Du) || 0,
-    n = Date.now();
-  if (!i || n - r > ZJe) return (t.globalState.update(_g, e), t.globalState.update(Du, n), !0);
-  if (i.startsWith(`${process.pid}-`)) return (t.globalState.update(Du, n), !0);
-  let s = parseInt(i.split("-")[0], 10);
-  return !isNaN(s) && !XJe(s) ? (t.globalState.update(_g, e), t.globalState.update(Du, n), !0) : !1;
+
+function getCurrentWorkspaceFolder() {
+  const ws = vr.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+  return normalizeWorkspacePath(ws);
 }
+
+function claimLeadership(context) {
+  const myWs = getCurrentWorkspaceFolder();
+  const now = Date.now();
+  writeSharedLeaderState(context, {
+    leaderPid: process.pid,
+    leaderWs: myWs,
+    heartbeat: now,
+    desiredWs: null
+  });
+  return true;
+}
+
+function releaseLeadership(context) {
+  const current = readSharedLeaderState(context);
+  if (current.leaderPid === process.pid) {
+    writeSharedLeaderState(context, {
+      leaderPid: null,
+      leaderWs: null,
+      heartbeat: 0
+    });
+  }
+}
+
 function t$e(t) {
-  t.globalState.update(Du, Date.now());
+  writeSharedLeaderState(t, {
+    leaderPid: process.pid,
+    leaderWs: getCurrentWorkspaceFolder(),
+    heartbeat: Date.now()
+  });
 }
+
 async function i$e(t) {
-  t.globalState.get(_g)?.startsWith(`${process.pid}-`) &&
-    (await t.globalState.update(_g, void 0), await t.globalState.update(Du, void 0));
+  releaseLeadership(t);
+}
+
+function e$e(t) {
+  const myWs = getCurrentWorkspaceFolder();
+  const state = readSharedLeaderState(t);
+  const now = Date.now();
+
+  if (state.desiredWs && myWs && state.desiredWs.toLowerCase() === myWs.toLowerCase()) {
+    claimLeadership(t);
+    return true;
+  }
+
+  const isLeaderAlive = state.leaderPid && XJe(state.leaderPid);
+  const isHeartbeatFresh = state.heartbeat && (now - state.heartbeat < ZJe);
+
+  if (!state.leaderPid || !isLeaderAlive || !isHeartbeatFresh) {
+    if (state.desiredWs && (!myWs || state.desiredWs.toLowerCase() !== myWs.toLowerCase())) {
+      return false;
+    }
+    claimLeadership(t);
+    return true;
+  }
+
+  if (state.leaderPid === process.pid) {
+    t$e(t);
+    return true;
+  }
+
+  return false;
 }
 var oU = class {
     state = "idle";
@@ -6789,30 +6948,34 @@ var oU = class {
         await this.ctx.workspaceState.update("antigravity-discord.wasReloaded", false);
         await this.ctx.workspaceState.update("antigravity-discord.wasRestarted", false);
 
-        const storedSwitch = this.ctx.globalState.get("antigravity-discord.wasWorkspaceSwitch", false);
-        const switchTime = this.ctx.globalState.get("antigravity-discord.switchTime", 0);
-        const targetWs = this.ctx.globalState.get("antigravity-discord.targetWorkspace", "");
+const leaderState = readSharedLeaderState(this.ctx);
+        const switchTime = leaderState.switchTime || this.ctx.globalState.get("antigravity-discord.switchTime", 0);
+        const targetWs = leaderState.targetWorkspace || this.ctx.globalState.get("antigravity-discord.targetWorkspace", "");
+        const storedSwitch = leaderState.wasWorkspaceSwitch || this.ctx.globalState.get("antigravity-discord.wasWorkspaceSwitch", false);
         if (storedSwitch && (Date.now() - switchTime < 120000)) {
           wasSwitch = true;
-          switchedWsName = targetWs ? require("path").basename(targetWs) : "";
+          switchedWsName = targetWs ? require("path").basename(targetWs) : (getCurrentWorkspaceFolder() ? require("path").basename(getCurrentWorkspaceFolder()) : "");
           await this.ctx.globalState.update("antigravity-discord.wasWorkspaceSwitch", false);
+          writeSharedLeaderState(this.ctx, { wasWorkspaceSwitch: false });
         }
       } catch {}
 
       if (this.discord?.isConnected()) {
         const header = wasSwitch
-          ? `📂 **Workspace Switched to \`${switchedWsName || "New Workspace"}\` — Dis-Gravity Online**`
+          ? `?? **Workspace Switched to \`${switchedWsName || "New Workspace"}\` ? Dis-Gravity Online**`
           : wasRestart
-            ? "🛠️ **Extension Host Restart Complete — Dis-Gravity Online**"
+            ? "??? **Extension Host Restart Complete ? Dis-Gravity Online**"
             : wasReload 
-              ? "🔄 **Window Reload Complete — Dis-Gravity Online**" 
-              : "🚀 **Dis-Gravity Connected & Ready**";
+              ? "?? **Window Reload Complete ? Dis-Gravity Online**" 
+              : "?? **Dis-Gravity Connected & Ready**";
         await this.notifyCurrentStatus(header);
       }
     }
-    async stop() {
+    async stop(isHandoff = false) {
       try {
-        await this.ctx.workspaceState.update("antigravity-discord.wasReloaded", true);
+        if (!isHandoff) {
+          await this.ctx.workspaceState.update("antigravity-discord.wasReloaded", true);
+        }
         await this.ctx.workspaceState.update("antigravity-discord.stopTime", Date.now());
       } catch {}
       (this.busyPollInterval && clearInterval(this.busyPollInterval),
@@ -9132,38 +9295,114 @@ var oU = class {
       }
     }
 
+async isWorkspaceOpenInAnotherWindow(targetPath) {
+      const path = require("path");
+      const fs = require("fs");
+      const targetNorm = normalizeWorkspacePath(targetPath).toLowerCase();
+      const wsName = path.basename(targetPath).toLowerCase();
+
+      // 1. Check storage.json openedWindows
+      try {
+        const appData = process.env.APPDATA || "";
+        const storagePath = path.join(appData, "Antigravity IDE", "User", "globalStorage", "storage.json");
+        if (fs.existsSync(storagePath)) {
+          const data = JSON.parse(fs.readFileSync(storagePath, "utf8"));
+          const opened = data.windowsState?.openedWindows || [];
+          for (const w of opened) {
+            if (w.folder) {
+              let p = decodeURIComponent(w.folder.replace(/^file:\/\/\/?/, ""));
+              if (normalizeWorkspacePath(p).toLowerCase() === targetNorm) {
+                return true;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        this.log.appendLine(`[Workspace] storage.json check error: ${err}`);
+      }
+
+      // 2. Check CDP targets on port 9000
+      try {
+        const debugPort = vr.workspace.getConfiguration("antigravity-discord").get("debugPort", 9000);
+        const res = await fetch(`http://127.0.0.1:${debugPort}/json/list`, { signal: AbortSignal.timeout(1000) });
+        if (res.ok) {
+          const targets = await res.json();
+          const found = targets.some(t => t.type === "page" && t.title && t.title.toLowerCase().includes(wsName));
+          if (found) return true;
+        }
+      } catch {}
+
+      return false;
+    }
+
+    async bringWorkspaceWindowToFront(targetPath) {
+      const path = require("path");
+      const wsName = path.basename(targetPath).toLowerCase();
+
+      // 1. CDP Page.bringToFront
+      try {
+        const debugPort = vr.workspace.getConfiguration("antigravity-discord").get("debugPort", 9000);
+        const res = await fetch(`http://127.0.0.1:${debugPort}/json/list`, { signal: AbortSignal.timeout(1000) });
+        if (res.ok) {
+          const targets = await res.json();
+          const target = targets.find(t => t.type === "page" && t.title && t.title.toLowerCase().includes(wsName));
+          if (target && target.webSocketDebuggerUrl) {
+            await new Promise((resolve) => {
+              try {
+                const ws = new WebSocket(target.webSocketDebuggerUrl);
+                ws.onopen = () => {
+                  ws.send(JSON.stringify({ id: 1, method: "Page.bringToFront" }));
+                  setTimeout(() => { ws.close(); resolve(); }, 300);
+                };
+                ws.onerror = () => resolve();
+                setTimeout(resolve, 800);
+              } catch {
+                resolve();
+              }
+            });
+          }
+        }
+      } catch (err) {
+        this.log.appendLine(`[Workspace] CDP focus error: ${err}`);
+      }
+
+      // 2. VS Code openFolder (focuses window without reloading)
+      try {
+        const uri = vr.Uri.file(targetPath);
+        await vr.commands.executeCommand("vscode.openFolder", uri, { forceReuseWindow: false, forceNewWindow: false });
+      } catch (err) {
+        this.log.appendLine(`[Workspace] openFolder focus error: ${err}`);
+      }
+    }
+
     async openWorkspacePath(interaction = null, targetPath, textMessage = null) {
       const path = require("path");
       const fs = require("fs");
 
-      let normalized = path.normalize(targetPath);
-      if (/^[a-zA-Z]:/.test(normalized)) {
-        normalized = normalized.charAt(0).toUpperCase() + normalized.slice(1);
-      }
+      let normalized = normalizeWorkspacePath(targetPath);
 
       if (!fs.existsSync(normalized)) {
-        const errMsg = `❌ **Workspace path does not exist on host machine:**\n> \`${normalized}\``;
+        const errMsg = `? **Workspace path does not exist on host machine:**\n> \`${normalized}\``;
         if (interaction) await this.safeReply(interaction, { content: errMsg, ephemeral: true });
         else if (textMessage && this.discord?.isConnected()) await this.discord.sendMessage(errMsg);
         return;
       }
 
-      const currentWs = vr.workspace.workspaceFolders?.[0]?.uri?.fsPath;
-      let normalizedCurrent = currentWs ? path.normalize(currentWs) : "";
-      if (/^[a-zA-Z]:/.test(normalizedCurrent)) {
-        normalizedCurrent = normalizedCurrent.charAt(0).toUpperCase() + normalizedCurrent.slice(1);
-      }
-
+      const currentWs = getCurrentWorkspaceFolder();
       const wsName = path.basename(normalized);
 
-      if (normalizedCurrent && normalizedCurrent.toLowerCase() === normalized.toLowerCase()) {
-        const sameMsg = `ℹ️ **Antigravity IDE is already open in workspace:** \`${wsName}\`\n> Path: \`${normalized}\``;
+      if (currentWs && currentWs.toLowerCase() === normalized.toLowerCase()) {
+        const sameMsg = `?? **Antigravity IDE is already open in workspace:** \`${wsName}\`\n> Path: \`${normalized}\``;
         if (interaction) await this.safeReply(interaction, { content: sameMsg });
         else if (textMessage && this.discord?.isConnected()) await this.discord.sendMessage(sameMsg);
         return;
       }
 
-      const notice = `📂 **Switching Antigravity IDE workspace to \`${wsName}\`...**\n> Path: \`${normalized}\`\n\nDis-Gravity will briefly reconnect once the workspace loads.`;
+      const isAlreadyOpen = await this.isWorkspaceOpenInAnotherWindow(normalized);
+
+      const notice = isAlreadyOpen
+        ? `?? **Switching active Discord bridge to \`${wsName}\`...**\n> Path: \`${normalized}\`\n\nTarget window is already open. Transferring control to active workspace...`
+        : `?? **Switching Antigravity IDE workspace to \`${wsName}\`...**\n> Path: \`${normalized}\`\n\nDis-Gravity will briefly reconnect once the workspace loads.`;
 
       if (interaction) {
         await this.safeReply(interaction, { content: notice, ephemeral: false });
@@ -9177,10 +9416,31 @@ var oU = class {
         }
       }
 
+      if (isAlreadyOpen) {
+        this.log.appendLine(`[Workspace] Multi-window handoff initiated for: ${normalized}`);
+        
+        writeSharedLeaderState(this.ctx, {
+          desiredWs: normalized,
+          targetWorkspace: normalized,
+          wasWorkspaceSwitch: true,
+          switchTime: Date.now()
+        });
+
+        await this.bringWorkspaceWindowToFront(normalized);
+
+        this.log.appendLine(`[Workspace] Releasing Discord leadership in current window and entering standby...`);
+        await this.stop(true);
+        LC = null;
+        startStandbyWatcher(this.ctx, this.log);
+        return;
+      }
+
       try {
-        this.ctx.globalState.update("antigravity-discord.wasWorkspaceSwitch", true);
-        this.ctx.globalState.update("antigravity-discord.targetWorkspace", normalized);
-        this.ctx.globalState.update("antigravity-discord.switchTime", Date.now());
+        writeSharedLeaderState(this.ctx, {
+          wasWorkspaceSwitch: true,
+          targetWorkspace: normalized,
+          switchTime: Date.now()
+        });
       } catch {}
 
       setTimeout(async () => {
@@ -9302,23 +9562,88 @@ var oU = class {
       }
     }
   },
-  LC = null;
+LC = null;
+var standbyInterval = null;
+
+function stopStandbyWatcher() {
+  if (standbyInterval) {
+    clearInterval(standbyInterval);
+    standbyInterval = null;
+  }
+}
+
+function startStandbyWatcher(t, output) {
+  stopStandbyWatcher();
+  output.appendLine(`[Extension] [PID=${process.pid}] Entering standby mode (polling every 1000ms)...`);
+
+  standbyInterval = setInterval(async () => {
+    try {
+      if (LC) {
+        stopStandbyWatcher();
+        return;
+      }
+
+      const myWs = getCurrentWorkspaceFolder();
+      const state = readSharedLeaderState(t);
+      const now = Date.now();
+
+      // Check 1: Explicit Workspace Handoff Target
+      if (state.desiredWs && myWs && state.desiredWs.toLowerCase() === myWs.toLowerCase()) {
+        output.appendLine(`[Extension] [PID=${process.pid}] Received workspace switch handoff signal for "${myWs}"! Claiming leadership...`);
+        stopStandbyWatcher();
+        writeSharedLeaderState(t, { desiredWs: null });
+        claimLeadership(t);
+        startLeaderInstance(t, output);
+        return;
+      }
+
+      // Check 2: Leader dead or timed out
+      const isLeaderAlive = state.leaderPid && XJe(state.leaderPid);
+      const isHeartbeatFresh = state.heartbeat && (now - state.heartbeat < ZJe);
+
+      if (!state.leaderPid || !isLeaderAlive || !isHeartbeatFresh) {
+        if (!state.desiredWs || (myWs && state.desiredWs.toLowerCase() === myWs.toLowerCase())) {
+          output.appendLine(`[Extension] [PID=${process.pid}] Leader inactive/dead. Claiming leadership...`);
+          stopStandbyWatcher();
+          claimLeadership(t);
+          startLeaderInstance(t, output);
+          return;
+        }
+      }
+    } catch (err) {
+      output.appendLine(`[Extension] Standby poll error: ${err}`);
+    }
+  }, 1000);
+}
+
+function startLeaderInstance(t, output) {
+  stopStandbyWatcher();
+  output.appendLine(`[Extension] [PID=${process.pid}] Elected as leader`);
+  LC = new oU(t);
+  LC.start().catch((err) => {
+    output.appendLine(`[Extension] Start failed: ${err}`);
+    output.show(true);
+  });
+}
+
 function r$e(t) {
   let e = vr.window.createOutputChannel("Antigravity Discord");
+  const myWs = getCurrentWorkspaceFolder();
+  e.appendLine(`[Extension] [PID=${process.pid}] Activating Dis-Gravity (Workspace: ${myWs || "None"})...`);
+
   if (!e$e(t)) {
-    (e.appendLine(`[Extension] [PID=${process.pid}] Another instance is the leader \u2014 skipping Discord connection`),
-      e.show(!0));
+    e.appendLine(`[Extension] [PID=${process.pid}] Another instance is the leader ? entering standby mode`);
+    startStandbyWatcher(t, e);
     return;
   }
-  (e.appendLine(`[Extension] [PID=${process.pid}] Elected as leader`),
-    (LC = new oU(t)),
-    LC.start().catch((i) => {
-      (e.appendLine(`[Extension] Start failed: ${i}`), e.show(!0));
-    }));
+  startLeaderInstance(t, e);
 }
+
 function n$e() {
+  stopStandbyWatcher();
   let t = LC?.stop();
-  return ((LC = null), t);
+  LC = null;
+  return t;
 }
 0 && (module.exports = { activate, deactivate });
 /*! Bundled license information:
