@@ -289,7 +289,7 @@ Configure via VS Code Settings GUI or in `.vscode/settings.json`:
 ## 📦 Installation
 
 ### Install from VSIX Release
-1. Download `dis-gravity-1.0.0.vsix` from [Releases](https://github.com/h4ck3r420/Dis-Gravity/releases).
+1. Download `dis-gravity-1.1.0.vsix` from [Releases](https://github.com/h4ck3r420/Dis-Gravity/releases).
 2. In VS Code / Antigravity: `Ctrl+Shift+P` → **Extensions: Install from VSIX...** → select the `.vsix` file.
 
 ### Build from Source

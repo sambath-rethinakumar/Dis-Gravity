@@ -1,0 +1,6 @@
+dist/extension.js.bak
+.vscodeignore
+.vsixmanifest
+*.vsix
+scratch/
+.disgravity/
