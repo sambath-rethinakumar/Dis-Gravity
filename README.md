@@ -295,12 +295,12 @@ Configure via VS Code Settings GUI or in `.vscode/settings.json`:
 ## 📦 Installation
 
 ### Install from VSIX Release
-1. Download `dis-gravity-1.1.0.vsix` from [Releases](https://github.com/h4ck3r420/Dis-Gravity/releases).
+1. Download `dis-gravity-1.1.0.vsix` from [Releases](https://github.com/sambath-rethinakumar/Dis-Gravity/releases).
 2. In VS Code / Antigravity: `Ctrl+Shift+P` → **Extensions: Install from VSIX...** → select the `.vsix` file.
 
 ### Build from Source
 ```bash
-git clone https://github.com/h4ck3r420/Dis-Gravity.git
+git clone https://github.com/sambath-rethinakumar/Dis-Gravity.git
 cd Dis-Gravity
 npm install
 npx @vscode/vsce package --no-dependencies
@@ -310,4 +310,4 @@ npx @vscode/vsce package --no-dependencies
 
 ## 📄 License
 
-MIT © [Anon King](https://github.com/h4ck3r420/Dis-Gravity)
+MIT © [Anon King](https://github.com/sambath-rethinakumar/Dis-Gravity)

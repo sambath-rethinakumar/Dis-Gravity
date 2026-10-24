@@ -8,11 +8,11 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/h4ck3r420/Dis-Gravity.git"
+		"url": "git+https://github.com/sambath-rethinakumar/Dis-Gravity.git"
 	},
-	"homepage": "https://github.com/h4ck3r420/Dis-Gravity#readme",
+	"homepage": "https://github.com/sambath-rethinakumar/Dis-Gravity#readme",
 	"bugs": {
-		"url": "https://github.com/h4ck3r420/Dis-Gravity/issues"
+		"url": "https://github.com/sambath-rethinakumar/Dis-Gravity/issues"
 	},
 	"author": "Anon King",
 	"preview": false,
