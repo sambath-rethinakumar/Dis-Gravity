@@ -9,7 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="#supported-ides"><img src="https://img.shields.io/badge/Supports-Antigravity%20%7C%20VS%20Code%20%7C%20Cursor%20%7C%20Windsurf%20%7C%20JetBrains-blueviolet?style=flat-square" alt="Supported IDEs"></a>
+  <a href="#supported-ides--environments"><img src="https://img.shields.io/badge/Supports-Antigravity%20%7C%20VS%20Code%20%7C%20Cursor%20%7C%20Windsurf%20%7C%20JetBrains-blueviolet?style=flat-square" alt="Supported IDEs"></a>
+  <a href="https://www.npmjs.com/package/dis-gravity"><img src="https://img.shields.io/npm/v/dis-gravity?style=flat-square&color=cb3837&logo=npm" alt="npm version"></a>
   <a href="#installation"><img src="https://img.shields.io/badge/VS%20Code-v1.93+-007acc?style=flat-square&logo=visualstudiocode" alt="VS Code Version"></a>
   <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="MIT License"></a>
   <a href="https://discord.com"><img src="https://img.shields.io/badge/Discord-discord.js%20v14-5865F2?style=flat-square&logo=discord" alt="Discord.js"></a>
@@ -31,20 +32,26 @@
 ## 📑 Table of Contents
 
 - [Supported IDEs & Environments](#supported-ides--environments)
+- [📦 Installation](#-installation)
+  - [Option 1: Instant via npx (Zero Install)](#option-1-instant-via-npx-zero-install)
+  - [Option 2: Install Global CLI via npm](#option-2-install-global-cli-via-npm)
+  - [Option 3: Install VS Code / Antigravity Extension (.vsix)](#option-3-install-vs-code--antigravity-extension-vsix)
+  - [Option 4: Build .vsix from Source](#option-4-build-vsix-from-source)
 - [🚀 3-Minute Quickstart Guide](#-3-minute-quickstart-guide)
   - [Step 1: Create Your Discord Bot](#step-1-create-your-discord-bot)
   - [Step 2: Invite the Bot to Your Server](#step-2-invite-the-bot-to-your-server)
   - [Step 3: Retrieve Channel ID & User ID](#step-3-retrieve-channel-id--user-id)
   - [Step 4: Configure Dis-Gravity in Your IDE](#step-4-configure-dis-gravity-in-your-ide)
 - [Connecting Your Specific IDE](#connecting-your-specific-ide)
-  - [Visual Studio Code & Copilot (Zero Port Required)](#1-visual-studio-code--github-copilot-zero-port-required)
-  - [Google Antigravity, Cursor AI & Windsurf (Port 9000)](#2-google-antigravity-cursor-ai--windsurf-port-9000)
-  - [JetBrains, Neovim & Headless Servers (Standalone CLI Daemon)](#3-jetbrains-neovim--headless-servers-standalone-cli-daemon)
+  - [1. Visual Studio Code & GitHub Copilot (Zero Port Required)](#1-visual-studio-code--github-copilot-zero-port-required)
+  - [2. Google Antigravity, Cursor AI & Windsurf (Port 9000)](#2-google-antigravity-cursor-ai--windsurf-port-9000)
+  - [3. JetBrains, Neovim & Headless Servers (Standalone CLI Daemon)](#3-jetbrains-neovim--headless-servers-standalone-cli-daemon)
 - [🛡️ Security Best Practices (`allowedUsers`)](#️-security-best-practices-allowedusers)
 - [🌟 Key Features](#-key-features)
 - [⌨️ Slash Commands & Text Shortcuts](#️-slash-commands--text-shortcuts)
 - [⚙️ Configuration Reference](#️-configuration-reference)
 - [❓ Troubleshooting & FAQ](#-troubleshooting--faq)
+- [📄 License](#-license)
 
 ---
 
@@ -57,6 +64,42 @@
 | **Cursor AI** | `cursor` or `auto` | CDP (`:9000`) | Composer & Chat (`/plan`, `/edit`, `@Codebase`) |
 | **Windsurf** | `windsurf` or `auto` | CDP (`:9000`) | Cascade Chat Webview with deep iframe traversal |
 | **JetBrains / Neovim / Headless** | `cli` (`bin/dis-gravity.js`) | Subprocess / PTY | Universal CLI (`agy`, `claude`, `aider`, `shell`) |
+
+---
+
+## 📦 Installation
+
+Choose the setup that best fits your workflow:
+
+### Option 1: Instant via npx (Zero Install)
+Run the standalone Dis-Gravity CLI daemon directly from npm without installing:
+
+```bash
+npx dis-gravity --token="YOUR_BOT_TOKEN" --channel="YOUR_CHANNEL_ID" --provider="cli"
+```
+
+### Option 2: Install Global CLI via npm
+Install the `dis-gravity` command globally on your machine:
+
+```bash
+npm install -g dis-gravity
+dis-gravity --help
+```
+
+### Option 3: Install VS Code / Antigravity Extension (.vsix)
+1. Download `dis-gravity-1.1.0.vsix` from [GitHub Releases](https://github.com/sambath-rethinakumar/Dis-Gravity/releases) or the root of this repository.
+2. In VS Code or Google Antigravity IDE:
+   - Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS).
+   - Type **Extensions: Install from VSIX...** and select `dis-gravity-1.1.0.vsix`.
+
+### Option 4: Build .vsix from Source
+```bash
+git clone https://github.com/sambath-rethinakumar/Dis-Gravity.git
+cd Dis-Gravity
+npm install
+npx @vscode/vsce package --no-dependencies
+```
+*(The production extension and CLI bundles are pre-compiled and self-contained; packaging produces `dis-gravity-1.1.0.vsix` immediately).*
 
 ---
 
@@ -167,13 +210,11 @@ antigravity --remote-debugging-port=9000
 Dis-Gravity includes a standalone, editor-agnostic daemon that runs in any terminal or remote SSH session:
 
 ```bash
-# Run directly via Node.js
-node bin/dis-gravity.js --token="YOUR_BOT_TOKEN" --channel="CHANNEL_ID" --workspace="." --allowed-users="YOUR_USER_ID"
-```
+# Run instantly with npx:
+npx dis-gravity --token="YOUR_BOT_TOKEN" --channel="CHANNEL_ID" --workspace="." --allowed-users="YOUR_USER_ID"
 
-Or install globally / link:
-```bash
-npm link
+# Or run globally via npm:
+npm install -g dis-gravity
 dis-gravity --token="YOUR_BOT_TOKEN" --channel="CHANNEL_ID" --provider="cli"
 ```
 
@@ -185,6 +226,7 @@ dis-gravity --token="YOUR_BOT_TOKEN" --channel="CHANNEL_ID" --provider="cli"
 - `--provider`, `-p`: AI engine (`cli`, `antigravity`, `cursor`, `windsurf`)
 - `--workspace`, `-w`: Path to root workspace directory (defaults to current working directory)
 - `--table-style`: Tabular style (`image`, `cards`, `rounded`, `boxed`, `ascii`)
+- `--port`: Remote debugging CDP port (defaults to `9000`)
 
 ---
 
@@ -204,7 +246,7 @@ Because Dis-Gravity allows remote terminal execution (`/sh`) and file reading (`
 ## 🌟 Key Features
 
 ### 🖼️ High-Resolution Visual Table Image Cards (`/table`, `!table`)
-Discord mobile apps suffer from a notorious line-wrapping bug that scrambled monospaced ASCII tables into unreadable text blocks. Dis-Gravity dynamically converts Markdown tables into **high-resolution 2x retina PNG cards** rendered natively in Discord messages, complete with dark theme styling, zebra rows, bold headers, colored status chips (`#57f287` green, `#fee75c` yellow, `#ed4245` red), full-color emojis, and pinch-to-zoom support. Features headless browser fallback (`msedge`/`chrome`) for environments without CDP ports.
+Discord mobile apps suffer from a notorious line-wrapping bug that scrambles monospaced ASCII tables into unreadable text blocks. Dis-Gravity dynamically converts Markdown tables into **high-resolution 2x retina PNG cards** rendered natively in Discord messages, complete with dark theme styling, zebra rows, bold headers, colored status chips (`#57f287` green, `#fee75c` yellow, `#ed4245` red), full-color emojis, and pinch-to-zoom support. Features headless browser fallback (`msedge`/`chrome`) for environments without CDP ports.
 
 ### 🎮 1-Click Command Palette (`/palette`, `/action`)
 Execute any of VS Code's 1,000+ commands remotely from your phone with 1 tap. Pre-built buttons across Developer (Reload Window, Restart Extension Host), Terminal (New, Toggle, Kill), Files (Save All, Close All), and Git (Sync, Pull, Push), plus live autocomplete search for any IDE command.
@@ -220,6 +262,9 @@ Browse and download AI-generated walkthroughs, architectural plans, patch files,
 
 ### ⏳ Live Step Streaming & Observability
 Replaces static wait timers with real-time DOM step updates: `⏳ Working (18s): 🔍 Viewing file package.json`, `⚡ Running command npm test`, `💭 Thinking...`.
+
+### 🖥️ Host Health & Workspace Dashboard (`/info`, `/workspace`)
+Check active workspace, git branch, dirty file count, open editor tabs, host OS, CPU load, memory utilization, and uptime directly from chat.
 
 ---
 
@@ -289,22 +334,6 @@ Configure via VS Code Settings GUI or in `.vscode/settings.json`:
 
 #### 4. "My table columns are wrapping into a jumble on my mobile phone."
 - Run `/table image` or `!table image` in Discord. Dis-Gravity will automatically render tables into high-DPI visual PNG image cards that display cleanly without text wrapping on any screen size.
-
----
-
-## 📦 Installation
-
-### Install from VSIX Release
-1. Download `dis-gravity-1.1.0.vsix` from [Releases](https://github.com/sambath-rethinakumar/Dis-Gravity/releases).
-2. In VS Code / Antigravity: `Ctrl+Shift+P` → **Extensions: Install from VSIX...** → select the `.vsix` file.
-
-### Build from Source
-```bash
-git clone https://github.com/sambath-rethinakumar/Dis-Gravity.git
-cd Dis-Gravity
-npm install
-npx @vscode/vsce package --no-dependencies
-```
 
 ---
 

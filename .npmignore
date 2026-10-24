@@ -4,3 +4,5 @@ dist/extension.js.bak
 *.vsix
 scratch/
 .disgravity/
+*.gif
+*.mp4
