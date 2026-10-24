@@ -22,6 +22,12 @@
 
 ---
 
+<p align="center">
+  <img src="media/dis-gravity-demo.gif" width="860" alt="Dis-Gravity Live Split-Screen Demo" />
+</p>
+
+---
+
 ## 📑 Table of Contents
 
 - [Supported IDEs & Environments](#supported-ides--environments)
