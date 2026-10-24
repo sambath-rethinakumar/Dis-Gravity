@@ -6009,17 +6009,17 @@ var oU = class {
       }
     }
     isUserAuthorized(userId) {
-      if (!userId) return true;
+      if (!userId) return false;
       const cfg = vr.workspace.getConfiguration("antigravity-discord");
       const rawAllowed = cfg.get("allowedUsers", "");
-      if (!rawAllowed) return true;
+      if (!rawAllowed) return false;
       let allowedList = [];
       if (Array.isArray(rawAllowed)) {
         allowedList = rawAllowed.map((u) => String(u).trim()).filter(Boolean);
       } else if (typeof rawAllowed === "string") {
         allowedList = rawAllowed.split(",").map((u) => u.trim()).filter(Boolean);
       }
-      if (allowedList.length === 0) return true;
+      if (allowedList.length === 0) return false;
       return allowedList.includes(String(userId).trim());
     }
     getSampleMarkdownTable() {
@@ -6892,8 +6892,8 @@ var oU = class {
         statusMsg += `\n> 💡 *Agent bridge disconnected. Launch your IDE with \`--remote-debugging-port=9000\` (Antigravity/Cursor/Windsurf) or switch \`agentProvider\` to \`copilot\` (requires no port).*`;
       }
       const rawAllowedUsers = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
-      if (!rawAllowedUsers || rawAllowedUsers.trim().length === 0) {
-        statusMsg += `\n> ⚠️ *Security notice: No \`allowedUsers\` configured. Add your Discord User ID in settings to restrict access.*`;
+      if (!rawAllowedUsers || (typeof rawAllowedUsers === "string" ? rawAllowedUsers.trim().length === 0 : rawAllowedUsers.length === 0)) {
+        statusMsg += `\n> 🛡️ *Security active: No \`allowedUsers\` configured. Remote execution is BLOCKED until your Discord User ID is added in settings.*`;
       }
 
       const actionRow = this.discord?.buildStatusActionRow(isBusy);
@@ -7011,8 +7011,8 @@ const leaderState = readSharedLeaderState(this.ctx);
         }
         vr.window.showInformationMessage(`Dis-Gravity (${vr.env?.appName || "IDE"}): Connected to Discord!`);
         const rawAllowed = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
-        if (!rawAllowed || rawAllowed.trim().length === 0) {
-          this.log.appendLine(`[Security Warning] No allowedUsers whitelist configured! Anyone in the Discord channel can control the IDE and execute shell commands. Set antigravity-discord.allowedUsers to your Discord User ID.`);
+        if (!rawAllowed || (typeof rawAllowed === "string" ? rawAllowed.trim().length === 0 : rawAllowed.length === 0)) {
+          this.log.appendLine(`[Security Notice] No allowedUsers whitelist configured! Default-deny active: remote commands and interactions are BLOCKED until your Discord User ID is set in antigravity-discord.allowedUsers.`);
         } else {
           this.log.appendLine(`[Security] User authorization whitelist active: ${rawAllowed}`);
         }
@@ -7233,8 +7233,13 @@ const leaderState = readSharedLeaderState(this.ctx);
           if (interaction.isAutocomplete()) {
             await interaction.respond([]).catch(() => {});
           } else if (!interaction.replied && !interaction.deferred) {
+            const rawAllowed = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
+            const hasWhitelist = rawAllowed && (Array.isArray(rawAllowed) ? rawAllowed.length > 0 : String(rawAllowed).trim().length > 0);
+            const denial = hasWhitelist
+              ? `⛔ **Unauthorized:** Your Discord User ID (\`${userId}\`) is not in the Dis-Gravity \`allowedUsers\` whitelist.`
+              : `⛔ **Unauthorized:** No \`allowedUsers\` configured in Antigravity Settings (\`antigravity-discord.allowedUsers\`). For security, all remote interactions are blocked by default. Add your Discord User ID (\`${userId}\`) in settings to enable access.`;
             await interaction.reply({
-              content: `⛔ **Unauthorized:** Your Discord User ID (\`${userId}\`) is not in the Dis-Gravity \`allowedUsers\` whitelist.`,
+              content: denial,
               ephemeral: true
             }).catch(() => {});
           }
@@ -7936,7 +7941,11 @@ const leaderState = readSharedLeaderState(this.ctx);
       if (!this.isUserAuthorized(e.authorId)) {
         this.log.appendLine(`[Security] Blocked unauthorized message from user ID ${e.authorId} (${e.author})`);
         if (this.discord?.isConnected()) {
-          const unauthorizedMsg = `⛔ **Unauthorized:** Your Discord User ID (\`${e.authorId}\`) is not in the Dis-Gravity \`allowedUsers\` whitelist.`;
+          const rawAllowed = vr.workspace.getConfiguration("antigravity-discord").get("allowedUsers", "");
+          const hasWhitelist = rawAllowed && (Array.isArray(rawAllowed) ? rawAllowed.length > 0 : String(rawAllowed).trim().length > 0);
+          const unauthorizedMsg = hasWhitelist
+            ? `⛔ **Unauthorized:** Your Discord User ID (\`${e.authorId}\`) is not in the Dis-Gravity \`allowedUsers\` whitelist.`
+            : `⛔ **Unauthorized:** No \`allowedUsers\` configured in Antigravity Settings (\`antigravity-discord.allowedUsers\`). For security, all remote commands and prompts are blocked by default. Add your Discord User ID (\`${e.authorId}\`) in settings to enable access.`;
           if (e.threadId) {
             let thread = await this.discord.getThread(e.threadId);
             if (thread) await this.discord.sendToThread(thread, unauthorizedMsg);

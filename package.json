@@ -199,6 +199,9 @@
 		"typescript": "^5.5.0",
 		"vitest": "^4.0.18"
 	},
+	"overrides": {
+		"@azure/msal-node": "^7.1.1"
+	},
 	"__metadata": {
 		"targetPlatform": "universal",
 		"isApplicationScoped": false,

@@ -245,8 +245,9 @@ async function startDaemon() {
   if (config.allowedUsers.length > 0) {
     log.appendLine(`Security Whitelist: ${config.allowedUsers.length} user(s) allowed (${config.allowedUsers.join(', ')})`);
   } else {
-    log.appendLine(`⚠️  SECURITY WARNING: No --allowed-users configured! Anyone with access to channel #${config.channelId} can execute commands and access files in this workspace.`);
-    log.appendLine(`   To restrict access to your user only, launch with: --allowed-users="YOUR_DISCORD_USER_ID"`);
+    log.appendLine(`⚠️  SECURITY NOTICE: No --allowed-users configured! Default-deny security is active.`);
+    log.appendLine(`   All remote commands and interactions are BLOCKED until you specify authorized Discord User ID(s).`);
+    log.appendLine(`   Configure with: --allowed-users="YOUR_DISCORD_USER_ID" or set "allowedUsers" in dis-gravity.config.json.`);
   }
 
   const client = new Client({
@@ -260,8 +261,13 @@ async function startDaemon() {
   });
 
   function isUserAllowed(userId) {
-    if (!config.allowedUsers || config.allowedUsers.length === 0) return true;
-    return config.allowedUsers.includes(userId);
+    if (!userId) return false;
+    if (!config.allowedUsers || config.allowedUsers.length === 0) return false;
+    const allowed = Array.isArray(config.allowedUsers)
+      ? config.allowedUsers.map((u) => String(u).trim()).filter(Boolean)
+      : String(config.allowedUsers).split(',').map((u) => u.trim()).filter(Boolean);
+    if (allowed.length === 0) return false;
+    return allowed.includes(String(userId).trim());
   }
 
   // Active CLI agent supervisor
@@ -404,7 +410,7 @@ async function startDaemon() {
     msg += `• **Host System:** 💻 ${os.platform()} (${os.release()}, ${os.arch()})\n`;
     msg += `• **Memory:** 📈 ${freeGB} GB free / ${totalGB} GB total\n`;
     if (!config.allowedUsers || config.allowedUsers.length === 0) {
-      msg += `\n> ⚠️ *Security notice: No \`allowedUsers\` whitelist configured. Add your Discord User ID to restrict access.*`;
+      msg += `\n> 🛡️ *Security active: No \`allowedUsers\` configured. Remote execution is BLOCKED until your Discord User ID is added.*`;
     }
 
     const actionRow = new ActionRowBuilder().addComponents(
@@ -477,7 +483,11 @@ async function startDaemon() {
     try {
       if (!isUserAllowed(interaction.user.id)) {
         if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: `⛔ **Unauthorized:** Your Discord User ID (\`${interaction.user.id}\`) is not on the whitelist.`, ephemeral: true });
+          const hasWhitelist = config.allowedUsers && config.allowedUsers.length > 0;
+          const denial = hasWhitelist
+            ? `⛔ **Unauthorized:** Your Discord User ID (\`${interaction.user.id}\`) is not on the Dis-Gravity whitelist.`
+            : `⛔ **Unauthorized:** No \`allowedUsers\` whitelist is configured in Dis-Gravity daemon. For security, all remote interactions are blocked by default. Add your Discord User ID (\`${interaction.user.id}\`) via \`--allowed-users\` or in \`dis-gravity.config.json\`.`;
+          await interaction.reply({ content: denial, ephemeral: true });
         }
         return;
       }
@@ -607,7 +617,11 @@ async function startDaemon() {
     if (message.channelId !== config.channelId && !message.channel.isDMBased()) return;
 
     if (!isUserAllowed(message.author.id)) {
-      await message.reply(`⛔ **Unauthorized:** Your Discord User ID (\`${message.author.id}\`) is not in the Dis-Gravity whitelist.`).catch(() => {});
+      const hasWhitelist = config.allowedUsers && config.allowedUsers.length > 0;
+      const denial = hasWhitelist
+        ? `⛔ **Unauthorized:** Your Discord User ID (\`${message.author.id}\`) is not in the Dis-Gravity whitelist.`
+        : `⛔ **Unauthorized:** No \`allowedUsers\` whitelist is configured in Dis-Gravity daemon. For security, all remote commands and prompts are blocked by default. Add your Discord User ID (\`${message.author.id}\`) via \`--allowed-users\` or in \`dis-gravity.config.json\`.`;
+      await message.reply(denial).catch(() => {});
       return;
     }
 

@@ -235,9 +235,9 @@ dis-gravity --token="YOUR_BOT_TOKEN" --channel="CHANNEL_ID" --provider="cli"
 > [!CAUTION]
 > **Never connect Dis-Gravity to a public or multi-user Discord channel without configuring `allowedUsers`!**
 
-Because Dis-Gravity allows remote terminal execution (`/sh`) and file reading (`/cat`), anyone with access to the channel can execute commands on your host workstation if `allowedUsers` is empty.
+Dis-Gravity enforces **default-deny authorization**: all remote commands (`/sh`), file inspections (`/cat`), and interactions are automatically blocked by default until at least one authorized Discord User ID is added to `allowedUsers`.
 
-1. **Always configure `allowedUsers`**: Enter your Discord User ID (e.g. `123456789012345678`). Multiple authorized users can be separated by commas (`123456789,987654321`).
+1. **Always configure `allowedUsers`**: Enter your Discord User ID (e.g. `123456789012345678`). Multiple authorized users can be separated by commas (`123456789,987654321`). Unauthorized users and unconfigured environments receive an explicit rejection notice.
 2. **Use a Private Channel**: Dedicate a private Discord text channel accessible only to you and the bot.
 3. **Interactive Approvals**: File modifications and terminal executions in Copilot / CLI modes prompt you with interactive `[ 🟢 Allow ]` and `[ 🔴 Deny ]` buttons before changes take effect.
 
